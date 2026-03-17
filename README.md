@@ -43,11 +43,7 @@ Version 1 supports a focused interoperable subset:
 - `make test`
   Runs the regression test suite.
 
-The test suite includes a TCP interoperability check that sends the same
-command bytes the current `uci_interactive_shell` project emits for its
-stabilized `CORE_DEVICE_INFO`, `CORE_GET_CAPS_INFO`, `SESSION_INIT`,
-`SESSION_START`, `SESSION_GET_STATE`, and `SESSION_STOP` commands, then
-asserts the simulator's wire responses and notifications.
+The test suite includes a TCP interoperability check driven by named wire-packet fixtures for the current `uci_interactive_shell` command flow. It currently pins `CORE_DEVICE_INFO`, `CORE_GET_CAPS_INFO`, `SESSION_INIT`, `SESSION_START`, `SESSION_GET_STATE`, and `SESSION_STOP` request/response/notification bytes exactly on the TCP transport.
 
 ## Run
 

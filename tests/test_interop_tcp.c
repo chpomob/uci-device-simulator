@@ -4,6 +4,7 @@
 #include "uci_sim_tcp_server.h"
 
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdint.h>
@@ -28,6 +29,13 @@ typedef struct {
     pid_t pid;
     uint16_t port;
 } test_server_t;
+
+typedef struct {
+    const char* request_fixture;
+    const char* response_fixture;
+    const char* notification_fixture;
+    const char* step_name;
+} tcp_interop_step_t;
 
 static ssize_t read_full(int fd, void* buffer, size_t count) {
     size_t total = 0;
@@ -143,115 +151,144 @@ static void stop_server(test_server_t* server) {
     server->pid = 0;
 }
 
+static int hex_value(int ch) {
+    if (ch >= '0' && ch <= '9') {
+        return ch - '0';
+    }
+    ch = tolower((unsigned char)ch);
+    if (ch >= 'a' && ch <= 'f') {
+        return 10 + (ch - 'a');
+    }
+    return -1;
+}
+
+static int load_hex_fixture(const char* path, uint8_t* buffer, size_t capacity, size_t* length) {
+    FILE* fp;
+    int ch;
+    int high_nibble = -1;
+    size_t out_len = 0;
+
+    if (!path || !buffer || !length) {
+        return -1;
+    }
+
+    fp = fopen(path, "r");
+    if (!fp) {
+        return -1;
+    }
+
+    while ((ch = fgetc(fp)) != EOF) {
+        int value;
+        if (isspace((unsigned char)ch)) {
+            continue;
+        }
+        value = hex_value(ch);
+        if (value < 0) {
+            fclose(fp);
+            return -1;
+        }
+        if (high_nibble < 0) {
+            high_nibble = value;
+            continue;
+        }
+        if (out_len >= capacity) {
+            fclose(fp);
+            return -1;
+        }
+        buffer[out_len++] = (uint8_t)((high_nibble << 4) | value);
+        high_nibble = -1;
+    }
+
+    fclose(fp);
+    if (high_nibble >= 0) {
+        return -1;
+    }
+
+    *length = out_len;
+    return 0;
+}
+
+static void assert_fixture_packet(int fd, const char* fixture_path, const char* step_name) {
+    uint8_t expected[UCI_SIM_MAX_PACKET];
+    uint8_t actual[UCI_SIM_MAX_PACKET];
+    size_t expected_len = 0;
+    size_t actual_len = 0;
+    char message[160];
+
+    snprintf(message, sizeof(message), "%s fixture load", step_name);
+    ASSERT_TRUE(load_hex_fixture(fixture_path, expected, sizeof(expected), &expected_len) == 0, message);
+    snprintf(message, sizeof(message), "%s packet read", step_name);
+    ASSERT_TRUE(read_packet(fd, actual, sizeof(actual), &actual_len) == 0, message);
+    snprintf(message, sizeof(message), "%s length", step_name);
+    ASSERT_EQ_INT((int)expected_len, (int)actual_len, message);
+    snprintf(message, sizeof(message), "%s bytes", step_name);
+    ASSERT_MEMEQ(expected, actual, actual_len, message);
+}
+
 static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
-    static const uint8_t k_core_device_info_cmd[] = { 0x20, 0x02, 0x00, 0x00 };
-    static const uint8_t k_expected_core_device_info_rsp[] = {
-        0x40, 0x02, 0x00, 0x09,
-        0x00, 0x00, 0x01, 0x00, 0x02, 0x00, 0x02, 0x00, 0x01
-    };
-    static const uint8_t k_core_get_caps_info_cmd[] = { 0x20, 0x03, 0x00, 0x00 };
-    static const uint8_t k_expected_core_get_caps_info_rsp[] = {
-        0x40, 0x03, 0x00, 0x04,
-        0x00, 0x01, 0xE4, 0x00
-    };
-    static const uint8_t k_session_init_cmd[] = {
-        0x21, 0x00, 0x00, 0x05,
-        0x78, 0x56, 0x34, 0x12, 0x00
-    };
-    static const uint8_t k_expected_session_init_rsp[] = {
-        0x41, 0x00, 0x00, 0x05,
-        0x00, 0x78, 0x56, 0x34, 0x12
-    };
-    static const uint8_t k_expected_session_init_ntf[] = {
-        0x61, 0x02, 0x00, 0x06,
-        0x78, 0x56, 0x34, 0x12, 0x00, 0x00
-    };
-    static const uint8_t k_session_start_cmd[] = {
-        0x22, 0x00, 0x00, 0x04,
-        0x78, 0x56, 0x34, 0x12
-    };
-    static const uint8_t k_expected_session_start_rsp[] = {
-        0x42, 0x00, 0x00, 0x01,
-        0x00
-    };
-    static const uint8_t k_expected_session_start_ntf[] = {
-        0x61, 0x02, 0x00, 0x06,
-        0x78, 0x56, 0x34, 0x12, 0x01, 0x00
-    };
-    static const uint8_t k_session_stop_cmd[] = {
-        0x22, 0x01, 0x00, 0x04,
-        0x78, 0x56, 0x34, 0x12
-    };
-    static const uint8_t k_expected_session_stop_rsp[] = {
-        0x42, 0x01, 0x00, 0x01,
-        0x00
-    };
-    static const uint8_t k_expected_session_stop_ntf[] = {
-        0x61, 0x02, 0x00, 0x06,
-        0x78, 0x56, 0x34, 0x12, 0x02, 0x00
-    };
-    static const uint8_t k_session_get_state_cmd[] = {
-        0x21, 0x06, 0x00, 0x04,
-        0x78, 0x56, 0x34, 0x12
-    };
-    static const uint8_t k_expected_session_get_state_rsp[] = {
-        0x41, 0x06, 0x00, 0x02,
-        0x00, 0x01
+    static const tcp_interop_step_t k_steps[] = {
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_device_info_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_device_info_rsp.hex",
+            NULL,
+            "core_device_info"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_get_caps_info_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_get_caps_info_rsp.hex",
+            NULL,
+            "core_get_caps_info"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_rsp.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
+            "session_init"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_rsp.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_ntf.hex",
+            "session_start"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_state_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_state_rsp.hex",
+            NULL,
+            "session_get_state"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_stop_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_stop_rsp.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_stop_ntf.hex",
+            "session_stop"
+        }
     };
 
     test_server_t server = {0};
-    uint8_t packet[UCI_SIM_MAX_PACKET];
-    size_t packet_len = 0;
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    size_t request_len = 0;
     int fd = -1;
+    size_t i;
+    char message[160];
 
     ASSERT_TRUE(start_server(&server) == 0, "start_server");
     fd = connect_with_retry(server.port);
     ASSERT_TRUE(fd >= 0, "connect_with_retry");
 
-    ASSERT_TRUE(write_full(fd, k_core_device_info_cmd, sizeof(k_core_device_info_cmd)) == (ssize_t)sizeof(k_core_device_info_cmd),
-                "write core_device_info");
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read core_device_info rsp");
-    ASSERT_EQ_INT((int)sizeof(k_expected_core_device_info_rsp), (int)packet_len, "core_device_info rsp len");
-    ASSERT_MEMEQ(k_expected_core_device_info_rsp, packet, packet_len, "core_device_info rsp bytes");
+    for (i = 0; i < sizeof(k_steps) / sizeof(k_steps[0]); ++i) {
+        snprintf(message, sizeof(message), "%s request load", k_steps[i].step_name);
+        ASSERT_TRUE(load_hex_fixture(k_steps[i].request_fixture, request, sizeof(request), &request_len) == 0, message);
+        snprintf(message, sizeof(message), "%s write", k_steps[i].step_name);
+        ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, message);
 
-    ASSERT_TRUE(write_full(fd, k_core_get_caps_info_cmd, sizeof(k_core_get_caps_info_cmd)) == (ssize_t)sizeof(k_core_get_caps_info_cmd),
-                "write core_get_caps_info");
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read core_get_caps_info rsp");
-    ASSERT_EQ_INT((int)sizeof(k_expected_core_get_caps_info_rsp), (int)packet_len, "core_get_caps_info rsp len");
-    ASSERT_MEMEQ(k_expected_core_get_caps_info_rsp, packet, packet_len, "core_get_caps_info rsp bytes");
-
-    ASSERT_TRUE(write_full(fd, k_session_init_cmd, sizeof(k_session_init_cmd)) == (ssize_t)sizeof(k_session_init_cmd),
-                "write session_init");
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_init rsp");
-    ASSERT_EQ_INT((int)sizeof(k_expected_session_init_rsp), (int)packet_len, "session_init rsp len");
-    ASSERT_MEMEQ(k_expected_session_init_rsp, packet, packet_len, "session_init rsp bytes");
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_init ntf");
-    ASSERT_EQ_INT((int)sizeof(k_expected_session_init_ntf), (int)packet_len, "session_init ntf len");
-    ASSERT_MEMEQ(k_expected_session_init_ntf, packet, packet_len, "session_init ntf bytes");
-
-    ASSERT_TRUE(write_full(fd, k_session_start_cmd, sizeof(k_session_start_cmd)) == (ssize_t)sizeof(k_session_start_cmd),
-                "write session_start");
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_start rsp");
-    ASSERT_EQ_INT((int)sizeof(k_expected_session_start_rsp), (int)packet_len, "session_start rsp len");
-    ASSERT_MEMEQ(k_expected_session_start_rsp, packet, packet_len, "session_start rsp bytes");
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_start ntf");
-    ASSERT_EQ_INT((int)sizeof(k_expected_session_start_ntf), (int)packet_len, "session_start ntf len");
-    ASSERT_MEMEQ(k_expected_session_start_ntf, packet, packet_len, "session_start ntf bytes");
-
-    ASSERT_TRUE(write_full(fd, k_session_get_state_cmd, sizeof(k_session_get_state_cmd)) == (ssize_t)sizeof(k_session_get_state_cmd),
-                "write session_get_state");
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_get_state rsp");
-    ASSERT_EQ_INT((int)sizeof(k_expected_session_get_state_rsp), (int)packet_len, "session_get_state rsp len");
-    ASSERT_MEMEQ(k_expected_session_get_state_rsp, packet, packet_len, "session_get_state rsp bytes");
-
-    ASSERT_TRUE(write_full(fd, k_session_stop_cmd, sizeof(k_session_stop_cmd)) == (ssize_t)sizeof(k_session_stop_cmd),
-                "write session_stop");
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_stop rsp");
-    ASSERT_EQ_INT((int)sizeof(k_expected_session_stop_rsp), (int)packet_len, "session_stop rsp len");
-    ASSERT_MEMEQ(k_expected_session_stop_rsp, packet, packet_len, "session_stop rsp bytes");
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_stop ntf");
-    ASSERT_EQ_INT((int)sizeof(k_expected_session_stop_ntf), (int)packet_len, "session_stop ntf len");
-    ASSERT_MEMEQ(k_expected_session_stop_ntf, packet, packet_len, "session_stop ntf bytes");
+        assert_fixture_packet(fd, k_steps[i].response_fixture, k_steps[i].step_name);
+        if (k_steps[i].notification_fixture) {
+            char notification_step[160];
+            snprintf(notification_step, sizeof(notification_step), "%s notification", k_steps[i].step_name);
+            assert_fixture_packet(fd, k_steps[i].notification_fixture, notification_step);
+        }
+    }
 
     close(fd);
     stop_server(&server);
@@ -260,6 +297,7 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
 
 int main(void) {
     test_shell_compatible_core_and_session_flow_over_tcp();
+
     printf("Passed: %d\n", g_passed);
     printf("Failed: %d\n", g_failed);
     return g_failed == 0 ? 0 : 1;

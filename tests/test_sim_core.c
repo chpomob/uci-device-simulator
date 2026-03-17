@@ -102,6 +102,66 @@ static void test_delayed_notification_scenario(void) {
     PASS();
 }
 
+static void test_session_app_config_storage(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "app config init failed");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = 1;
+    request.payload[5] = 0x00;
+    request.payload[6] = 1;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set app config failed");
+    ASSERT_TRUE(result.has_response, "set app config response missing");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "set app config status");
+    ASSERT_EQ_U8(1, result.response.payload[1], "set app config count");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_GET_APP_CONFIG;
+    request.payload_len = 6;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = 1;
+    request.payload[5] = 0x00;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get app config failed");
+    ASSERT_TRUE(result.has_response, "get app config response missing");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get app config status");
+    ASSERT_EQ_U8(1, result.response.payload[1], "get app config count");
+    ASSERT_EQ_U8(0x00, result.response.payload[2], "get app config id");
+    ASSERT_EQ_U8(1, result.response.payload[3], "get app config len");
+    ASSERT_EQ_U8(0x01, result.response.payload[4], "get app config value");
+    PASS();
+}
+
 static void test_session_lifecycle(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -150,6 +210,7 @@ int main(void) {
     test_core_device_info();
     test_default_scenario_initialization();
     test_delayed_notification_scenario();
+    test_session_app_config_storage();
     test_session_lifecycle();
 
     printf("Passed: %d\n", g_passed);

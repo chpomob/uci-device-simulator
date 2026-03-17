@@ -83,3 +83,61 @@ void uci_sim_device_finalize_result(uci_sim_device_t* device,
         result->has_notification = 1;
     }
 }
+
+int uci_sim_session_store_config(uci_sim_session_t* session,
+                                 uint8_t config_id,
+                                 const uint8_t* value,
+                                 uint8_t value_len) {
+    size_t i;
+
+    if (!session || value_len > UCI_SIM_MAX_CONFIG_VALUE || (value_len > 0 && !value)) {
+        return -1;
+    }
+
+    for (i = 0; i < UCI_SIM_MAX_SESSION_CONFIGS; ++i) {
+        if (session->configs[i].in_use && session->configs[i].config_id == config_id) {
+            session->configs[i].value_len = value_len;
+            if (value_len > 0) {
+                memcpy(session->configs[i].value, value, value_len);
+            }
+            return 0;
+        }
+    }
+
+    for (i = 0; i < UCI_SIM_MAX_SESSION_CONFIGS; ++i) {
+        if (!session->configs[i].in_use) {
+            session->configs[i].in_use = 1;
+            session->configs[i].config_id = config_id;
+            session->configs[i].value_len = value_len;
+            if (value_len > 0) {
+                memcpy(session->configs[i].value, value, value_len);
+            }
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
+int uci_sim_session_get_config(const uci_sim_session_t* session,
+                               uint8_t config_id,
+                               uint8_t* value,
+                               uint8_t* value_len) {
+    size_t i;
+
+    if (!session || !value_len) {
+        return -1;
+    }
+
+    for (i = 0; i < UCI_SIM_MAX_SESSION_CONFIGS; ++i) {
+        if (session->configs[i].in_use && session->configs[i].config_id == config_id) {
+            if (value && session->configs[i].value_len > 0) {
+                memcpy(value, session->configs[i].value, session->configs[i].value_len);
+            }
+            *value_len = session->configs[i].value_len;
+            return 0;
+        }
+    }
+
+    return -1;
+}

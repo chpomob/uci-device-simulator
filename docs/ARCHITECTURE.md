@@ -22,3 +22,6 @@ Future transports should only adapt raw bytes to `uci_sim_packet_t`. Session/ran
 The simulator now has an explicit scenario seam in the device model. The default scenario preserves current immediate notification behavior, and future variants should change notification timing or error injection without pushing test-only branches into the transport adapter.
 
 The first non-default scenario is `delayed_notifications`, which defers session-state notifications until the next command exchange. This gives clients a deterministic way to exercise lagged notification handling without changing the transport contract.
+
+App-config state is now owned by the session model rather than encoded directly in handlers, so future protocol expansion can reuse the same storage path across scenarios.
+Protocol-surface expansion should continue through this model-backed path and stay pinned by both simulator fixture tests and sibling-shell end-to-end integration, so Cherry/Qorvo semantic drift is caught outside the handlers.

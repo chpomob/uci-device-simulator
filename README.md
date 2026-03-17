@@ -19,6 +19,8 @@ Version 1 supports a focused interoperable subset:
 - `CORE_GET_CAPS_INFO`
 - `SESSION_INIT`
 - `SESSION_DEINIT`
+- `SESSION_SET_APP_CONFIG`
+- `SESSION_GET_APP_CONFIG`
 - `SESSION_GET_STATE`
 - `SESSION_START`
 - `SESSION_STOP`
@@ -46,7 +48,7 @@ Version 1 supports a focused interoperable subset:
 - `make test`
   Runs the regression test suite.
 
-The test suite includes TCP interoperability coverage driven by named wire-packet fixtures for the current `uci_interactive_shell` command flow. It pins `CORE_DEVICE_INFO`, `CORE_GET_CAPS_INFO`, `SESSION_INIT`, `SESSION_START`, `SESSION_GET_STATE`, and `SESSION_STOP` request/response/notification bytes exactly on the TCP transport, and now also checks the `delayed_notifications` scenario as a deterministic black-box variant.
+The test suite includes TCP interoperability coverage driven by named wire-packet fixtures for the current `uci_interactive_shell` command flow. It pins `CORE_DEVICE_INFO`, `CORE_GET_CAPS_INFO`, `SESSION_INIT`, `SESSION_SET_APP_CONFIG`, `SESSION_GET_APP_CONFIG`, `SESSION_START`, `SESSION_GET_STATE`, and `SESSION_STOP` request/response/notification bytes exactly on the TCP transport, and now also checks the `delayed_notifications` scenario as a deterministic black-box variant. Those fixtures now align the simulator with the shell and Cherry-style semantics for `CORE_DEVICE_INFO` payload length and session-state values.
 The sibling `uci_interactive_shell` repo also provides an opt-in `make tcp-simulator-integration-test` target that launches this simulator binary and validates a real `mode_tcp` shell session against it.
 
 ## Run

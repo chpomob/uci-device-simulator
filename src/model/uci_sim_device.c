@@ -241,6 +241,9 @@ int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
                                        uci_sim_result_t* result) {
     uci_sim_packet_t notification;
     uint8_t* payload;
+    uint32_t sequence_number;
+    uint32_t measurement_base_cm;
+    int sample;
 
     if (!device || !session || !result) {
         return -1;
@@ -249,46 +252,55 @@ int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
         return 0;
     }
 
-    memset(&notification, 0, sizeof(notification));
-    notification.mt = UCI_MT_NOTIFICATION;
-    notification.pbf = UCI_PBF_COMPLETE;
-    notification.gid = UCI_GID_SESSION_CONTROL;
-    notification.oid = UCI_SESSION_START;
-    notification.payload_len = 52;
-    payload = notification.payload;
+    for (sample = 0; sample < 3; ++sample) {
+        memset(&notification, 0, sizeof(notification));
+        notification.mt = UCI_MT_NOTIFICATION;
+        notification.pbf = UCI_PBF_COMPLETE;
+        notification.gid = UCI_GID_SESSION_CONTROL;
+        notification.oid = UCI_SESSION_START;
+        notification.payload_len = 52;
+        payload = notification.payload;
 
-    write_u32_le(&payload[0], device->next_ranging_sequence++);
-    write_u32_le(&payload[4], session->session_id);
-    payload[8] = 0x00;
-    write_u32_le(&payload[9], 1000U);
-    payload[13] = 0x01;
-    payload[14] = 0x00;
-    payload[15] = 0x00;
-    write_u32_le(&payload[16], session->session_id);
-    memset(&payload[20], 0, 4);
-    payload[24] = 0x01;
-    payload[25] = 0x12;
-    payload[26] = 0x34;
-    payload[27] = 0x00;
-    payload[28] = 0x00;
-    payload[29] = 0x64;
-    payload[30] = 0x00;
-    payload[31] = 0x14;
-    payload[32] = 0x00;
-    payload[33] = 0x08;
-    payload[34] = 0x05;
-    payload[35] = 0x00;
-    payload[36] = 0x07;
-    payload[37] = 0x10;
-    payload[38] = 0x00;
-    payload[39] = 0x06;
-    payload[40] = 0x03;
-    payload[41] = 0x00;
-    payload[42] = 0x09;
-    payload[43] = 0x02;
-    payload[44] = 0xE0;
-    memset(&payload[45], 0, 7);
+        sequence_number = device->next_ranging_sequence++;
+        measurement_base_cm = 100U + ((uint32_t)sample * 5U);
 
-    session->ranging_count++;
-    return uci_sim_device_queue_notification(device, &notification);
+        write_u32_le(&payload[0], sequence_number);
+        write_u32_le(&payload[4], session->session_id);
+        payload[8] = 0x00;
+        write_u32_le(&payload[9], 1000U);
+        payload[13] = 0x01;
+        payload[14] = 0x00;
+        payload[15] = 0x00;
+        write_u32_le(&payload[16], session->session_id);
+        memset(&payload[20], 0, 4);
+        payload[24] = 0x01;
+        payload[25] = 0x12;
+        payload[26] = 0x34;
+        payload[27] = 0x00;
+        payload[28] = 0x00;
+        payload[29] = (uint8_t)(measurement_base_cm & 0xFFU);
+        payload[30] = (uint8_t)((measurement_base_cm >> 8) & 0xFFU);
+        payload[31] = 0x14;
+        payload[32] = 0x00;
+        payload[33] = 0x08;
+        payload[34] = 0x05;
+        payload[35] = 0x00;
+        payload[36] = 0x07;
+        payload[37] = 0x10;
+        payload[38] = 0x00;
+        payload[39] = 0x06;
+        payload[40] = 0x03;
+        payload[41] = 0x00;
+        payload[42] = 0x09;
+        payload[43] = 0x02;
+        payload[44] = 0xE0;
+        memset(&payload[45], 0, 7);
+
+        session->ranging_count++;
+        if (uci_sim_device_queue_notification(device, &notification) != 0) {
+            return -1;
+        }
+    }
+
+    return 0;
 }

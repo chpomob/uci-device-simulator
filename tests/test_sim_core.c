@@ -224,6 +224,7 @@ static void test_ranging_stream_scenario(void) {
     uci_sim_packet_t request;
     uci_sim_result_t result;
     uci_sim_packet_t queued;
+    uint32_t sequence;
 
     uci_sim_device_init_with_scenario(&device, UCI_SIM_SCENARIO_RANGING_STREAM);
     memset(&request, 0, sizeof(request));
@@ -246,13 +247,22 @@ static void test_ranging_stream_scenario(void) {
     ASSERT_TRUE(result.has_notification, "ranging stream status notification missing");
     ASSERT_EQ_U8(UCI_GID_SESSION_CONFIG, result.notification.gid, "ranging stream status gid");
     ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, result.notification.oid, "ranging stream status oid");
-    ASSERT_EQ_U8(1, (uint8_t)device.pending_notification_count, "ranging stream pending count");
+    ASSERT_EQ_U8(3, (uint8_t)device.pending_notification_count, "ranging stream pending count");
     ASSERT_TRUE(uci_sim_device_dequeue_notification(&device, &queued) == 0, "ranging stream pending dequeue failed");
     ASSERT_EQ_U8(UCI_GID_SESSION_CONTROL, queued.gid, "ranging stream data gid");
     ASSERT_EQ_U8(UCI_SESSION_START, queued.oid, "ranging stream data oid");
     ASSERT_EQ_U8(52, (uint8_t)queued.payload_len, "ranging stream payload len");
     ASSERT_EQ_U8(1, queued.payload[24], "ranging stream measurement count");
-    ASSERT_EQ_U8(1, (uint8_t)device.sessions[0].ranging_count, "ranging stream count");
+    sequence = read_u32_le(queued.payload);
+    ASSERT_EQ_U32(1, sequence, "ranging stream sequence 1");
+    ASSERT_TRUE(uci_sim_device_dequeue_notification(&device, &queued) == 0, "ranging stream pending dequeue 2 failed");
+    sequence = read_u32_le(queued.payload);
+    ASSERT_EQ_U32(2, sequence, "ranging stream sequence 2");
+    ASSERT_TRUE(uci_sim_device_dequeue_notification(&device, &queued) == 0, "ranging stream pending dequeue 3 failed");
+    sequence = read_u32_le(queued.payload);
+    ASSERT_EQ_U32(3, sequence, "ranging stream sequence 3");
+    ASSERT_EQ_U8(0, (uint8_t)device.pending_notification_count, "ranging stream pending drained");
+    ASSERT_EQ_U8(3, (uint8_t)device.sessions[0].ranging_count, "ranging stream count");
     PASS();
 }
 

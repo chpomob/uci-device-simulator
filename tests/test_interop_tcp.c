@@ -439,8 +439,24 @@ static void test_ranging_stream_flow_over_tcp(void) {
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_ntf.hex",
                           "ranging stream start ntf");
     assert_fixture_packet(fd,
-                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_range_data_ntf.hex",
-                          "ranging stream range ntf");
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_range_data_ntf_1.hex",
+                          "ranging stream range ntf 1");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_range_data_ntf_2.hex",
+                          "ranging stream range ntf 2");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_range_data_ntf_3.hex",
+                          "ranging stream range ntf 3");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_ranging_count_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load ranging stream count");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write ranging stream count");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_ranging_count_after_stream_rsp.hex",
+                          "ranging stream count rsp");
 
     close(fd);
     stop_server(&server);

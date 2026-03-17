@@ -30,5 +30,6 @@ Session-count behavior is also model-derived now, which keeps the simulator’s 
 Ranging-query behavior now follows the same pattern: the session model owns fixed queryable fields such as `max_data_size` and `ranging_count`, while handlers only expose them through standard UCI responses.
 The first notification-centric scenario is `ranging_stream`. It keeps the
 handler path simple: `SESSION_START` changes state, while the scenario layer
-decides to queue Cherry-aligned range-data notifications that the TCP transport
-flushes after the response/initial status notification.
+decides to queue a deterministic series of Cherry-aligned range-data
+notifications that the TCP transport flushes after the response/initial status
+notification.

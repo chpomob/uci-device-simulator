@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -118,6 +119,17 @@ static int connect_with_retry(uint16_t port) {
     }
 
     return -1;
+}
+
+static int set_socket_timeout_ms(int fd, int timeout_ms) {
+    struct timeval timeout;
+
+    timeout.tv_sec = timeout_ms / 1000;
+    timeout.tv_usec = (timeout_ms % 1000) * 1000;
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {
+        return -1;
+    }
+    return 0;
 }
 
 static int start_server(test_server_t* server) {
@@ -405,7 +417,9 @@ static void test_delayed_notification_flow_over_tcp(void) {
 static void test_ranging_stream_flow_over_tcp(void) {
     test_server_t server = {0};
     uint8_t request[UCI_SIM_MAX_PACKET];
+    uint8_t packet[UCI_SIM_MAX_PACKET];
     size_t request_len = 0;
+    size_t packet_len = 0;
     int fd = -1;
 
     server.scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
@@ -441,12 +455,32 @@ static void test_ranging_stream_flow_over_tcp(void) {
     assert_fixture_packet(fd,
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_range_data_ntf_1.hex",
                           "ranging stream range ntf 1");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_state_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load ranging stream get state");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write ranging stream get state");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_state_rsp.hex",
+                          "ranging stream get state rsp");
     assert_fixture_packet(fd,
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_range_data_ntf_2.hex",
                           "ranging stream range ntf 2");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_stop_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load ranging stream stop");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write ranging stream stop");
     assert_fixture_packet(fd,
-                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_range_data_ntf_3.hex",
-                          "ranging stream range ntf 3");
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_stop_rsp.hex",
+                          "ranging stream stop rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_stop_ntf.hex",
+                          "ranging stream stop ntf");
 
     ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_ranging_count_cmd.hex",
                                  request,
@@ -457,6 +491,9 @@ static void test_ranging_stream_flow_over_tcp(void) {
     assert_fixture_packet(fd,
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_ranging_count_after_stream_rsp.hex",
                           "ranging stream count rsp");
+
+    ASSERT_TRUE(set_socket_timeout_ms(fd, 100) == 0, "set ranging stream timeout");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) != 0, "ranging stream should stop after session stop");
 
     close(fd);
     stop_server(&server);

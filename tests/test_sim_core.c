@@ -247,7 +247,7 @@ static void test_ranging_stream_scenario(void) {
     ASSERT_TRUE(result.has_notification, "ranging stream status notification missing");
     ASSERT_EQ_U8(UCI_GID_SESSION_CONFIG, result.notification.gid, "ranging stream status gid");
     ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, result.notification.oid, "ranging stream status oid");
-    ASSERT_EQ_U8(3, (uint8_t)device.pending_notification_count, "ranging stream pending count");
+    ASSERT_EQ_U8(1, (uint8_t)device.pending_notification_count, "ranging stream pending count after start");
     ASSERT_TRUE(uci_sim_device_dequeue_notification(&device, &queued) == 0, "ranging stream pending dequeue failed");
     ASSERT_EQ_U8(UCI_GID_SESSION_CONTROL, queued.gid, "ranging stream data gid");
     ASSERT_EQ_U8(UCI_SESSION_START, queued.oid, "ranging stream data oid");
@@ -255,14 +255,35 @@ static void test_ranging_stream_scenario(void) {
     ASSERT_EQ_U8(1, queued.payload[24], "ranging stream measurement count");
     sequence = read_u32_le(queued.payload);
     ASSERT_EQ_U32(1, sequence, "ranging stream sequence 1");
-    ASSERT_TRUE(uci_sim_device_dequeue_notification(&device, &queued) == 0, "ranging stream pending dequeue 2 failed");
-    sequence = read_u32_le(queued.payload);
+    ASSERT_EQ_U8(0, (uint8_t)device.pending_notification_count, "ranging stream pending drained after start");
+    ASSERT_EQ_U8(1, (uint8_t)device.sessions[0].ranging_count, "ranging stream count after start");
+    ASSERT_EQ_U8(2, device.sessions[0].ranging_stream_remaining, "ranging stream remaining after start");
+
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_GET_STATE;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging stream get state failed");
+    ASSERT_TRUE(result.has_notification, "ranging stream follow-up notification missing");
+    ASSERT_EQ_U8(UCI_GID_SESSION_CONTROL, result.notification.gid, "ranging stream follow-up gid");
+    ASSERT_EQ_U8(UCI_SESSION_START, result.notification.oid, "ranging stream follow-up oid");
+    sequence = read_u32_le(result.notification.payload);
     ASSERT_EQ_U32(2, sequence, "ranging stream sequence 2");
-    ASSERT_TRUE(uci_sim_device_dequeue_notification(&device, &queued) == 0, "ranging stream pending dequeue 3 failed");
-    sequence = read_u32_le(queued.payload);
-    ASSERT_EQ_U32(3, sequence, "ranging stream sequence 3");
-    ASSERT_EQ_U8(0, (uint8_t)device.pending_notification_count, "ranging stream pending drained");
-    ASSERT_EQ_U8(3, (uint8_t)device.sessions[0].ranging_count, "ranging stream count");
+    ASSERT_EQ_U8(2, (uint8_t)device.sessions[0].ranging_count, "ranging stream count after follow-up");
+    ASSERT_EQ_U8(1, device.sessions[0].ranging_stream_remaining, "ranging stream remaining after follow-up");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_STOP;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging stream stop failed");
+    ASSERT_TRUE(result.has_notification, "ranging stream stop notification missing");
+    ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, result.notification.oid, "ranging stream stop status oid");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_IDLE, result.notification.payload[4], "ranging stream stop state");
+    ASSERT_EQ_U8(0, device.sessions[0].ranging_stream_remaining, "ranging stream remaining after stop");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_GET_RANGING_COUNT;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging stream get count failed");
+    ASSERT_TRUE(!result.has_notification, "ranging stream should not emit after stop");
+    ASSERT_EQ_U32(2, read_u32_le(&result.response.payload[1]), "ranging stream final count");
     PASS();
 }
 

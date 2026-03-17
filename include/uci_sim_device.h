@@ -29,6 +29,7 @@ typedef struct {
     uint8_t state;
     uint32_t ranging_count;
     uint16_t max_data_size;
+    uint8_t ranging_stream_remaining;
     int allocated;
     uci_sim_session_config_t configs[UCI_SIM_MAX_SESSION_CONFIGS];
 } uci_sim_session_t;
@@ -84,6 +85,10 @@ int uci_sim_device_get_config(const uci_sim_device_t* device,
 int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
                                        uci_sim_session_t* session,
                                        uci_sim_result_t* result);
+void uci_sim_device_stop_ranging_stream(uci_sim_session_t* session);
+int uci_sim_device_progress_ranging_stream(uci_sim_device_t* device,
+                                           const uci_sim_packet_t* request,
+                                           uci_sim_result_t* result);
 int uci_sim_device_handle_packet(uci_sim_device_t* device,
                                  const uci_sim_packet_t* request,
                                  uci_sim_result_t* result);

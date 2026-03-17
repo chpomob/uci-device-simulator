@@ -462,7 +462,10 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
     make_status_response(request, result, UCI_STATUS_OK);
     emit_session_status_ntf(device, session_id, next_state, result);
     if (request->oid == UCI_SESSION_START) {
+        session->ranging_stream_remaining = 3;
         (void)uci_sim_device_emit_ranging_stream(device, session, result);
+    } else if (request->oid == UCI_SESSION_STOP) {
+        uci_sim_device_stop_ranging_stream(session);
     }
     return 0;
 }
@@ -500,6 +503,7 @@ int uci_sim_device_handle_packet(uci_sim_device_t* device,
             break;
     }
 
+    (void)uci_sim_device_progress_ranging_stream(device, request, result);
     uci_sim_device_finalize_result(device, result, pending_count_before);
     return rc;
 }

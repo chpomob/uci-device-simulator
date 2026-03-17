@@ -89,7 +89,11 @@ int uci_sim_device_deliver_notification(uci_sim_device_t* device,
 void uci_sim_device_finalize_result(uci_sim_device_t* device,
                                   uci_sim_result_t* result,
                                   size_t pending_count_before) {
-    if (!device || !result || result->has_notification || pending_count_before == 0) {
+    if (!device || !result || result->has_notification) {
+        return;
+    }
+    if (device->scenario == UCI_SIM_SCENARIO_DELAYED_NOTIFICATIONS &&
+        pending_count_before == 0) {
         return;
     }
 
@@ -243,62 +247,93 @@ int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
     uint8_t* payload;
     uint32_t sequence_number;
     uint32_t measurement_base_cm;
-    int sample;
 
     if (!device || !session || !result) {
         return -1;
     }
-    if (device->scenario != UCI_SIM_SCENARIO_RANGING_STREAM) {
+    if (device->scenario != UCI_SIM_SCENARIO_RANGING_STREAM ||
+        session->ranging_stream_remaining == 0 ||
+        session->state != UCI_SESSION_STATE_ACTIVE) {
         return 0;
     }
 
-    for (sample = 0; sample < 3; ++sample) {
-        memset(&notification, 0, sizeof(notification));
-        notification.mt = UCI_MT_NOTIFICATION;
-        notification.pbf = UCI_PBF_COMPLETE;
-        notification.gid = UCI_GID_SESSION_CONTROL;
-        notification.oid = UCI_SESSION_START;
-        notification.payload_len = 52;
-        payload = notification.payload;
+    memset(&notification, 0, sizeof(notification));
+    notification.mt = UCI_MT_NOTIFICATION;
+    notification.pbf = UCI_PBF_COMPLETE;
+    notification.gid = UCI_GID_SESSION_CONTROL;
+    notification.oid = UCI_SESSION_START;
+    notification.payload_len = 52;
+    payload = notification.payload;
 
-        sequence_number = device->next_ranging_sequence++;
-        measurement_base_cm = 100U + ((uint32_t)sample * 5U);
+    sequence_number = device->next_ranging_sequence++;
+    measurement_base_cm = 100U + (session->ranging_count * 5U);
 
-        write_u32_le(&payload[0], sequence_number);
-        write_u32_le(&payload[4], session->session_id);
-        payload[8] = 0x00;
-        write_u32_le(&payload[9], 1000U);
-        payload[13] = 0x01;
-        payload[14] = 0x00;
-        payload[15] = 0x00;
-        write_u32_le(&payload[16], session->session_id);
-        memset(&payload[20], 0, 4);
-        payload[24] = 0x01;
-        payload[25] = 0x12;
-        payload[26] = 0x34;
-        payload[27] = 0x00;
-        payload[28] = 0x00;
-        payload[29] = (uint8_t)(measurement_base_cm & 0xFFU);
-        payload[30] = (uint8_t)((measurement_base_cm >> 8) & 0xFFU);
-        payload[31] = 0x14;
-        payload[32] = 0x00;
-        payload[33] = 0x08;
-        payload[34] = 0x05;
-        payload[35] = 0x00;
-        payload[36] = 0x07;
-        payload[37] = 0x10;
-        payload[38] = 0x00;
-        payload[39] = 0x06;
-        payload[40] = 0x03;
-        payload[41] = 0x00;
-        payload[42] = 0x09;
-        payload[43] = 0x02;
-        payload[44] = 0xE0;
-        memset(&payload[45], 0, 7);
+    write_u32_le(&payload[0], sequence_number);
+    write_u32_le(&payload[4], session->session_id);
+    payload[8] = 0x00;
+    write_u32_le(&payload[9], 1000U);
+    payload[13] = 0x01;
+    payload[14] = 0x00;
+    payload[15] = 0x00;
+    write_u32_le(&payload[16], session->session_id);
+    memset(&payload[20], 0, 4);
+    payload[24] = 0x01;
+    payload[25] = 0x12;
+    payload[26] = 0x34;
+    payload[27] = 0x00;
+    payload[28] = 0x00;
+    payload[29] = (uint8_t)(measurement_base_cm & 0xFFU);
+    payload[30] = (uint8_t)((measurement_base_cm >> 8) & 0xFFU);
+    payload[31] = 0x14;
+    payload[32] = 0x00;
+    payload[33] = 0x08;
+    payload[34] = 0x05;
+    payload[35] = 0x00;
+    payload[36] = 0x07;
+    payload[37] = 0x10;
+    payload[38] = 0x00;
+    payload[39] = 0x06;
+    payload[40] = 0x03;
+    payload[41] = 0x00;
+    payload[42] = 0x09;
+    payload[43] = 0x02;
+    payload[44] = 0xE0;
+    memset(&payload[45], 0, 7);
 
-        session->ranging_count++;
-        if (uci_sim_device_queue_notification(device, &notification) != 0) {
-            return -1;
+    session->ranging_count++;
+    session->ranging_stream_remaining--;
+    if (uci_sim_device_queue_notification(device, &notification) != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+void uci_sim_device_stop_ranging_stream(uci_sim_session_t* session) {
+    if (!session) {
+        return;
+    }
+    session->ranging_stream_remaining = 0;
+}
+
+int uci_sim_device_progress_ranging_stream(uci_sim_device_t* device,
+                                           const uci_sim_packet_t* request,
+                                           uci_sim_result_t* result) {
+    size_t i;
+
+    if (!device || !request || !result || device->scenario != UCI_SIM_SCENARIO_RANGING_STREAM) {
+        return 0;
+    }
+    if (request->gid == UCI_GID_SESSION_CONTROL &&
+        (request->oid == UCI_SESSION_START || request->oid == UCI_SESSION_STOP)) {
+        return 0;
+    }
+
+    for (i = 0; i < UCI_SIM_MAX_SESSIONS; ++i) {
+        if (device->sessions[i].allocated &&
+            device->sessions[i].state == UCI_SESSION_STATE_ACTIVE &&
+            device->sessions[i].ranging_stream_remaining > 0) {
+            return uci_sim_device_emit_ranging_stream(device, &device->sessions[i], result);
         }
     }
 

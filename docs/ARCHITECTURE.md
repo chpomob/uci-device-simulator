@@ -31,5 +31,5 @@ Ranging-query behavior now follows the same pattern: the session model owns fixe
 The first notification-centric scenario is `ranging_stream`. It keeps the
 handler path simple: `SESSION_START` changes state, while the scenario layer
 decides to queue a deterministic series of Cherry-aligned range-data
-notifications that the TCP transport flushes after the response/initial status
-notification.
+notifications that progress across later command exchanges. `SESSION_STOP`
+cancels any remaining stream notifications before they reach the transport.

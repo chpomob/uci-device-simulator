@@ -63,7 +63,8 @@ The sibling `uci_interactive_shell` repo also provides an opt-in `make tcp-simul
 The server accepts one TCP client at a time and exchanges raw UCI packets.
 
 The `ranging_stream` scenario emits a standard `SESSION_STATUS_NTF` on session
-start and then immediately streams a short deterministic series of
-Cherry-aligned `RANGE_DATA_NTF (SESSION_INFO_NTF)` notifications with advancing
-sequence numbers and ranging counts, so UCI clients can exercise real ranging
-notification decode paths instead of a one-shot synthetic event.
+start and then advances a short deterministic series of Cherry-aligned
+`RANGE_DATA_NTF (SESSION_INFO_NTF)` notifications across subsequent command
+exchanges. `SESSION_STOP` suppresses any remaining range-data notifications, so
+UCI clients can exercise stream progression and stop behavior instead of a
+one-shot synthetic event.

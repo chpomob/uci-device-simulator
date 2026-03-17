@@ -25,3 +25,4 @@ The first non-default scenario is `delayed_notifications`, which defers session-
 
 App-config state is now owned by the session model rather than encoded directly in handlers, so future protocol expansion can reuse the same storage path across scenarios.
 Protocol-surface expansion should continue through this model-backed path and stay pinned by both simulator fixture tests and sibling-shell end-to-end integration, so Cherry/Qorvo semantic drift is caught outside the handlers.
+Core device configuration now follows the same rule: the handlers only translate UCI TLVs, while persistent device config values live in the device model and are exposed through fixture-backed TCP interoperability tests.

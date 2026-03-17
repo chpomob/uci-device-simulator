@@ -61,6 +61,47 @@ static void test_core_device_info(void) {
     PASS();
 }
 
+static void test_core_device_config_storage(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_SET_CONFIG;
+    request.payload_len = 4;
+    request.payload[0] = 1;
+    request.payload[1] = UCI_DEVICE_CONFIG_DEVICE_STATE;
+    request.payload[2] = 1;
+    request.payload[3] = UCI_DEVICE_STATE_ACTIVE;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set core config failed");
+    ASSERT_TRUE(result.has_response, "set core config response missing");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "set core config status");
+    ASSERT_EQ_U8(UCI_DEVICE_STATE_ACTIVE, device.device_state, "device state not updated");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_GET_CONFIG;
+    request.payload_len = 2;
+    request.payload[0] = 1;
+    request.payload[1] = UCI_DEVICE_CONFIG_DEVICE_STATE;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get core config failed");
+    ASSERT_TRUE(result.has_response, "get core config response missing");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get core config status");
+    ASSERT_EQ_U8(1, result.response.payload[1], "get core config count");
+    ASSERT_EQ_U8(UCI_DEVICE_CONFIG_DEVICE_STATE, result.response.payload[2], "get core config id");
+    ASSERT_EQ_U8(1, result.response.payload[3], "get core config len");
+    ASSERT_EQ_U8(UCI_DEVICE_STATE_ACTIVE, result.response.payload[4], "get core config value");
+    PASS();
+}
+
 static void test_default_scenario_initialization(void) {
     uci_sim_device_t device;
 
@@ -208,6 +249,7 @@ static void test_session_lifecycle(void) {
 int main(void) {
     test_packet_round_trip();
     test_core_device_info();
+    test_core_device_config_storage();
     test_default_scenario_initialization();
     test_delayed_notification_scenario();
     test_session_app_config_storage();

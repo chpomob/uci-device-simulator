@@ -5,6 +5,7 @@
 #include "uci_sim_scenario.h"
 
 #define UCI_SIM_MAX_PENDING_NOTIFICATIONS 8U
+#define UCI_SIM_MAX_DEVICE_CONFIGS 8U
 #define UCI_SIM_MAX_SESSION_CONFIGS 16U
 #define UCI_SIM_MAX_CONFIG_VALUE 64U
 
@@ -14,6 +15,13 @@ typedef struct {
     uint8_t value[UCI_SIM_MAX_CONFIG_VALUE];
     int in_use;
 } uci_sim_session_config_t;
+
+typedef struct {
+    uint8_t config_id;
+    uint8_t value_len;
+    uint8_t value[UCI_SIM_MAX_CONFIG_VALUE];
+    int in_use;
+} uci_sim_device_config_t;
 
 typedef struct {
     uint32_t session_id;
@@ -29,6 +37,7 @@ typedef struct {
     uint16_t phy_version;
     uint16_t test_version;
     uint8_t device_state;
+    uci_sim_device_config_t device_configs[UCI_SIM_MAX_DEVICE_CONFIGS];
     uci_sim_scenario_kind_t scenario;
     uci_sim_session_t sessions[UCI_SIM_MAX_SESSIONS];
     uci_sim_packet_t pending_notifications[UCI_SIM_MAX_PENDING_NOTIFICATIONS];
@@ -61,6 +70,14 @@ int uci_sim_session_get_config(const uci_sim_session_t* session,
                                uint8_t config_id,
                                uint8_t* value,
                                uint8_t* value_len);
+int uci_sim_device_store_config(uci_sim_device_t* device,
+                                uint8_t config_id,
+                                const uint8_t* value,
+                                uint8_t value_len);
+int uci_sim_device_get_config(const uci_sim_device_t* device,
+                              uint8_t config_id,
+                              uint8_t* value,
+                              uint8_t* value_len);
 int uci_sim_device_handle_packet(uci_sim_device_t* device,
                                  const uci_sim_packet_t* request,
                                  uci_sim_result_t* result);

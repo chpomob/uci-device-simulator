@@ -25,6 +25,11 @@ void uci_sim_device_init_with_scenario(uci_sim_device_t* device, uci_sim_scenari
     device->device_configs[1].config_id = UCI_DEVICE_CONFIG_LOW_POWER_MODE;
     device->device_configs[1].value_len = 1;
     device->device_configs[1].value[0] = 0x00;
+    device->device_configs[2].in_use = 1;
+    device->device_configs[2].config_id = UCI_DEVICE_CONFIG_DEVICE_PAN_ID;
+    device->device_configs[2].value_len = 2;
+    device->device_configs[2].value[0] = 0x00;
+    device->device_configs[2].value[1] = 0x00;
     device->scenario = scenario;
 }
 

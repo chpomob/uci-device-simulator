@@ -218,6 +218,7 @@ static int handle_core_set_get_config(uci_sim_device_t* device,
 static int handle_session_config(uci_sim_device_t* device, const uci_sim_packet_t* request, uci_sim_result_t* result) {
     uint32_t session_id;
     uci_sim_session_t* session;
+    size_t i;
 
     switch (request->oid) {
         case UCI_SESSION_INIT:
@@ -262,6 +263,21 @@ static int handle_session_config(uci_sim_device_t* device, const uci_sim_packet_
             return handle_session_set_get_config(device, request, result, 1);
         case UCI_SESSION_GET_APP_CONFIG:
             return handle_session_set_get_config(device, request, result, 0);
+        case UCI_SESSION_GET_COUNT:
+            result->has_response = 1;
+            result->response.mt = UCI_MT_RESPONSE;
+            result->response.pbf = UCI_PBF_COMPLETE;
+            result->response.gid = UCI_GID_SESSION_CONFIG;
+            result->response.oid = UCI_SESSION_GET_COUNT;
+            result->response.payload_len = 2;
+            result->response.payload[0] = UCI_STATUS_OK;
+            result->response.payload[1] = 0;
+            for (i = 0; i < UCI_SIM_MAX_SESSIONS; ++i) {
+                if (device->sessions[i].allocated) {
+                    result->response.payload[1]++;
+                }
+            }
+            return 0;
         case UCI_SESSION_GET_STATE:
             if (request->payload_len < 4) {
                 make_status_response(request, result, UCI_STATUS_INVALID_MSG_SIZE);

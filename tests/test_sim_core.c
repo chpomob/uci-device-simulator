@@ -102,6 +102,85 @@ static void test_core_device_config_storage(void) {
     PASS();
 }
 
+static void test_core_additional_device_configs(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_SET_CONFIG;
+    request.payload_len = 4;
+    request.payload[0] = 1;
+    request.payload[1] = UCI_DEVICE_CONFIG_LOW_POWER_MODE;
+    request.payload[2] = 1;
+    request.payload[3] = 1;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set low power mode failed");
+
+    request.oid = UCI_CORE_GET_CONFIG;
+    request.payload_len = 2;
+    request.payload[0] = 1;
+    request.payload[1] = UCI_DEVICE_CONFIG_LOW_POWER_MODE;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get low power mode failed");
+    ASSERT_EQ_U8(UCI_DEVICE_CONFIG_LOW_POWER_MODE, result.response.payload[2], "get low power mode id");
+    ASSERT_EQ_U8(1, result.response.payload[4], "get low power mode value");
+
+    request.oid = UCI_CORE_SET_CONFIG;
+    request.payload_len = 5;
+    request.payload[0] = 1;
+    request.payload[1] = UCI_DEVICE_CONFIG_DEVICE_PAN_ID;
+    request.payload[2] = 2;
+    request.payload[3] = 0x34;
+    request.payload[4] = 0x12;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set device pan id failed");
+
+    request.oid = UCI_CORE_GET_CONFIG;
+    request.payload_len = 2;
+    request.payload[0] = 1;
+    request.payload[1] = UCI_DEVICE_CONFIG_DEVICE_PAN_ID;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get device pan id failed");
+    ASSERT_EQ_U8(UCI_DEVICE_CONFIG_DEVICE_PAN_ID, result.response.payload[2], "get device pan id id");
+    ASSERT_EQ_U8(2, result.response.payload[3], "get device pan id len");
+    ASSERT_EQ_U8(0x34, result.response.payload[4], "get device pan id lo");
+    ASSERT_EQ_U8(0x12, result.response.payload[5], "get device pan id hi");
+    PASS();
+}
+
+static void test_session_get_count(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_GET_COUNT;
+    request.payload_len = 0;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "session get count empty failed");
+    ASSERT_EQ_U8(0, result.response.payload[1], "session get count initial");
+
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "session init for count failed");
+
+    request.oid = UCI_SESSION_GET_COUNT;
+    request.payload_len = 0;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "session get count after init failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "session get count status");
+    ASSERT_EQ_U8(1, result.response.payload[1], "session get count after init");
+    PASS();
+}
+
 static void test_default_scenario_initialization(void) {
     uci_sim_device_t device;
 
@@ -250,8 +329,10 @@ int main(void) {
     test_packet_round_trip();
     test_core_device_info();
     test_core_device_config_storage();
+    test_core_additional_device_configs();
     test_default_scenario_initialization();
     test_delayed_notification_scenario();
+    test_session_get_count();
     test_session_app_config_storage();
     test_session_lifecycle();
 

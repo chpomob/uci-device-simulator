@@ -27,6 +27,8 @@ typedef struct {
     uint32_t session_id;
     uint8_t session_type;
     uint8_t state;
+    uint32_t ranging_count;
+    uint16_t max_data_size;
     int allocated;
     uci_sim_session_config_t configs[UCI_SIM_MAX_SESSION_CONFIGS];
 } uci_sim_session_t;

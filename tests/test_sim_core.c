@@ -181,6 +181,44 @@ static void test_session_get_count(void) {
     PASS();
 }
 
+static void test_session_query_data_size_and_ranging_count(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "session init for data size failed");
+
+    request.oid = UCI_SESSION_QUERY_DATA_SIZE_IN_RANGING;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "query data size failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "query data size status");
+    ASSERT_EQ_U8(0x00, result.response.payload[1], "query data size lo");
+    ASSERT_EQ_U8(0x02, result.response.payload[2], "query data size hi");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_GET_RANGING_COUNT;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get ranging count failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get ranging count status");
+    ASSERT_EQ_U8(0x00, result.response.payload[1], "get ranging count b0");
+    ASSERT_EQ_U8(0x00, result.response.payload[2], "get ranging count b1");
+    ASSERT_EQ_U8(0x00, result.response.payload[3], "get ranging count b2");
+    ASSERT_EQ_U8(0x00, result.response.payload[4], "get ranging count b3");
+    PASS();
+}
+
 static void test_default_scenario_initialization(void) {
     uci_sim_device_t device;
 
@@ -333,6 +371,7 @@ int main(void) {
     test_default_scenario_initialization();
     test_delayed_notification_scenario();
     test_session_get_count();
+    test_session_query_data_size_and_ranging_count();
     test_session_app_config_storage();
     test_session_lifecycle();
 

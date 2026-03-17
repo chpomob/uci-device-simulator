@@ -2,6 +2,7 @@ CC = gcc
 CFLAGS = -Iinclude -Wall -Wextra -std=c11 -g
 LDFLAGS =
 BUILD_DIR = build
+DEPFLAGS = -MMD -MP
 
 COMMON_SRCS = \
 	src/spec/uci_sim_spec.c \
@@ -17,6 +18,7 @@ INTEROP_TEST_SRCS = $(COMMON_SRCS) src/transport/tcp/uci_sim_tcp_server.c tests/
 APP_OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(APP_SRCS))
 TEST_OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(TEST_SRCS))
 INTEROP_TEST_OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(INTEROP_TEST_SRCS))
+DEPS = $(APP_OBJS:.o=.d) $(TEST_OBJS:.o=.d) $(INTEROP_TEST_OBJS:.o=.d)
 
 all: test uci-device-sim
 
@@ -36,7 +38,7 @@ $(BUILD_DIR)/test_interop_tcp: $(INTEROP_TEST_OBJS)
 
 $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c -o $@ $<
 
 test: $(BUILD_DIR)/test_sim_core $(BUILD_DIR)/test_interop_tcp
 	./$(BUILD_DIR)/test_sim_core
@@ -44,3 +46,5 @@ test: $(BUILD_DIR)/test_sim_core $(BUILD_DIR)/test_interop_tcp
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+-include $(DEPS)

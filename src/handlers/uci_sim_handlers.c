@@ -34,6 +34,8 @@ static uci_sim_session_t* alloc_session(uci_sim_device_t* device, uint32_t sessi
             device->sessions[i].session_id = session_id;
             device->sessions[i].session_type = UCI_SESSION_TYPE_RANGING;
             device->sessions[i].state = UCI_SESSION_STATE_INIT;
+            device->sessions[i].ranging_count = 0;
+            device->sessions[i].max_data_size = 0x0200;
             return &device->sessions[i];
         }
     }
@@ -278,6 +280,36 @@ static int handle_session_config(uci_sim_device_t* device, const uci_sim_packet_
                 }
             }
             return 0;
+        case UCI_SESSION_QUERY_DATA_SIZE_IN_RANGING:
+            if (request->payload_len < 4) {
+                result->has_response = 1;
+                result->response.mt = UCI_MT_RESPONSE;
+                result->response.pbf = UCI_PBF_COMPLETE;
+                result->response.gid = UCI_GID_SESSION_CONFIG;
+                result->response.oid = UCI_SESSION_QUERY_DATA_SIZE_IN_RANGING;
+                result->response.payload_len = 3;
+                result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
+                result->response.payload[1] = 0x00;
+                result->response.payload[2] = 0x00;
+                return -1;
+            }
+            session_id = read_u32_le(request->payload);
+            session = find_session(device, session_id);
+            result->has_response = 1;
+            result->response.mt = UCI_MT_RESPONSE;
+            result->response.pbf = UCI_PBF_COMPLETE;
+            result->response.gid = UCI_GID_SESSION_CONFIG;
+            result->response.oid = UCI_SESSION_QUERY_DATA_SIZE_IN_RANGING;
+            result->response.payload_len = 3;
+            result->response.payload[0] = (session != NULL) ? UCI_STATUS_OK : UCI_STATUS_INVALID_PARAM;
+            if (session != NULL) {
+                result->response.payload[1] = (uint8_t)(session->max_data_size & 0xFFU);
+                result->response.payload[2] = (uint8_t)((session->max_data_size >> 8) & 0xFFU);
+                return 0;
+            }
+            result->response.payload[1] = 0x00;
+            result->response.payload[2] = 0x00;
+            return -1;
         case UCI_SESSION_GET_STATE:
             if (request->payload_len < 4) {
                 make_status_response(request, result, UCI_STATUS_INVALID_MSG_SIZE);
@@ -411,6 +443,16 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
         case UCI_SESSION_STOP:
             next_state = UCI_SESSION_STATE_IDLE;
             break;
+        case UCI_SESSION_GET_RANGING_COUNT:
+            result->has_response = 1;
+            result->response.mt = UCI_MT_RESPONSE;
+            result->response.pbf = UCI_PBF_COMPLETE;
+            result->response.gid = UCI_GID_SESSION_CONTROL;
+            result->response.oid = UCI_SESSION_GET_RANGING_COUNT;
+            result->response.payload_len = 5;
+            result->response.payload[0] = UCI_STATUS_OK;
+            write_u32_le(&result->response.payload[1], session->ranging_count);
+            return 0;
         default:
             make_status_response(request, result, UCI_STATUS_UNKNOWN_OID);
             return -1;

@@ -290,6 +290,12 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
             "session_get_count"
         },
         {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_query_data_size_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_query_data_size_rsp.hex",
+            NULL,
+            "session_query_data_size"
+        },
+        {
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_cmd.hex",
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
             NULL,
@@ -318,6 +324,12 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_stop_rsp.hex",
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_stop_ntf.hex",
             "session_stop"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_ranging_count_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_ranging_count_rsp.hex",
+            NULL,
+            "session_get_ranging_count"
         }
     };
 

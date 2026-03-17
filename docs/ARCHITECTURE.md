@@ -19,7 +19,11 @@ Future transports should only adapt raw bytes to `uci_sim_packet_t`. Session/ran
 
 ## Scenario Direction
 
-The simulator now has an explicit scenario seam in the device model. The default scenario preserves current immediate notification behavior, and future variants should change notification timing or error injection without pushing test-only branches into the transport adapter.
+The simulator now has an explicit scenario seam through `uci_sim_scenario.*`.
+The default scenario preserves current immediate notification behavior, and
+future variants should change notification timing or error injection through
+scenario hooks instead of pushing test-only branches into the transport adapter
+or the core device model.
 
 The first non-default scenario is `delayed_notifications`, which defers session-state notifications until the next command exchange. This gives clients a deterministic way to exercise lagged notification handling without changing the transport contract.
 
@@ -30,6 +34,7 @@ Session-count behavior is also model-derived now, which keeps the simulator’s 
 Ranging-query behavior now follows the same pattern: the session model owns fixed queryable fields such as `max_data_size` and `ranging_count`, while handlers only expose them through standard UCI responses.
 The first notification-centric scenario is `ranging_stream`. It keeps the
 handler path simple: `SESSION_START` changes state, while the scenario layer
-decides to queue a deterministic series of Cherry-aligned range-data
-notifications that progress across later command exchanges. `SESSION_STOP`
-cancels any remaining stream notifications before they reach the transport.
+decides when to enqueue Cherry-aligned range-data notifications through
+`on_session_started`, `on_session_stopped`, and `on_command_complete` hooks.
+`SESSION_STOP` cancels any remaining stream notifications before they reach the
+transport.

@@ -39,7 +39,7 @@ Version 1 supports a focused interoperable subset:
 - `src/core/`: packet parsing/building and dispatch glue
 - `src/model/`: simulator device/session state
 - `src/handlers/`: protocol family behavior
-- `src/scenario/` and `src/spec/uci_sim_scenario.c`: scenario selection and notification policy
+- `src/scenario/` and `src/spec/uci_sim_scenario.c`: scenario selection, notification policy, and event hooks
 - `src/transport/`: transport adapters
 - `tests/`: protocol and behavior regression tests
 - `docs/`: architecture notes
@@ -64,7 +64,7 @@ The server accepts one TCP client at a time and exchanges raw UCI packets.
 
 The `ranging_stream` scenario emits a standard `SESSION_STATUS_NTF` on session
 start and then advances a short deterministic series of Cherry-aligned
-`RANGE_DATA_NTF (SESSION_INFO_NTF)` notifications across subsequent command
-exchanges. `SESSION_STOP` suppresses any remaining range-data notifications, so
-UCI clients can exercise stream progression and stop behavior instead of a
+`RANGE_DATA_NTF (SESSION_INFO_NTF)` notifications through explicit scenario
+event hooks. `SESSION_STOP` suppresses any remaining range-data notifications,
+so UCI clients can exercise stream progression and stop behavior instead of a
 one-shot synthetic event.

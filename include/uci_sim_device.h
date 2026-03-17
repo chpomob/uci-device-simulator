@@ -9,21 +9,21 @@
 #define UCI_SIM_MAX_SESSION_CONFIGS 16U
 #define UCI_SIM_MAX_CONFIG_VALUE 64U
 
-typedef struct {
+typedef struct uci_sim_session_config {
     uint8_t config_id;
     uint8_t value_len;
     uint8_t value[UCI_SIM_MAX_CONFIG_VALUE];
     int in_use;
 } uci_sim_session_config_t;
 
-typedef struct {
+typedef struct uci_sim_device_config {
     uint8_t config_id;
     uint8_t value_len;
     uint8_t value[UCI_SIM_MAX_CONFIG_VALUE];
     int in_use;
 } uci_sim_device_config_t;
 
-typedef struct {
+typedef struct uci_sim_session {
     uint32_t session_id;
     uint8_t session_type;
     uint8_t state;
@@ -34,7 +34,7 @@ typedef struct {
     uci_sim_session_config_t configs[UCI_SIM_MAX_SESSION_CONFIGS];
 } uci_sim_session_t;
 
-typedef struct {
+typedef struct uci_sim_device {
     uint16_t uci_version;
     uint16_t mac_version;
     uint16_t phy_version;
@@ -48,7 +48,7 @@ typedef struct {
     size_t pending_notification_count;
 } uci_sim_device_t;
 
-typedef struct {
+typedef struct uci_sim_result {
     uci_sim_packet_t response;
     int has_response;
     uci_sim_packet_t notification;
@@ -85,10 +85,6 @@ int uci_sim_device_get_config(const uci_sim_device_t* device,
 int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
                                        uci_sim_session_t* session,
                                        uci_sim_result_t* result);
-void uci_sim_device_stop_ranging_stream(uci_sim_session_t* session);
-int uci_sim_device_progress_ranging_stream(uci_sim_device_t* device,
-                                           const uci_sim_packet_t* request,
-                                           uci_sim_result_t* result);
 int uci_sim_device_handle_packet(uci_sim_device_t* device,
                                  const uci_sim_packet_t* request,
                                  uci_sim_result_t* result);

@@ -91,7 +91,7 @@ static int process_client(int client_fd, uci_sim_device_t* device) {
                 return -1;
             }
         }
-        if (device->scenario != UCI_SIM_SCENARIO_DELAYED_NOTIFICATIONS) {
+        if (!uci_sim_scenario_should_defer_notification(device->scenario)) {
             uci_sim_packet_t pending_notification;
             while (uci_sim_device_dequeue_notification(device, &pending_notification) == 0) {
                 if (write_packet(client_fd, buffer, sizeof(buffer), &pending_notification) != 0) {

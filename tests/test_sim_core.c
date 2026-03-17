@@ -287,6 +287,54 @@ static void test_ranging_stream_scenario(void) {
     PASS();
 }
 
+static void test_ranging_stream_progresses_to_completion(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uint32_t sequence;
+
+    uci_sim_device_init_with_scenario(&device, UCI_SIM_SCENARIO_RANGING_STREAM);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging progression init failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging progression start failed");
+    ASSERT_TRUE(uci_sim_device_dequeue_notification(&device, &result.notification) == 0, "ranging progression dequeue 1 failed");
+    sequence = read_u32_le(result.notification.payload);
+    ASSERT_EQ_U32(1, sequence, "ranging progression sequence 1");
+
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_GET_STATE;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging progression get state 1 failed");
+    sequence = read_u32_le(result.notification.payload);
+    ASSERT_EQ_U32(2, sequence, "ranging progression sequence 2");
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging progression get state 2 failed");
+    sequence = read_u32_le(result.notification.payload);
+    ASSERT_EQ_U32(3, sequence, "ranging progression sequence 3");
+    ASSERT_EQ_U8(0, device.sessions[0].ranging_stream_remaining, "ranging progression remaining");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_GET_RANGING_COUNT;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging progression get count failed");
+    ASSERT_TRUE(!result.has_notification, "ranging progression should complete cleanly");
+    ASSERT_EQ_U32(3, read_u32_le(&result.response.payload[1]), "ranging progression final count");
+    PASS();
+}
+
 static void test_default_scenario_initialization(void) {
     uci_sim_device_t device;
 
@@ -441,6 +489,7 @@ int main(void) {
     test_session_get_count();
     test_session_query_data_size_and_ranging_count();
     test_ranging_stream_scenario();
+    test_ranging_stream_progresses_to_completion();
     test_session_app_config_storage();
     test_session_lifecycle();
 

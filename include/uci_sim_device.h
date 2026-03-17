@@ -41,6 +41,7 @@ typedef struct {
     uint8_t device_state;
     uci_sim_device_config_t device_configs[UCI_SIM_MAX_DEVICE_CONFIGS];
     uci_sim_scenario_kind_t scenario;
+    uint32_t next_ranging_sequence;
     uci_sim_session_t sessions[UCI_SIM_MAX_SESSIONS];
     uci_sim_packet_t pending_notifications[UCI_SIM_MAX_PENDING_NOTIFICATIONS];
     size_t pending_notification_count;
@@ -80,6 +81,9 @@ int uci_sim_device_get_config(const uci_sim_device_t* device,
                               uint8_t config_id,
                               uint8_t* value,
                               uint8_t* value_len);
+int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
+                                       uci_sim_session_t* session,
+                                       uci_sim_result_t* result);
 int uci_sim_device_handle_packet(uci_sim_device_t* device,
                                  const uci_sim_packet_t* request,
                                  uci_sim_result_t* result);

@@ -30,6 +30,7 @@ Version 1 supports a focused interoperable subset:
 - `SESSION_STOP`
 - `SESSION_STATUS_NTF`
 - Scenario variants selected at process start, beginning with `default` and `delayed_notifications`
+  and now including `ranging_stream`
 
 ## Repository Layout
 
@@ -57,6 +58,11 @@ The sibling `uci_interactive_shell` repo also provides an opt-in `make tcp-simul
 
 ## Run
 
-`./build/uci-device-sim 127.0.0.1 9000 [default|delayed_notifications]`
+`./build/uci-device-sim 127.0.0.1 9000 [default|delayed_notifications|ranging_stream]`
 
 The server accepts one TCP client at a time and exchanges raw UCI packets.
+
+The `ranging_stream` scenario emits a standard `SESSION_STATUS_NTF` on session
+start and then immediately streams a Cherry-aligned `RANGE_DATA_NTF
+(SESSION_INFO_NTF)` notification burst so UCI clients can exercise real ranging
+notification decode paths.

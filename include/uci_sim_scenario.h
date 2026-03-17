@@ -6,6 +6,7 @@
 typedef enum {
     UCI_SIM_SCENARIO_DEFAULT = 0,
     UCI_SIM_SCENARIO_DELAYED_NOTIFICATIONS = 1,
+    UCI_SIM_SCENARIO_RANGING_STREAM = 2,
 } uci_sim_scenario_kind_t;
 
 const char* uci_sim_scenario_name(uci_sim_scenario_kind_t scenario);

@@ -219,6 +219,43 @@ static void test_session_query_data_size_and_ranging_count(void) {
     PASS();
 }
 
+static void test_ranging_stream_scenario(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_packet_t queued;
+
+    uci_sim_device_init_with_scenario(&device, UCI_SIM_SCENARIO_RANGING_STREAM);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging stream init failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging stream start failed");
+    ASSERT_TRUE(result.has_notification, "ranging stream status notification missing");
+    ASSERT_EQ_U8(UCI_GID_SESSION_CONFIG, result.notification.gid, "ranging stream status gid");
+    ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, result.notification.oid, "ranging stream status oid");
+    ASSERT_EQ_U8(1, (uint8_t)device.pending_notification_count, "ranging stream pending count");
+    ASSERT_TRUE(uci_sim_device_dequeue_notification(&device, &queued) == 0, "ranging stream pending dequeue failed");
+    ASSERT_EQ_U8(UCI_GID_SESSION_CONTROL, queued.gid, "ranging stream data gid");
+    ASSERT_EQ_U8(UCI_SESSION_START, queued.oid, "ranging stream data oid");
+    ASSERT_EQ_U8(52, (uint8_t)queued.payload_len, "ranging stream payload len");
+    ASSERT_EQ_U8(1, queued.payload[24], "ranging stream measurement count");
+    ASSERT_EQ_U8(1, (uint8_t)device.sessions[0].ranging_count, "ranging stream count");
+    PASS();
+}
+
 static void test_default_scenario_initialization(void) {
     uci_sim_device_t device;
 
@@ -372,6 +409,7 @@ int main(void) {
     test_delayed_notification_scenario();
     test_session_get_count();
     test_session_query_data_size_and_ranging_count();
+    test_ranging_stream_scenario();
     test_session_app_config_storage();
     test_session_lifecycle();
 

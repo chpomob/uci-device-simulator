@@ -461,6 +461,9 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
     session->state = next_state;
     make_status_response(request, result, UCI_STATUS_OK);
     emit_session_status_ntf(device, session_id, next_state, result);
+    if (request->oid == UCI_SESSION_START) {
+        (void)uci_sim_device_emit_ranging_stream(device, session, result);
+    }
     return 0;
 }
 

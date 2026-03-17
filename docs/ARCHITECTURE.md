@@ -28,3 +28,7 @@ Protocol-surface expansion should continue through this model-backed path and st
 Core device configuration now follows the same rule: the handlers only translate UCI TLVs, while persistent device config values live in the device model and are exposed through fixture-backed TCP interoperability tests.
 Session-count behavior is also model-derived now, which keeps the simulator’s standard session bookkeeping observable without adding special-case state to the transport layer.
 Ranging-query behavior now follows the same pattern: the session model owns fixed queryable fields such as `max_data_size` and `ranging_count`, while handlers only expose them through standard UCI responses.
+The first notification-centric scenario is `ranging_stream`. It keeps the
+handler path simple: `SESSION_START` changes state, while the scenario layer
+decides to queue Cherry-aligned range-data notifications that the TCP transport
+flushes after the response/initial status notification.

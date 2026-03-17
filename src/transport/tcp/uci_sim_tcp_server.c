@@ -34,6 +34,18 @@ static ssize_t write_full(int fd, const void* buffer, size_t count) {
     return (ssize_t)total;
 }
 
+static int write_packet(int fd, uint8_t* buffer, size_t buffer_capacity, const uci_sim_packet_t* packet) {
+    size_t written = 0;
+
+    if (uci_sim_packet_serialize(packet, buffer, buffer_capacity, &written) != 0) {
+        return -1;
+    }
+    if (write_full(fd, buffer, written) <= 0) {
+        return -1;
+    }
+    return 0;
+}
+
 static int process_client(int client_fd, uci_sim_device_t* device) {
     uint8_t header[UCI_SIM_HEADER_SIZE];
     uint8_t buffer[UCI_SIM_MAX_PACKET];
@@ -70,21 +82,21 @@ static int process_client(int client_fd, uci_sim_device_t* device) {
         }
 
         if (result.has_response) {
-            size_t written = 0;
-            if (uci_sim_packet_serialize(&result.response, buffer, sizeof(buffer), &written) != 0) {
-                return -1;
-            }
-            if (write_full(client_fd, buffer, written) <= 0) {
+            if (write_packet(client_fd, buffer, sizeof(buffer), &result.response) != 0) {
                 return -1;
             }
         }
         if (result.has_notification) {
-            size_t written = 0;
-            if (uci_sim_packet_serialize(&result.notification, buffer, sizeof(buffer), &written) != 0) {
+            if (write_packet(client_fd, buffer, sizeof(buffer), &result.notification) != 0) {
                 return -1;
             }
-            if (write_full(client_fd, buffer, written) <= 0) {
-                return -1;
+        }
+        if (device->scenario != UCI_SIM_SCENARIO_DELAYED_NOTIFICATIONS) {
+            uci_sim_packet_t pending_notification;
+            while (uci_sim_device_dequeue_notification(device, &pending_notification) == 0) {
+                if (write_packet(client_fd, buffer, sizeof(buffer), &pending_notification) != 0) {
+                    return -1;
+                }
             }
         }
     }

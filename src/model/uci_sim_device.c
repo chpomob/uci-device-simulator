@@ -31,6 +31,7 @@ void uci_sim_device_init_with_scenario(uci_sim_device_t* device, uci_sim_scenari
     device->device_configs[2].value[0] = 0x00;
     device->device_configs[2].value[1] = 0x00;
     device->scenario = scenario;
+    device->next_ranging_sequence = 1;
 }
 
 void uci_sim_device_init(uci_sim_device_t* device) {
@@ -226,4 +227,68 @@ int uci_sim_device_get_config(const uci_sim_device_t* device,
     }
 
     return -1;
+}
+
+static void write_u32_le(uint8_t* payload, uint32_t value) {
+    payload[0] = (uint8_t)(value & 0xFFU);
+    payload[1] = (uint8_t)((value >> 8) & 0xFFU);
+    payload[2] = (uint8_t)((value >> 16) & 0xFFU);
+    payload[3] = (uint8_t)((value >> 24) & 0xFFU);
+}
+
+int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
+                                       uci_sim_session_t* session,
+                                       uci_sim_result_t* result) {
+    uci_sim_packet_t notification;
+    uint8_t* payload;
+
+    if (!device || !session || !result) {
+        return -1;
+    }
+    if (device->scenario != UCI_SIM_SCENARIO_RANGING_STREAM) {
+        return 0;
+    }
+
+    memset(&notification, 0, sizeof(notification));
+    notification.mt = UCI_MT_NOTIFICATION;
+    notification.pbf = UCI_PBF_COMPLETE;
+    notification.gid = UCI_GID_SESSION_CONTROL;
+    notification.oid = UCI_SESSION_START;
+    notification.payload_len = 52;
+    payload = notification.payload;
+
+    write_u32_le(&payload[0], device->next_ranging_sequence++);
+    write_u32_le(&payload[4], session->session_id);
+    payload[8] = 0x00;
+    write_u32_le(&payload[9], 1000U);
+    payload[13] = 0x01;
+    payload[14] = 0x00;
+    payload[15] = 0x00;
+    write_u32_le(&payload[16], session->session_id);
+    memset(&payload[20], 0, 4);
+    payload[24] = 0x01;
+    payload[25] = 0x12;
+    payload[26] = 0x34;
+    payload[27] = 0x00;
+    payload[28] = 0x00;
+    payload[29] = 0x64;
+    payload[30] = 0x00;
+    payload[31] = 0x14;
+    payload[32] = 0x00;
+    payload[33] = 0x08;
+    payload[34] = 0x05;
+    payload[35] = 0x00;
+    payload[36] = 0x07;
+    payload[37] = 0x10;
+    payload[38] = 0x00;
+    payload[39] = 0x06;
+    payload[40] = 0x03;
+    payload[41] = 0x00;
+    payload[42] = 0x09;
+    payload[43] = 0x02;
+    payload[44] = 0xE0;
+    memset(&payload[45], 0, 7);
+
+    session->ranging_count++;
+    return uci_sim_device_queue_notification(device, &notification);
 }

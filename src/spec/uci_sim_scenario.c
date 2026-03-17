@@ -8,6 +8,8 @@ const char* uci_sim_scenario_name(uci_sim_scenario_kind_t scenario) {
             return "default";
         case UCI_SIM_SCENARIO_DELAYED_NOTIFICATIONS:
             return "delayed_notifications";
+        case UCI_SIM_SCENARIO_RANGING_STREAM:
+            return "ranging_stream";
         default:
             return "unknown";
     }
@@ -24,6 +26,10 @@ int uci_sim_scenario_parse(const char* name, uci_sim_scenario_kind_t* scenario) 
     }
     if (strcmp(name, "delayed_notifications") == 0) {
         *scenario = UCI_SIM_SCENARIO_DELAYED_NOTIFICATIONS;
+        return 0;
+    }
+    if (strcmp(name, "ranging_stream") == 0) {
+        *scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
         return 0;
     }
 

@@ -402,9 +402,55 @@ static void test_delayed_notification_flow_over_tcp(void) {
     PASS();
 }
 
+static void test_ranging_stream_flow_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    size_t request_len = 0;
+    int fd = -1;
+
+    server.scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
+    ASSERT_TRUE(start_server(&server) == 0, "start ranging stream server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect ranging stream server");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load ranging stream init");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write ranging stream init");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_rsp.hex",
+                          "ranging stream init rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
+                          "ranging stream init ntf");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load ranging stream start");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write ranging stream start");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_rsp.hex",
+                          "ranging stream start rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_ntf.hex",
+                          "ranging stream start ntf");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_range_data_ntf.hex",
+                          "ranging stream range ntf");
+
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 int main(void) {
     test_shell_compatible_core_and_session_flow_over_tcp();
     test_delayed_notification_flow_over_tcp();
+    test_ranging_stream_flow_over_tcp();
 
     printf("Passed: %d\n", g_passed);
     printf("Failed: %d\n", g_failed);

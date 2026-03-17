@@ -43,6 +43,11 @@ Version 1 supports a focused interoperable subset:
 - `make test`
   Runs the regression test suite.
 
+The test suite includes a TCP interoperability check that sends the same
+command bytes the current `uci_interactive_shell` project emits for its
+stabilized CORE and SESSION lifecycle commands, then asserts the simulator's
+wire responses and notifications.
+
 ## Run
 
 `./build/uci-device-sim 127.0.0.1 9000`

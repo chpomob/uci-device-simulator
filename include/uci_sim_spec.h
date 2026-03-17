@@ -1,0 +1,82 @@
+#ifndef UCI_SIM_SPEC_H
+#define UCI_SIM_SPEC_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#define UCI_SIM_HEADER_SIZE 4U
+#define UCI_SIM_MAX_PAYLOAD 1024U
+#define UCI_SIM_MAX_PACKET (UCI_SIM_HEADER_SIZE + UCI_SIM_MAX_PAYLOAD)
+#define UCI_SIM_MAX_SESSIONS 8U
+
+enum {
+    UCI_MT_DATA = 0x0,
+    UCI_MT_COMMAND = 0x1,
+    UCI_MT_RESPONSE = 0x2,
+    UCI_MT_NOTIFICATION = 0x3
+};
+
+enum {
+    UCI_PBF_COMPLETE = 0x0,
+    UCI_PBF_NOT_COMPLETE = 0x1
+};
+
+enum {
+    UCI_GID_CORE = 0x00,
+    UCI_GID_SESSION_CONFIG = 0x01,
+    UCI_GID_SESSION_CONTROL = 0x02
+};
+
+enum {
+    UCI_STATUS_OK = 0x00,
+    UCI_STATUS_REJECTED = 0x01,
+    UCI_STATUS_FAILED = 0x02,
+    UCI_STATUS_SYNTAX_ERROR = 0x03,
+    UCI_STATUS_INVALID_PARAM = 0x04,
+    UCI_STATUS_INVALID_RANGE = 0x05,
+    UCI_STATUS_INVALID_MSG_SIZE = 0x06,
+    UCI_STATUS_UNKNOWN_GID = 0x07,
+    UCI_STATUS_UNKNOWN_OID = 0x08
+};
+
+enum {
+    UCI_CORE_DEVICE_RESET = 0x00,
+    UCI_CORE_DEVICE_STATUS_NTF = 0x01,
+    UCI_CORE_DEVICE_INFO = 0x02,
+    UCI_CORE_GET_CAPS_INFO = 0x03
+};
+
+enum {
+    UCI_SESSION_INIT = 0x00,
+    UCI_SESSION_DEINIT = 0x01,
+    UCI_SESSION_STATUS_NTF = 0x02,
+    UCI_SESSION_GET_STATE = 0x06
+};
+
+enum {
+    UCI_SESSION_START = 0x00,
+    UCI_SESSION_STOP = 0x01
+};
+
+enum {
+    UCI_DEVICE_STATE_READY = 0x01
+};
+
+enum {
+    UCI_SESSION_TYPE_RANGING = 0x00
+};
+
+enum {
+    UCI_SESSION_STATE_INIT = 0x00,
+    UCI_SESSION_STATE_ACTIVE = 0x01,
+    UCI_SESSION_STATE_IDLE = 0x02
+};
+
+enum {
+    UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS = 0x00
+};
+
+const char* uci_sim_status_name(uint8_t status);
+const char* uci_sim_gid_name(uint8_t gid);
+
+#endif

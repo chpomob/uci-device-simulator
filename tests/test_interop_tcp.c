@@ -122,7 +122,7 @@ static int start_server(test_server_t* server) {
     uci_sim_device_t device;
     pid_t pid;
 
-    server->port = (uint16_t)(19000 + (getpid() % 1000));
+    server->port = (uint16_t)(20000 + (((unsigned)getpid() ^ (unsigned)time(NULL)) % 20000));
     pid = fork();
     if (pid < 0) {
         return -1;

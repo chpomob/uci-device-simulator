@@ -54,16 +54,23 @@ static void write_u32_le(uint8_t* payload, uint32_t value) {
     payload[3] = (uint8_t)((value >> 24) & 0xFFU);
 }
 
-static void emit_session_status_ntf(uint32_t session_id, uint8_t state, uci_sim_result_t* result) {
-    result->has_notification = 1;
-    result->notification.mt = UCI_MT_NOTIFICATION;
-    result->notification.pbf = UCI_PBF_COMPLETE;
-    result->notification.gid = UCI_GID_SESSION_CONFIG;
-    result->notification.oid = UCI_SESSION_STATUS_NTF;
-    result->notification.payload_len = 6;
-    write_u32_le(result->notification.payload, session_id);
-    result->notification.payload[4] = state;
-    result->notification.payload[5] = UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS;
+static void emit_session_status_ntf(uci_sim_device_t* device,
+                                    uint32_t session_id,
+                                    uint8_t state,
+                                    uci_sim_result_t* result) {
+    uci_sim_packet_t notification;
+
+    memset(&notification, 0, sizeof(notification));
+    notification.mt = UCI_MT_NOTIFICATION;
+    notification.pbf = UCI_PBF_COMPLETE;
+    notification.gid = UCI_GID_SESSION_CONFIG;
+    notification.oid = UCI_SESSION_STATUS_NTF;
+    notification.payload_len = 6;
+    write_u32_le(notification.payload, session_id);
+    notification.payload[4] = state;
+    notification.payload[5] = UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS;
+
+    (void)uci_sim_device_deliver_notification(device, &notification, result);
 }
 
 static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request, uci_sim_result_t* result) {
@@ -131,7 +138,7 @@ static int handle_session_config(uci_sim_device_t* device, const uci_sim_packet_
             result->response.payload_len = 5;
             result->response.payload[0] = UCI_STATUS_OK;
             write_u32_le(&result->response.payload[1], session_id);
-            emit_session_status_ntf(session_id, UCI_SESSION_STATE_INIT, result);
+            emit_session_status_ntf(device, session_id, UCI_SESSION_STATE_INIT, result);
             return 0;
         case UCI_SESSION_DEINIT:
             if (request->payload_len < 4) {
@@ -204,13 +211,15 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
 
     session->state = next_state;
     make_status_response(request, result, UCI_STATUS_OK);
-    emit_session_status_ntf(session_id, next_state, result);
+    emit_session_status_ntf(device, session_id, next_state, result);
     return 0;
 }
 
 int uci_sim_device_handle_packet(uci_sim_device_t* device,
                                  const uci_sim_packet_t* request,
                                  uci_sim_result_t* result) {
+    int rc;
+
     if (!device || !request || !result) {
         return -1;
     }
@@ -222,13 +231,20 @@ int uci_sim_device_handle_packet(uci_sim_device_t* device,
 
     switch (request->gid) {
         case UCI_GID_CORE:
-            return handle_core(device, request, result);
+            rc = handle_core(device, request, result);
+            break;
         case UCI_GID_SESSION_CONFIG:
-            return handle_session_config(device, request, result);
+            rc = handle_session_config(device, request, result);
+            break;
         case UCI_GID_SESSION_CONTROL:
-            return handle_session_control(device, request, result);
+            rc = handle_session_control(device, request, result);
+            break;
         default:
             make_status_response(request, result, UCI_STATUS_UNKNOWN_GID);
-            return -1;
+            rc = -1;
+            break;
     }
+
+    uci_sim_device_finalize_result(device, result);
+    return rc;
 }

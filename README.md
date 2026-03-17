@@ -10,6 +10,7 @@ Standalone UCI device simulator intended to interoperate with:
 - Transport adapters must remain thin. Core protocol behavior lives outside transport code.
 - TCP is the first transport. Additional transports such as pseudo-serial/chardev will be added later without changing the simulator core.
 - All externally visible packet behavior should be pinned by tests.
+- Scenario behavior must stay outside transport code and out of the protocol handlers whenever possible.
 
 ## Initial Scope
 
@@ -30,6 +31,7 @@ Version 1 supports a focused interoperable subset:
 - `src/core/`: packet parsing/building and dispatch glue
 - `src/model/`: simulator device/session state
 - `src/handlers/`: protocol family behavior
+- `src/scenario/` and `src/spec/uci_sim_scenario.c`: scenario selection and notification policy
 - `src/transport/`: transport adapters
 - `tests/`: protocol and behavior regression tests
 - `docs/`: architecture notes

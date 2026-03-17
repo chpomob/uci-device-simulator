@@ -61,6 +61,14 @@ static void test_core_device_info(void) {
     PASS();
 }
 
+static void test_default_scenario_initialization(void) {
+    uci_sim_device_t device;
+
+    uci_sim_device_init(&device);
+    ASSERT_EQ_U8(UCI_SIM_SCENARIO_DEFAULT, device.scenario, "default scenario");
+    PASS();
+}
+
 static void test_session_lifecycle(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -107,6 +115,7 @@ static void test_session_lifecycle(void) {
 int main(void) {
     test_packet_round_trip();
     test_core_device_info();
+    test_default_scenario_initialization();
     test_session_lifecycle();
 
     printf("Passed: %d\n", g_passed);

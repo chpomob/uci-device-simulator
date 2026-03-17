@@ -5,6 +5,7 @@ BUILD_DIR = build
 
 COMMON_SRCS = \
 	src/spec/uci_sim_spec.c \
+	src/spec/uci_sim_scenario.c \
 	src/core/uci_sim_packet.c \
 	src/model/uci_sim_device.c \
 	src/handlers/uci_sim_handlers.c

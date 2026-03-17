@@ -219,6 +219,7 @@ int uci_sim_device_handle_packet(uci_sim_device_t* device,
                                  const uci_sim_packet_t* request,
                                  uci_sim_result_t* result) {
     int rc;
+    size_t pending_count_before;
 
     if (!device || !request || !result) {
         return -1;
@@ -228,6 +229,8 @@ int uci_sim_device_handle_packet(uci_sim_device_t* device,
     if (request->mt != UCI_MT_COMMAND) {
         return -1;
     }
+
+    pending_count_before = device->pending_notification_count;
 
     switch (request->gid) {
         case UCI_GID_CORE:
@@ -245,6 +248,6 @@ int uci_sim_device_handle_packet(uci_sim_device_t* device,
             break;
     }
 
-    uci_sim_device_finalize_result(device, result);
+    uci_sim_device_finalize_result(device, result, pending_count_before);
     return rc;
 }

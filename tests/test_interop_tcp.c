@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include "uci_sim_device.h"
 #include "uci_sim_packet.h"
 #include "uci_sim_tcp_server.h"
 
@@ -28,6 +29,7 @@ static int g_passed = 0;
 typedef struct {
     pid_t pid;
     uint16_t port;
+    uci_sim_scenario_kind_t scenario;
 } test_server_t;
 
 typedef struct {
@@ -128,7 +130,7 @@ static int start_server(test_server_t* server) {
         return -1;
     }
     if (pid == 0) {
-        uci_sim_device_init(&device);
+        uci_sim_device_init_with_scenario(&device, server->scenario);
         if (uci_sim_tcp_serve("127.0.0.1", server->port, &device) != 0) {
             _exit(1);
         }
@@ -295,8 +297,48 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
     PASS();
 }
 
+static void test_delayed_notification_flow_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    size_t request_len = 0;
+    int fd = -1;
+
+    server.scenario = UCI_SIM_SCENARIO_DELAYED_NOTIFICATIONS;
+    ASSERT_TRUE(start_server(&server) == 0, "start delayed server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect delayed server");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load delayed session_init request");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write delayed session_init");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_rsp.hex",
+                          "delayed session_init rsp");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_state_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load delayed get_state request");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write delayed get_state");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_state_init_rsp.hex",
+                          "delayed session_get_state rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
+                          "delayed session_init ntf");
+
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 int main(void) {
     test_shell_compatible_core_and_session_flow_over_tcp();
+    test_delayed_notification_flow_over_tcp();
 
     printf("Passed: %d\n", g_passed);
     printf("Failed: %d\n", g_failed);

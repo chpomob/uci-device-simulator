@@ -59,6 +59,10 @@ int uci_sim_device_deliver_notification(uci_sim_device_t* device,
         return -1;
     }
 
+    if (device->scenario == UCI_SIM_SCENARIO_DELAYED_NOTIFICATIONS) {
+        return uci_sim_device_queue_notification(device, notification);
+    }
+
     if (!result->has_notification) {
         result->notification = *notification;
         result->has_notification = 1;
@@ -68,8 +72,10 @@ int uci_sim_device_deliver_notification(uci_sim_device_t* device,
     return uci_sim_device_queue_notification(device, notification);
 }
 
-void uci_sim_device_finalize_result(uci_sim_device_t* device, uci_sim_result_t* result) {
-    if (!device || !result || result->has_notification) {
+void uci_sim_device_finalize_result(uci_sim_device_t* device,
+                                  uci_sim_result_t* result,
+                                  size_t pending_count_before) {
+    if (!device || !result || result->has_notification || pending_count_before == 0) {
         return;
     }
 

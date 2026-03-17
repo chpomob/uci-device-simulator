@@ -69,6 +69,39 @@ static void test_default_scenario_initialization(void) {
     PASS();
 }
 
+static void test_delayed_notification_scenario(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    const uint32_t session_id = 0x12345678U;
+
+    uci_sim_device_init_with_scenario(&device, UCI_SIM_SCENARIO_DELAYED_NOTIFICATIONS);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "delayed session init failed");
+    ASSERT_TRUE(result.has_response, "delayed session init response missing");
+    ASSERT_TRUE(!result.has_notification, "delayed session init should defer notification");
+
+    request.oid = UCI_SESSION_GET_STATE;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "delayed get state failed");
+    ASSERT_TRUE(result.has_response, "delayed get state response missing");
+    ASSERT_TRUE(result.has_notification, "delayed notification missing on next command");
+    ASSERT_EQ_U32(session_id, read_u32_le(result.notification.payload), "delayed notification session");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, result.notification.payload[4], "delayed notification state");
+    PASS();
+}
+
 static void test_session_lifecycle(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -116,6 +149,7 @@ int main(void) {
     test_packet_round_trip();
     test_core_device_info();
     test_default_scenario_initialization();
+    test_delayed_notification_scenario();
     test_session_lifecycle();
 
     printf("Passed: %d\n", g_passed);

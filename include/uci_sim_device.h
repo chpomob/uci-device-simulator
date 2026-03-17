@@ -40,7 +40,9 @@ int uci_sim_device_dequeue_notification(uci_sim_device_t* device, uci_sim_packet
 int uci_sim_device_deliver_notification(uci_sim_device_t* device,
                                         const uci_sim_packet_t* notification,
                                         uci_sim_result_t* result);
-void uci_sim_device_finalize_result(uci_sim_device_t* device, uci_sim_result_t* result);
+void uci_sim_device_finalize_result(uci_sim_device_t* device,
+                                  uci_sim_result_t* result,
+                                  size_t pending_count_before);
 int uci_sim_device_handle_packet(uci_sim_device_t* device,
                                  const uci_sim_packet_t* request,
                                  uci_sim_result_t* result);

@@ -149,6 +149,11 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
         0x40, 0x02, 0x00, 0x09,
         0x00, 0x00, 0x01, 0x00, 0x02, 0x00, 0x02, 0x00, 0x01
     };
+    static const uint8_t k_core_get_caps_info_cmd[] = { 0x20, 0x03, 0x00, 0x00 };
+    static const uint8_t k_expected_core_get_caps_info_rsp[] = {
+        0x40, 0x03, 0x00, 0x04,
+        0x00, 0x01, 0xE4, 0x00
+    };
     static const uint8_t k_session_init_cmd[] = {
         0x21, 0x00, 0x00, 0x05,
         0x78, 0x56, 0x34, 0x12, 0x00
@@ -172,6 +177,18 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
     static const uint8_t k_expected_session_start_ntf[] = {
         0x61, 0x02, 0x00, 0x06,
         0x78, 0x56, 0x34, 0x12, 0x01, 0x00
+    };
+    static const uint8_t k_session_stop_cmd[] = {
+        0x22, 0x01, 0x00, 0x04,
+        0x78, 0x56, 0x34, 0x12
+    };
+    static const uint8_t k_expected_session_stop_rsp[] = {
+        0x42, 0x01, 0x00, 0x01,
+        0x00
+    };
+    static const uint8_t k_expected_session_stop_ntf[] = {
+        0x61, 0x02, 0x00, 0x06,
+        0x78, 0x56, 0x34, 0x12, 0x02, 0x00
     };
     static const uint8_t k_session_get_state_cmd[] = {
         0x21, 0x06, 0x00, 0x04,
@@ -197,6 +214,12 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
     ASSERT_EQ_INT((int)sizeof(k_expected_core_device_info_rsp), (int)packet_len, "core_device_info rsp len");
     ASSERT_MEMEQ(k_expected_core_device_info_rsp, packet, packet_len, "core_device_info rsp bytes");
 
+    ASSERT_TRUE(write_full(fd, k_core_get_caps_info_cmd, sizeof(k_core_get_caps_info_cmd)) == (ssize_t)sizeof(k_core_get_caps_info_cmd),
+                "write core_get_caps_info");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read core_get_caps_info rsp");
+    ASSERT_EQ_INT((int)sizeof(k_expected_core_get_caps_info_rsp), (int)packet_len, "core_get_caps_info rsp len");
+    ASSERT_MEMEQ(k_expected_core_get_caps_info_rsp, packet, packet_len, "core_get_caps_info rsp bytes");
+
     ASSERT_TRUE(write_full(fd, k_session_init_cmd, sizeof(k_session_init_cmd)) == (ssize_t)sizeof(k_session_init_cmd),
                 "write session_init");
     ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_init rsp");
@@ -220,6 +243,15 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
     ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_get_state rsp");
     ASSERT_EQ_INT((int)sizeof(k_expected_session_get_state_rsp), (int)packet_len, "session_get_state rsp len");
     ASSERT_MEMEQ(k_expected_session_get_state_rsp, packet, packet_len, "session_get_state rsp bytes");
+
+    ASSERT_TRUE(write_full(fd, k_session_stop_cmd, sizeof(k_session_stop_cmd)) == (ssize_t)sizeof(k_session_stop_cmd),
+                "write session_stop");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_stop rsp");
+    ASSERT_EQ_INT((int)sizeof(k_expected_session_stop_rsp), (int)packet_len, "session_stop rsp len");
+    ASSERT_MEMEQ(k_expected_session_stop_rsp, packet, packet_len, "session_stop rsp bytes");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_stop ntf");
+    ASSERT_EQ_INT((int)sizeof(k_expected_session_stop_ntf), (int)packet_len, "session_stop ntf len");
+    ASSERT_MEMEQ(k_expected_session_stop_ntf, packet, packet_len, "session_stop ntf bytes");
 
     close(fd);
     stop_server(&server);

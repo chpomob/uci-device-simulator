@@ -45,8 +45,9 @@ Version 1 supports a focused interoperable subset:
 
 The test suite includes a TCP interoperability check that sends the same
 command bytes the current `uci_interactive_shell` project emits for its
-stabilized CORE and SESSION lifecycle commands, then asserts the simulator's
-wire responses and notifications.
+stabilized `CORE_DEVICE_INFO`, `CORE_GET_CAPS_INFO`, `SESSION_INIT`,
+`SESSION_START`, `SESSION_GET_STATE`, and `SESSION_STOP` commands, then
+asserts the simulator's wire responses and notifications.
 
 ## Run
 

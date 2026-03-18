@@ -709,7 +709,8 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set app config failed");
     ASSERT_TRUE(result.has_response, "set app config response missing");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "set app config status");
-    ASSERT_EQ_U8(1, result.response.payload[1], "set app config count");
+    ASSERT_EQ_U8(0, result.response.payload[1], "set app config count");
+    ASSERT_EQ_U8(2, result.response.payload_len, "set app config response length");
 
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;

@@ -641,11 +641,10 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
     offset = 5;
 
     if (is_set) {
-        size_t response_offset = 2;
         while (processed < count && offset + 2 <= request->payload_len) {
             uint8_t config_id = request->payload[offset++];
             uint8_t value_len = request->payload[offset++];
-            if (offset + value_len > request->payload_len || response_offset + 2 > UCI_SIM_MAX_PAYLOAD) {
+            if (offset + value_len > request->payload_len) {
                 result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
                 break;
             }
@@ -657,13 +656,11 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
                 result->response.payload[0] = UCI_STATUS_REJECTED;
                 break;
             }
-            result->response.payload[response_offset++] = config_id;
-            result->response.payload[response_offset++] = UCI_STATUS_OK;
             offset += value_len;
             processed++;
         }
-        result->response.payload[1] = processed;
-        result->response.payload_len = (uint16_t)(2 + (processed * 2));
+        result->response.payload[1] = 0;
+        result->response.payload_len = 2;
         return (result->response.payload[0] == UCI_STATUS_OK) ? 0 : -1;
     }
 

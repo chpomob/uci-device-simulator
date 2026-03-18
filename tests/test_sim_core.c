@@ -161,8 +161,8 @@ static void test_default_profile_feature_matrix(void) {
                 "profile should support session init");
     ASSERT_TRUE(uci_sim_profile_supports_command(profile, UCI_GID_SESSION_CONTROL, UCI_SESSION_START),
                 "profile should support session start");
-    ASSERT_TRUE(!uci_sim_profile_supports_command(profile, UCI_GID_CORE, UCI_CORE_DEVICE_RESET),
-                "profile should reject unsupported core reset");
+    ASSERT_TRUE(uci_sim_profile_supports_command(profile, UCI_GID_CORE, UCI_CORE_DEVICE_RESET),
+                "profile should support core reset");
     ASSERT_TRUE(uci_sim_profile_supports_core_config(profile, UCI_DEVICE_CONFIG_DEVICE_STATE),
                 "profile should support device state config");
     ASSERT_TRUE(!uci_sim_profile_supports_core_config(profile, 0x7FU),
@@ -173,6 +173,8 @@ static void test_default_profile_feature_matrix(void) {
                 "profile should reject unknown app config");
     ASSERT_TRUE(start_transition != NULL, "profile should define session start transition");
     ASSERT_TRUE(stop_transition != NULL, "profile should define session stop transition");
+    ASSERT_TRUE(uci_sim_profile_supports_command(profile, UCI_GID_CORE, UCI_CORE_DEVICE_RESET),
+                "profile should support device reset");
     ASSERT_TRUE(uci_sim_profile_supports_command(profile, UCI_GID_CORE, UCI_CORE_QUERY_UWBS_TIMESTAMP),
                 "profile should support query timestamp");
     ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, profile->initial_session_state, "profile initial session state");
@@ -288,7 +290,7 @@ static void test_profile_rejects_unsupported_core_features(void) {
     request.mt = UCI_MT_COMMAND;
     request.pbf = UCI_PBF_COMPLETE;
     request.gid = UCI_GID_CORE;
-    request.oid = UCI_CORE_DEVICE_RESET;
+    request.oid = UCI_CORE_GENERIC_ERROR;
 
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "unsupported core command should fail");
     ASSERT_EQ_U8(UCI_STATUS_UNKNOWN_OID, result.response.payload[0], "unsupported core command status");
@@ -354,6 +356,63 @@ static void test_core_query_timestamp_response(void) {
     ASSERT_TRUE(read_u64_le(&result.response.payload[1]) ==
                 (profile->initial_uwbs_timestamp + profile->uwbs_timestamp_increment),
                 "query timestamp second value");
+    PASS();
+}
+
+static void test_core_device_reset_restores_profile_defaults(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_SET_CONFIG;
+    request.payload_len = 4;
+    request.payload[0] = 1;
+    request.payload[1] = UCI_DEVICE_CONFIG_DEVICE_STATE;
+    request.payload[2] = 1;
+    request.payload[3] = UCI_DEVICE_STATE_ACTIVE;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set state before reset failed");
+
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "session init before reset failed");
+
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_QUERY_UWBS_TIMESTAMP;
+    request.payload_len = 0;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "timestamp before reset failed");
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "timestamp increment before reset failed");
+
+    request.oid = UCI_CORE_DEVICE_RESET;
+    request.payload_len = 1;
+    request.payload[0] = 0x00;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "device reset failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "device reset status");
+    ASSERT_TRUE(result.has_notification, "device reset notification missing");
+    ASSERT_EQ_U8(UCI_GID_CORE, result.notification.gid, "device reset notification gid");
+    ASSERT_EQ_U8(UCI_CORE_DEVICE_STATUS_NTF, result.notification.oid, "device reset notification oid");
+    ASSERT_EQ_U8(UCI_DEVICE_STATE_READY, result.notification.payload[0], "device reset ready state");
+    ASSERT_EQ_U8(UCI_DEVICE_STATE_READY, device.device_state, "device state reset");
+    ASSERT_EQ_U8(0, (uint8_t)device.sessions[0].allocated, "sessions cleared on reset");
+    ASSERT_EQ_U8(0, (uint8_t)device.scheduled_event_count, "events cleared on reset");
+    ASSERT_EQ_U8(0, (uint8_t)device.pending_notification_count, "pending notifications cleared on reset");
+
+    request.oid = UCI_CORE_QUERY_UWBS_TIMESTAMP;
+    request.payload_len = 0;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "timestamp after reset failed");
+    ASSERT_TRUE(read_u64_le(&result.response.payload[1]) == uci_sim_default_profile()->initial_uwbs_timestamp,
+                "timestamp reset to profile default");
     PASS();
 }
 
@@ -819,6 +878,7 @@ int main(void) {
     test_profile_rejects_unsupported_core_features();
     test_core_caps_match_profile();
     test_core_query_timestamp_response();
+    test_core_device_reset_restores_profile_defaults();
     test_default_scenario_initialization();
     test_delayed_notification_scenario();
     test_session_get_count();

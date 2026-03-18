@@ -24,7 +24,7 @@ Status meanings:
 
 | GID | OID | Command | Status | Notes |
 |---|---:|---|---|---|
-| `CORE` | `0x00` | `DEVICE_RESET` | `profile-rejected` | In Cherry/Qorvo headers, not implemented in simulator handlers |
+| `CORE` | `0x00` | `DEVICE_RESET` | `supported` | Restores profile defaults and emits `CORE_DEVICE_STATUS_NTF(READY)` |
 | `CORE` | `0x01` | `DEVICE_STATUS_NTF` | `missing` | No explicit generator/support path in simulator |
 | `CORE` | `0x02` | `GET_DEVICE_INFO` | `supported` | Profile-backed device info response |
 | `CORE` | `0x03` | `GET_CAPS_INFO` | `supported` | Profile-backed capability payload |
@@ -125,12 +125,11 @@ These are present in the local Qorvo SDK headers but not yet modeled in the simu
 - Notifications: `SESSION_STATUS_NTF`, Cherry-aligned `RANGE_DATA_NTF (SESSION_INFO_NTF)`
 
 ### Highest-priority missing standard commands
-1. `CORE_DEVICE_RESET`
-2. `SESSION_UPDATE_CONTROLLER_MULTICAST_LIST`
-3. `SESSION_DATA_TRANSFER_PHASE_CONFIG`
-4. `SESSION_DATA_CREDIT_NTF`
-5. `SESSION_DATA_TRANSFER_STATUS_NTF`
-6. `LOGICAL_LINK_*`
+1. `SESSION_UPDATE_CONTROLLER_MULTICAST_LIST`
+2. `SESSION_DATA_TRANSFER_PHASE_CONFIG`
+3. `SESSION_DATA_CREDIT_NTF`
+4. `SESSION_DATA_TRANSFER_STATUS_NTF`
+5. `LOGICAL_LINK_*`
 
 ### Highest-priority missing profile/config coverage
 1. `RANGING_ROUND_USAGE`

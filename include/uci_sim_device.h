@@ -77,6 +77,7 @@ void uci_sim_device_init_with_scenario(uci_sim_device_t* device, uci_sim_scenari
 void uci_sim_device_init_with_profile(uci_sim_device_t* device,
                                       const uci_sim_profile_t* profile,
                                       uci_sim_scenario_kind_t scenario);
+void uci_sim_device_reset_runtime_state(uci_sim_device_t* device);
 void uci_sim_device_set_scenario(uci_sim_device_t* device, uci_sim_scenario_kind_t scenario);
 int uci_sim_device_queue_notification(uci_sim_device_t* device, const uci_sim_packet_t* notification);
 int uci_sim_device_dequeue_notification(uci_sim_device_t* device, uci_sim_packet_t* notification);

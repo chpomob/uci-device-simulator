@@ -70,13 +70,14 @@ static const uci_sim_profile_t k_default_profile = {
     .range_data_distance_base_cm = 100,
     .range_data_distance_step_cm = 5,
     .supported_core_oids = {
+        UCI_CORE_DEVICE_RESET,
         UCI_CORE_DEVICE_INFO,
         UCI_CORE_GET_CAPS_INFO,
         UCI_CORE_SET_CONFIG,
         UCI_CORE_GET_CONFIG,
         UCI_CORE_QUERY_UWBS_TIMESTAMP
     },
-    .supported_core_oid_count = 5,
+    .supported_core_oid_count = 6,
     .supported_session_config_oids = {
         UCI_SESSION_INIT,
         UCI_SESSION_DEINIT,
@@ -104,10 +105,11 @@ static const uci_sim_profile_t k_default_profile = {
     },
     .supported_session_app_config_id_count = 1,
     .supported_notification_oids = {
+        UCI_CORE_DEVICE_STATUS_NTF,
         UCI_SESSION_STATUS_NTF,
         UCI_SESSION_START
     },
-    .supported_notification_oid_count = 2
+    .supported_notification_oid_count = 3
 };
 
 const uci_sim_profile_t* uci_sim_default_profile(void) {

@@ -91,6 +91,22 @@ static void emit_session_status_ntf(uci_sim_device_t* device,
     (void)uci_sim_device_deliver_notification(device, &notification, result);
 }
 
+static void emit_device_status_ntf(uci_sim_device_t* device,
+                                   uint8_t state,
+                                   uci_sim_result_t* result) {
+    uci_sim_packet_t notification;
+
+    memset(&notification, 0, sizeof(notification));
+    notification.mt = UCI_MT_NOTIFICATION;
+    notification.pbf = UCI_PBF_COMPLETE;
+    notification.gid = UCI_GID_CORE;
+    notification.oid = UCI_CORE_DEVICE_STATUS_NTF;
+    notification.payload_len = 1;
+    notification.payload[0] = state;
+
+    (void)uci_sim_device_deliver_notification(device, &notification, result);
+}
+
 static int handle_session_set_get_config(uci_sim_device_t* device,
                                          const uci_sim_packet_t* request,
                                          uci_sim_result_t* result,
@@ -107,6 +123,15 @@ static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request
     }
 
     switch (request->oid) {
+        case UCI_CORE_DEVICE_RESET:
+            if (request->payload_len != 1) {
+                make_status_response(request, result, UCI_STATUS_INVALID_MSG_SIZE);
+                return -1;
+            }
+            uci_sim_device_reset_runtime_state(device);
+            make_status_response(request, result, UCI_STATUS_OK);
+            emit_device_status_ntf(device, device->device_state, result);
+            return 0;
         case UCI_CORE_DEVICE_INFO:
             result->has_response = 1;
             result->response.mt = UCI_MT_RESPONSE;

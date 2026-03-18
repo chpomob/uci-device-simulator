@@ -2,6 +2,35 @@
 
 #include <string.h>
 
+static void apply_profile_defaults(uci_sim_device_t* device, const uci_sim_profile_t* effective_profile) {
+    if (!device || !effective_profile) {
+        return;
+    }
+
+    device->profile = effective_profile;
+    device->uci_version = effective_profile->uci_version;
+    device->mac_version = effective_profile->mac_version;
+    device->phy_version = effective_profile->phy_version;
+    device->test_version = effective_profile->test_version;
+    device->device_state = effective_profile->default_device_state;
+    device->next_uwbs_timestamp = effective_profile->initial_uwbs_timestamp;
+
+    memset(device->device_configs, 0, sizeof(device->device_configs));
+    device->device_configs[0].in_use = 1;
+    device->device_configs[0].config_id = UCI_DEVICE_CONFIG_DEVICE_STATE;
+    device->device_configs[0].value_len = 1;
+    device->device_configs[0].value[0] = effective_profile->default_device_state;
+    device->device_configs[1].in_use = 1;
+    device->device_configs[1].config_id = UCI_DEVICE_CONFIG_LOW_POWER_MODE;
+    device->device_configs[1].value_len = 1;
+    device->device_configs[1].value[0] = effective_profile->default_low_power_mode;
+    device->device_configs[2].in_use = 1;
+    device->device_configs[2].config_id = UCI_DEVICE_CONFIG_DEVICE_PAN_ID;
+    device->device_configs[2].value_len = 2;
+    device->device_configs[2].value[0] = effective_profile->default_device_pan_id[0];
+    device->device_configs[2].value[1] = effective_profile->default_device_pan_id[1];
+}
+
 void uci_sim_device_set_scenario(uci_sim_device_t* device, uci_sim_scenario_kind_t scenario) {
     if (!device) {
         return;
@@ -16,26 +45,7 @@ void uci_sim_device_init_with_profile(uci_sim_device_t* device,
     const uci_sim_profile_t* effective_profile = profile ? profile : uci_sim_default_profile();
 
     memset(device, 0, sizeof(*device));
-    device->profile = effective_profile;
-    device->uci_version = effective_profile->uci_version;
-    device->mac_version = effective_profile->mac_version;
-    device->phy_version = effective_profile->phy_version;
-    device->test_version = effective_profile->test_version;
-    device->device_state = effective_profile->default_device_state;
-    device->next_uwbs_timestamp = effective_profile->initial_uwbs_timestamp;
-    device->device_configs[0].in_use = 1;
-    device->device_configs[0].config_id = UCI_DEVICE_CONFIG_DEVICE_STATE;
-    device->device_configs[0].value_len = 1;
-    device->device_configs[0].value[0] = effective_profile->default_device_state;
-    device->device_configs[1].in_use = 1;
-    device->device_configs[1].config_id = UCI_DEVICE_CONFIG_LOW_POWER_MODE;
-    device->device_configs[1].value_len = 1;
-    device->device_configs[1].value[0] = effective_profile->default_low_power_mode;
-    device->device_configs[2].in_use = 1;
-    device->device_configs[2].config_id = UCI_DEVICE_CONFIG_DEVICE_PAN_ID;
-    device->device_configs[2].value_len = 2;
-    device->device_configs[2].value[0] = effective_profile->default_device_pan_id[0];
-    device->device_configs[2].value[1] = effective_profile->default_device_pan_id[1];
+    apply_profile_defaults(device, effective_profile);
     device->scenario = scenario;
     device->next_ranging_sequence = 1;
 }
@@ -46,6 +56,27 @@ void uci_sim_device_init_with_scenario(uci_sim_device_t* device, uci_sim_scenari
 
 void uci_sim_device_init(uci_sim_device_t* device) {
     uci_sim_device_init_with_scenario(device, UCI_SIM_SCENARIO_DEFAULT);
+}
+
+void uci_sim_device_reset_runtime_state(uci_sim_device_t* device) {
+    const uci_sim_profile_t* effective_profile;
+    uci_sim_scenario_kind_t scenario;
+
+    if (!device) {
+        return;
+    }
+
+    effective_profile = device->profile ? device->profile : uci_sim_default_profile();
+    scenario = device->scenario;
+
+    memset(device->sessions, 0, sizeof(device->sessions));
+    memset(device->scheduled_events, 0, sizeof(device->scheduled_events));
+    memset(device->pending_notifications, 0, sizeof(device->pending_notifications));
+    device->scheduled_event_count = 0;
+    device->pending_notification_count = 0;
+    device->next_ranging_sequence = 1;
+    apply_profile_defaults(device, effective_profile);
+    device->scenario = scenario;
 }
 
 int uci_sim_device_queue_notification(uci_sim_device_t* device, const uci_sim_packet_t* notification) {

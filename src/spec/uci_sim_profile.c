@@ -142,6 +142,12 @@ static const uci_sim_profile_t k_default_profile = {
         0x1D,
         0x1E,
         0x1F,
+        0x20,
+        0x21,
+        0x22,
+        0x23,
+        0x24,
+        0x25,
         0x26,
         0x2C,
         0x2E,
@@ -156,7 +162,7 @@ static const uci_sim_profile_t k_default_profile = {
         0x3E,
         0x3F
     },
-    .supported_session_app_config_id_count = 45,
+    .supported_session_app_config_id_count = 51,
     .default_session_app_config_ids = {
         0x00,
         0x01,
@@ -190,6 +196,12 @@ static const uci_sim_profile_t k_default_profile = {
         0x1D,
         0x1E,
         0x1F,
+        0x20,
+        0x21,
+        0x22,
+        0x23,
+        0x24,
+        0x25,
         0x26,
         0x2C,
         0x2E,
@@ -205,7 +217,7 @@ static const uci_sim_profile_t k_default_profile = {
         0x3F
     },
     .default_session_app_config_value_lens = {
-        1, 1, 1, 1, 1, 1, 2, 2, 2, 4, 4, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 2, 4, 1, 2, 1, 1, 1, 1
+        1, 1, 1, 1, 1, 1, 2, 2, 2, 4, 4, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 2, 1, 1, 2, 1, 1, 1, 1, 1, 2, 4, 1, 2, 1, 1, 1, 1
     },
     .default_session_app_config_values = {
         { 0x01 },
@@ -240,6 +252,12 @@ static const uci_sim_profile_t k_default_profile = {
         { 0x00, 0x00 },
         { 0x00 },
         { 0x00 },
+        { 0x00, 0x00 },
+        { 0x00, 0x00 },
+        { 0x00 },
+        { 0x00 },
+        { 0x00, 0x00 },
+        { 0x32 },
         { 0x00 },
         { 0x00 },
         { 0x00 },
@@ -254,7 +272,7 @@ static const uci_sim_profile_t k_default_profile = {
         { 0x03 },
         { 0x01 }
     },
-    .default_session_app_config_count = 45,
+    .default_session_app_config_count = 51,
     .supported_notification_oids = {
         UCI_CORE_DEVICE_STATUS_NTF,
         UCI_SESSION_STATUS_NTF,

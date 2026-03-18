@@ -604,6 +604,42 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
             "session_set_app_config_prf_mode"
         },
         {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_cap_size_range_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_cap_size_range"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_tx_jitter_window_size_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_tx_jitter_window_size"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_scheduled_mode_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_scheduled_mode"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_key_rotation_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_key_rotation"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_key_rotation_rate_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_key_rotation_rate"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_session_priority_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_session_priority"
+        },
+        {
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_mac_address_mode_cmd.hex",
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
             NULL,
@@ -878,6 +914,42 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_prf_mode_rsp.hex",
             NULL,
             "session_get_app_config_prf_mode"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_cap_size_range_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_cap_size_range_rsp.hex",
+            NULL,
+            "session_get_app_config_cap_size_range"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_tx_jitter_window_size_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_tx_jitter_window_size_rsp.hex",
+            NULL,
+            "session_get_app_config_tx_jitter_window_size"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_scheduled_mode_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_scheduled_mode_rsp.hex",
+            NULL,
+            "session_get_app_config_scheduled_mode"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_key_rotation_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_key_rotation_rsp.hex",
+            NULL,
+            "session_get_app_config_key_rotation"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_key_rotation_rate_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_key_rotation_rate_rsp.hex",
+            NULL,
+            "session_get_app_config_key_rotation_rate"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_session_priority_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_session_priority_rsp.hex",
+            NULL,
+            "session_get_app_config_session_priority"
         },
         {
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_mac_address_mode_cmd.hex",

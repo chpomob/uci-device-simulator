@@ -989,6 +989,43 @@ static void test_session_app_config_storage(void) {
     request.payload[7] = 0x01;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set prf mode app config failed");
 
+    request.payload_len = 9;
+    request.payload[5] = 0x20;
+    request.payload[6] = 2;
+    request.payload[7] = 0x00;
+    request.payload[8] = 0x02;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set cap size range app config failed");
+
+    request.payload[5] = 0x21;
+    request.payload[6] = 2;
+    request.payload[7] = 0x10;
+    request.payload[8] = 0x00;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set tx jitter window size app config failed");
+
+    request.payload_len = 8;
+    request.payload[5] = 0x22;
+    request.payload[6] = 1;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set scheduled mode app config failed");
+
+    request.payload[5] = 0x23;
+    request.payload[6] = 1;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set key rotation app config failed");
+
+    request.payload_len = 9;
+    request.payload[5] = 0x24;
+    request.payload[6] = 2;
+    request.payload[7] = 0x20;
+    request.payload[8] = 0x00;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set key rotation rate app config failed");
+
+    request.payload_len = 8;
+    request.payload[5] = 0x25;
+    request.payload[6] = 1;
+    request.payload[7] = 0x4B;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set session priority app config failed");
+
     request.payload[5] = 0x26;
     request.payload[6] = 1;
     request.payload[7] = 0x01;
@@ -1101,12 +1138,12 @@ static void test_session_app_config_storage(void) {
     ASSERT_EQ_U8(0x03, result.response.payload[5], "get multi app config second id");
     ASSERT_EQ_U8(0x02, result.response.payload[7], "get multi app config second value");
 
-    request.payload_len = 46;
+    request.payload_len = 52;
     request.payload[0] = 0x78;
     request.payload[1] = 0x56;
     request.payload[2] = 0x34;
     request.payload[3] = 0x12;
-    request.payload[4] = 41;
+    request.payload[4] = 47;
     request.payload[5] = 0x01;
     request.payload[6] = 0x02;
     request.payload[7] = 0x04;
@@ -1135,22 +1172,28 @@ static void test_session_app_config_storage(void) {
     request.payload[30] = 0x1D;
     request.payload[31] = 0x1E;
     request.payload[32] = 0x1F;
-    request.payload[33] = 0x26;
-    request.payload[34] = 0x2C;
-    request.payload[35] = 0x2E;
-    request.payload[36] = 0x2F;
-    request.payload[37] = 0x31;
-    request.payload[38] = 0x32;
-    request.payload[39] = 0x33;
-    request.payload[40] = 0x3A;
-    request.payload[41] = 0x3B;
-    request.payload[42] = 0x3C;
-    request.payload[43] = 0x3D;
-    request.payload[44] = 0x3E;
-    request.payload[45] = 0x3F;
+    request.payload[33] = 0x20;
+    request.payload[34] = 0x21;
+    request.payload[35] = 0x22;
+    request.payload[36] = 0x23;
+    request.payload[37] = 0x24;
+    request.payload[38] = 0x25;
+    request.payload[39] = 0x26;
+    request.payload[40] = 0x2C;
+    request.payload[41] = 0x2E;
+    request.payload[42] = 0x2F;
+    request.payload[43] = 0x31;
+    request.payload[44] = 0x32;
+    request.payload[45] = 0x33;
+    request.payload[46] = 0x3A;
+    request.payload[47] = 0x3B;
+    request.payload[48] = 0x3C;
+    request.payload[49] = 0x3D;
+    request.payload[50] = 0x3E;
+    request.payload[51] = 0x3F;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get extended app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get extended app config status");
-    ASSERT_EQ_U8(41, result.response.payload[1], "get extended app config count");
+    ASSERT_EQ_U8(47, result.response.payload[1], "get extended app config count");
     ASSERT_EQ_U8(0x01, result.response.payload[2], "get extended app config first id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x0A,
                                              (const uint8_t[]){ 0x05, 0x00, 0x00, 0x00 }, 4),
@@ -1194,6 +1237,24 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x1F,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get extended app config missing prf mode");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x20,
+                                             (const uint8_t[]){ 0x00, 0x02 }, 2),
+                "get extended app config missing cap size range");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x21,
+                                             (const uint8_t[]){ 0x10, 0x00 }, 2),
+                "get extended app config missing tx jitter window size");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x22,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get extended app config missing scheduled mode");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x23,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get extended app config missing key rotation");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x24,
+                                             (const uint8_t[]){ 0x20, 0x00 }, 2),
+                "get extended app config missing key rotation rate");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x25,
+                                             (const uint8_t[]){ 0x4B }, 1),
+                "get extended app config missing session priority");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x3F,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get extended app config missing dl tdoa hop count");
@@ -1205,7 +1266,7 @@ static void test_session_app_config_storage(void) {
     request.payload[4] = 0;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get all app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get all app config status");
-    ASSERT_EQ_U8(45, result.response.payload[1], "get all app config count");
+    ASSERT_EQ_U8(51, result.response.payload[1], "get all app config count");
     ASSERT_EQ_U8(0x00, result.response.payload[2], "get all app config first id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x0A,
                                              (const uint8_t[]){ 0x05, 0x00, 0x00, 0x00 }, 4),
@@ -1249,6 +1310,24 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x1F,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing prf mode");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x20,
+                                             (const uint8_t[]){ 0x00, 0x02 }, 2),
+                "get all app config missing cap size range");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x21,
+                                             (const uint8_t[]){ 0x10, 0x00 }, 2),
+                "get all app config missing tx jitter window size");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x22,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get all app config missing scheduled mode");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x23,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get all app config missing key rotation");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x24,
+                                             (const uint8_t[]){ 0x20, 0x00 }, 2),
+                "get all app config missing key rotation rate");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x25,
+                                             (const uint8_t[]){ 0x4B }, 1),
+                "get all app config missing session priority");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x26,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing mac address mode");

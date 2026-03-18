@@ -117,6 +117,12 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x1D` | `RNG_DATA_NTF_AOA_BOUND` | `supported` | Default-profile stored/retrievable |
 | `0x1E` | `RESPONDER_SLOT_INDEX` | `supported` | Default-profile stored/retrievable |
 | `0x1F` | `PRF_MODE` | `supported` | Default-profile stored/retrievable |
+| `0x20` | `CAP_SIZE_RANGE` | `supported` | Default-profile stored/retrievable |
+| `0x21` | `TX_JITTER_WINDOW_SIZE` | `supported` | Default-profile stored/retrievable |
+| `0x22` | `SCHEDULED_MODE` | `supported` | Default-profile stored/retrievable |
+| `0x23` | `KEY_ROTATION` | `supported` | Default-profile stored/retrievable |
+| `0x24` | `KEY_ROTATION_RATE` | `supported` | Default-profile stored/retrievable |
+| `0x25` | `SESSION_PRIORITY` | `supported` | Default-profile stored/retrievable |
 | `0x26` | `MAC_ADDRESS_MODE` | `supported` | Default-profile stored/retrievable |
 | `0x2C` | `HOPPING_MODE` | `supported` | Default-profile stored/retrievable |
 | `0x2E` | `RESULT_REPORT_CONFIG` | `supported` | Default-profile stored/retrievable |

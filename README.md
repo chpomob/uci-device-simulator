@@ -12,6 +12,9 @@ Standalone UCI device simulator intended to interoperate with:
 - All externally visible packet behavior should be pinned by tests.
 - Scenario behavior must stay outside transport code and out of the protocol handlers whenever possible.
 - Device-visible defaults and timings should come from explicit device profiles, not ad hoc constants.
+- Behavior changes should be grounded in the audit recorded in
+  [docs/QORVO_SDK_BEHAVIOR_AUDIT.md](docs/QORVO_SDK_BEHAVIOR_AUDIT.md) before
+  they become simulator runtime logic.
 
 ## Initial Scope
 

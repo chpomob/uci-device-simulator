@@ -108,6 +108,10 @@ stored supported TLVs below.
 | `0x31` | `BPRF_PHR_DATA_RATE` | `supported` | Default-profile stored/retrievable |
 | `0x32` | `MAX_NUMBER_OF_MEASUREMENTS` | `supported` | Default-profile stored/retrievable |
 | `0x33` | `UL_TDOA_TX_INTERVAL` | `supported` | Default-profile stored/retrievable |
+| `0x3A` | `MIN_FRAMES_PER_RR` | `supported` | Default-profile stored/retrievable |
+| `0x3B` | `MTU_SIZE` | `supported` | Default-profile stored/retrievable |
+| `0x3C` | `INTER_FRAME_INTERVAL` | `supported` | Default-profile stored/retrievable |
+| `0x3D` | `DL_TDOA_RANGING_METHOD` | `supported` | Default-profile stored/retrievable |
 | `0x0A`..`0x4D` | Standard FiRa app-config range | `missing` | Not yet modeled |
 | `0xA0`..`0xEC` | CCC / vendor app-config extensions | `missing` | Not yet modeled |
 

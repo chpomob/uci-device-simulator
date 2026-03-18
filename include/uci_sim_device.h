@@ -58,6 +58,10 @@ typedef struct uci_sim_session {
     uint32_t ranging_count;
     uint16_t max_data_size;
     uint8_t ranging_stream_remaining;
+    uint8_t dt_anchor_round_indexes[UCI_SIM_MAX_DT_ROUNDS];
+    uint8_t dt_anchor_round_count;
+    uint8_t dt_tag_round_indexes[UCI_SIM_MAX_DT_ROUNDS];
+    uint8_t dt_tag_round_count;
     uint8_t dtp_repetition;
     uint8_t dtp_control;
     uint8_t dtp_size;

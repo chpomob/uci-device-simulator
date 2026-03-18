@@ -1317,6 +1317,68 @@ static void test_logical_link_edge_cases(void) {
     PASS();
 }
 
+static void test_dt_round_update_commands(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "dt rounds init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "dt rounds session lookup");
+
+    request.oid = UCI_SESSION_UPDATE_DT_ANCHOR_RANGING_ROUNDS;
+    request.payload_len = 8;
+    request.payload[4] = 3;
+    request.payload[5] = 0x01;
+    request.payload[6] = 0x05;
+    request.payload[7] = 0x09;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "dt anchor update failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "dt anchor update status");
+    ASSERT_EQ_U8(3, result.response.payload[1], "dt anchor stored count");
+    ASSERT_EQ_U8(0x01, result.response.payload[2], "dt anchor first round");
+    ASSERT_EQ_U8(0x05, result.response.payload[3], "dt anchor second round");
+    ASSERT_EQ_U8(0x09, result.response.payload[4], "dt anchor third round");
+    ASSERT_EQ_U8(3, session->dt_anchor_round_count, "dt anchor session count");
+    ASSERT_EQ_U8(0x01, session->dt_anchor_round_indexes[0], "dt anchor session first round");
+    ASSERT_EQ_U8(0x05, session->dt_anchor_round_indexes[1], "dt anchor session second round");
+    ASSERT_EQ_U8(0x09, session->dt_anchor_round_indexes[2], "dt anchor session third round");
+
+    request.oid = UCI_SESSION_UPDATE_DT_TAG_RANGING_ROUNDS;
+    request.payload_len = 7;
+    request.payload[4] = 2;
+    request.payload[5] = 0x03;
+    request.payload[6] = 0x07;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "dt tag update failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "dt tag update status");
+    ASSERT_EQ_U8(2, result.response.payload[1], "dt tag stored count");
+    ASSERT_EQ_U8(0x03, result.response.payload[2], "dt tag first round");
+    ASSERT_EQ_U8(0x07, result.response.payload[3], "dt tag second round");
+    ASSERT_EQ_U8(2, session->dt_tag_round_count, "dt tag session count");
+    ASSERT_EQ_U8(0x03, session->dt_tag_round_indexes[0], "dt tag session first round");
+    ASSERT_EQ_U8(0x07, session->dt_tag_round_indexes[1], "dt tag session second round");
+
+    request.oid = UCI_SESSION_UPDATE_DT_TAG_RANGING_ROUNDS;
+    request.payload_len = 5;
+    request.payload[4] = 0;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "dt tag clear failed");
+    ASSERT_EQ_U8(0, session->dt_tag_round_count, "dt tag clear count");
+    ASSERT_EQ_U8(0, result.response.payload[1], "dt tag clear stored count");
+    PASS();
+}
+
 int main(void) {
     test_packet_round_trip();
     test_engine_clock_poll_progression();
@@ -1345,6 +1407,7 @@ int main(void) {
     test_data_message_send_edge_cases();
     test_logical_link_lifecycle();
     test_logical_link_edge_cases();
+    test_dt_round_update_commands();
 
     printf("Passed: %d\n", g_passed);
     printf("Failed: %d\n", g_failed);

@@ -406,6 +406,18 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
             "session_update_multicast_remove"
         },
         {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_update_dt_anchor_rounds_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_update_dt_anchor_rounds_rsp.hex",
+            NULL,
+            "session_update_dt_anchor_rounds"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_update_dt_tag_rounds_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_update_dt_tag_rounds_rsp.hex",
+            NULL,
+            "session_update_dt_tag_rounds"
+        },
+        {
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_rsp.hex",
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_ntf.hex",

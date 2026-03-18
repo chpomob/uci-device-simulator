@@ -43,8 +43,8 @@ Status meanings:
 | `SESSION_CONFIG` | `0x05` | `GET_COUNT` | `supported` | Model-backed |
 | `SESSION_CONFIG` | `0x06` | `GET_STATE` | `supported` | Model-backed |
 | `SESSION_CONFIG` | `0x07` | `UPDATE_CONTROLLER_MULTICAST_LIST` | `supported` | Model-backed multicast add/remove with per-entry status payloads |
-| `SESSION_CONFIG` | `0x08` | `UPDATE_DT_ANCHOR_RANGING_ROUNDS` | `missing` | Not yet modeled |
-| `SESSION_CONFIG` | `0x09` | `UPDATE_DT_TAG_RANGING_ROUNDS` | `missing` | Not yet modeled |
+| `SESSION_CONFIG` | `0x08` | `UPDATE_DT_ANCHOR_RANGING_ROUNDS` | `supported` | Model-backed stored round index list |
+| `SESSION_CONFIG` | `0x09` | `UPDATE_DT_TAG_RANGING_ROUNDS` | `supported` | Model-backed stored round index list |
 | `SESSION_CONFIG` | `0x0B` | `QUERY_DATA_SIZE_IN_RANGING` | `supported` | Model-backed |
 | `SESSION_CONFIG` | `0x0C` | `SET_HUS_CONTROLLER_CONFIG` | `missing` | Not yet modeled |
 | `SESSION_CONFIG` | `0x0D` | `SET_HUS_CONTROLEE_CONFIG` | `missing` | Not yet modeled |
@@ -129,11 +129,11 @@ These are present in the local Qorvo SDK headers but not yet modeled in the simu
 - `DATA`: `DATA_MESSAGE_SND` ingress with model-backed transfer-status behavior
 
 ### Highest-priority missing standard commands
-1. `UPDATE_DT_ANCHOR_RANGING_ROUNDS`
-2. `UPDATE_DT_TAG_RANGING_ROUNDS`
-3. `SET_HUS_CONTROLLER_CONFIG`
-4. `SET_HUS_CONTROLEE_CONFIG`
-5. broader `CORE_DEVICE_STATUS_NTF` policy beyond reset-triggered readiness
+1. `SET_HUS_CONTROLLER_CONFIG`
+2. `SET_HUS_CONTROLEE_CONFIG`
+3. broader `CORE_DEVICE_STATUS_NTF` policy beyond reset-triggered readiness
+4. deeper device-profile-specific error ordering/notification behavior
+5. remaining standard session app-config IDs
 
 ### Highest-priority missing profile/config coverage
 1. `RANGING_ROUND_USAGE`

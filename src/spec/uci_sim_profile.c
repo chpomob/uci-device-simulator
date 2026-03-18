@@ -86,10 +86,12 @@ static const uci_sim_profile_t k_default_profile = {
         UCI_SESSION_GET_COUNT,
         UCI_SESSION_GET_STATE,
         UCI_SESSION_UPDATE_CONTROLLER_MULTICAST_LIST,
+        UCI_SESSION_UPDATE_DT_ANCHOR_RANGING_ROUNDS,
+        UCI_SESSION_UPDATE_DT_TAG_RANGING_ROUNDS,
         UCI_SESSION_DATA_TRANSFER_PHASE_CONFIG,
         UCI_SESSION_QUERY_DATA_SIZE_IN_RANGING
     },
-    .supported_session_config_oid_count = 9,
+    .supported_session_config_oid_count = 11,
     .supported_session_control_oids = {
         UCI_SESSION_START,
         UCI_SESSION_STOP,

@@ -165,6 +165,10 @@ static int handle_core_set_get_config(uci_sim_device_t* device,
 static int handle_session_update_multicast_list(uci_sim_device_t* device,
                                                 const uci_sim_packet_t* request,
                                                 uci_sim_result_t* result);
+static int handle_session_update_dt_rounds(uci_sim_device_t* device,
+                                           const uci_sim_packet_t* request,
+                                           uci_sim_result_t* result,
+                                           int use_anchor_rounds);
 static int handle_session_data_transfer_phase_config(uci_sim_device_t* device,
                                                      const uci_sim_packet_t* request,
                                                      uci_sim_result_t* result);
@@ -473,6 +477,10 @@ static int handle_session_config(uci_sim_device_t* device, const uci_sim_packet_
             return 0;
         case UCI_SESSION_UPDATE_CONTROLLER_MULTICAST_LIST:
             return handle_session_update_multicast_list(device, request, result);
+        case UCI_SESSION_UPDATE_DT_ANCHOR_RANGING_ROUNDS:
+            return handle_session_update_dt_rounds(device, request, result, 1);
+        case UCI_SESSION_UPDATE_DT_TAG_RANGING_ROUNDS:
+            return handle_session_update_dt_rounds(device, request, result, 0);
         case UCI_SESSION_DATA_TRANSFER_PHASE_CONFIG:
             return handle_session_data_transfer_phase_config(device, request, result);
         default:
@@ -621,6 +629,64 @@ static int handle_session_data_transfer_phase_config(uci_sim_device_t* device,
     }
 
     make_status_response(request, result, UCI_STATUS_OK);
+    return 0;
+}
+
+static int handle_session_update_dt_rounds(uci_sim_device_t* device,
+                                           const uci_sim_packet_t* request,
+                                           uci_sim_result_t* result,
+                                           int use_anchor_rounds) {
+    uint32_t session_id;
+    uci_sim_session_t* session;
+    uint8_t round_count;
+    uint8_t* dst_rounds;
+    uint8_t* dst_count;
+
+    if (request->payload_len < 5) {
+        make_status_response(request, result, UCI_STATUS_INVALID_PARAM);
+        return -1;
+    }
+
+    session_id = read_u32_le(request->payload);
+    round_count = request->payload[4];
+    if (request->payload_len < (size_t)(5 + round_count) || round_count > UCI_SIM_MAX_DT_ROUNDS) {
+        make_status_response(request, result, UCI_STATUS_INVALID_PARAM);
+        return -1;
+    }
+
+    session = find_session(device, session_id);
+    if (session == NULL) {
+        make_status_response(request, result, UCI_STATUS_INVALID_PARAM);
+        return -1;
+    }
+
+    if (use_anchor_rounds) {
+        dst_rounds = session->dt_anchor_round_indexes;
+        dst_count = &session->dt_anchor_round_count;
+    } else {
+        dst_rounds = session->dt_tag_round_indexes;
+        dst_count = &session->dt_tag_round_count;
+    }
+
+    *dst_count = round_count;
+    if (round_count > 0) {
+        memcpy(dst_rounds, &request->payload[5], round_count);
+    }
+    if (round_count < UCI_SIM_MAX_DT_ROUNDS) {
+        memset(&dst_rounds[round_count], 0, UCI_SIM_MAX_DT_ROUNDS - round_count);
+    }
+
+    result->has_response = 1;
+    result->response.mt = UCI_MT_RESPONSE;
+    result->response.pbf = UCI_PBF_COMPLETE;
+    result->response.gid = UCI_GID_SESSION_CONFIG;
+    result->response.oid = request->oid;
+    result->response.payload_len = (uint16_t)(2 + round_count);
+    result->response.payload[0] = UCI_STATUS_OK;
+    result->response.payload[1] = round_count;
+    if (round_count > 0) {
+        memcpy(&result->response.payload[2], dst_rounds, round_count);
+    }
     return 0;
 }
 

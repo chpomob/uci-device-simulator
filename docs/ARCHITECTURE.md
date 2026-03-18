@@ -43,6 +43,11 @@ engine. It now also owns the supported command/config/app-config matrix, which
 the handlers enforce before touching model storage. Future fidelity work should
 add new profiles for concrete hardware and firmware targets instead of editing
 generic simulator logic.
+Session transition rules now live there too, so valid start/stop states, next
+states, and invalid-transition status codes are profile behavior rather than
+hard-coded handler assumptions. The range-data notification shape is also
+profile-owned: the model copies a Cherry-aligned payload template from the
+profile and patches only the dynamic fields before enqueueing the notification.
 
 The first non-default scenario is `delayed_notifications`, which defers
 session-state notifications until the next command exchange. This gives

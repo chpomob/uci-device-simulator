@@ -28,12 +28,14 @@ static uci_sim_session_t* find_session(uci_sim_device_t* device, uint32_t sessio
 
 static uci_sim_session_t* alloc_session(uci_sim_device_t* device, uint32_t session_id) {
     size_t i;
+    const uci_sim_profile_t* profile = device && device->profile ? device->profile : uci_sim_default_profile();
+
     for (i = 0; i < UCI_SIM_MAX_SESSIONS; ++i) {
         if (!device->sessions[i].allocated) {
             device->sessions[i].allocated = 1;
             device->sessions[i].session_id = session_id;
-            device->sessions[i].session_type = UCI_SESSION_TYPE_RANGING;
-            device->sessions[i].state = UCI_SESSION_STATE_INIT;
+            device->sessions[i].session_type = profile->default_session_type;
+            device->sessions[i].state = profile->initial_session_state;
             device->sessions[i].ranging_count = 0;
             device->sessions[i].max_data_size = device->profile
                 ? device->profile->default_session_max_data_size
@@ -63,6 +65,7 @@ static void emit_session_status_ntf(uci_sim_device_t* device,
                                     uint8_t state,
                                     uci_sim_result_t* result) {
     uci_sim_packet_t notification;
+    const uci_sim_profile_t* profile = device && device->profile ? device->profile : uci_sim_default_profile();
 
     memset(&notification, 0, sizeof(notification));
     notification.mt = UCI_MT_NOTIFICATION;
@@ -72,7 +75,7 @@ static void emit_session_status_ntf(uci_sim_device_t* device,
     notification.payload_len = 6;
     write_u32_le(notification.payload, session_id);
     notification.payload[4] = state;
-    notification.payload[5] = UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS;
+    notification.payload[5] = profile->session_status_reason_code;
 
     (void)uci_sim_device_deliver_notification(device, &notification, result);
 }
@@ -268,7 +271,7 @@ static int handle_session_config(uci_sim_device_t* device, const uci_sim_packet_
             result->response.payload_len = 5;
             result->response.payload[0] = UCI_STATUS_OK;
             write_u32_le(&result->response.payload[1], session_id);
-            emit_session_status_ntf(device, session_id, UCI_SESSION_STATE_INIT, result);
+            emit_session_status_ntf(device, session_id, session->state, result);
             return 0;
         case UCI_SESSION_DEINIT:
             if (request->payload_len < 4) {
@@ -454,7 +457,7 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
 static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet_t* request, uci_sim_result_t* result) {
     uint32_t session_id;
     uci_sim_session_t* session;
-    uint8_t next_state;
+    const uci_sim_session_transition_t* transition;
 
     if (!uci_sim_profile_supports_command(device->profile, request->gid, request->oid)) {
         make_status_response(request, result, UCI_STATUS_UNKNOWN_OID);
@@ -474,12 +477,6 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
     }
 
     switch (request->oid) {
-        case UCI_SESSION_START:
-            next_state = UCI_SESSION_STATE_ACTIVE;
-            break;
-        case UCI_SESSION_STOP:
-            next_state = UCI_SESSION_STATE_IDLE;
-            break;
         case UCI_SESSION_GET_RANGING_COUNT:
             result->has_response = 1;
             result->response.mt = UCI_MT_RESPONSE;
@@ -491,13 +488,27 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
             write_u32_le(&result->response.payload[1], session->ranging_count);
             return 0;
         default:
-            make_status_response(request, result, UCI_STATUS_UNKNOWN_OID);
-            return -1;
+            transition = uci_sim_profile_get_session_transition(device->profile, request->oid);
+            if (transition == NULL) {
+                make_status_response(request, result, UCI_STATUS_UNKNOWN_OID);
+                return -1;
+            }
+            break;
     }
 
-    session->state = next_state;
+    transition = uci_sim_profile_get_session_transition(device->profile, request->oid);
+    if (transition == NULL) {
+        make_status_response(request, result, UCI_STATUS_UNKNOWN_OID);
+        return -1;
+    }
+    if ((transition->allowed_states_mask & (1U << session->state)) == 0U) {
+        make_status_response(request, result, transition->invalid_status);
+        return -1;
+    }
+
+    session->state = transition->next_state;
     make_status_response(request, result, UCI_STATUS_OK);
-    emit_session_status_ntf(device, session_id, next_state, result);
+    emit_session_status_ntf(device, session_id, transition->next_state, result);
     if (request->oid == UCI_SESSION_START) {
         (void)uci_sim_scenario_on_session_started(device, session, result);
     } else if (request->oid == UCI_SESSION_STOP) {

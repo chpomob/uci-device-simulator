@@ -20,11 +20,53 @@ static const uci_sim_profile_t k_default_profile = {
     .default_device_state = UCI_DEVICE_STATE_READY,
     .default_low_power_mode = 0x00,
     .default_device_pan_id = { 0x00, 0x00 },
+    .default_session_type = UCI_SESSION_TYPE_RANGING,
+    .initial_session_state = UCI_SESSION_STATE_INIT,
+    .session_status_reason_code = UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+    .session_transitions = {
+        {
+            .oid = UCI_SESSION_START,
+            .allowed_states_mask = (1U << UCI_SESSION_STATE_INIT) | (1U << UCI_SESSION_STATE_IDLE),
+            .next_state = UCI_SESSION_STATE_ACTIVE,
+            .invalid_status = UCI_STATUS_REJECTED,
+        },
+        {
+            .oid = UCI_SESSION_STOP,
+            .allowed_states_mask = (1U << UCI_SESSION_STATE_ACTIVE),
+            .next_state = UCI_SESSION_STATE_IDLE,
+            .invalid_status = UCI_STATUS_REJECTED,
+        }
+    },
+    .session_transition_count = 2,
     .default_session_max_data_size = 0x0200,
     .ranging_interval_ms = 1000U,
     .ranging_event_period_ms = 1000U,
+    .ranging_stream_burst_count = 3,
     .core_caps_payload = { UCI_STATUS_OK, 0x01, 0xE4, 0x00 },
     .core_caps_payload_len = 4,
+    .range_data_notification_oid = UCI_SESSION_START,
+    .range_data_payload_template = {
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0x00,
+        0xE8, 0x03, 0x00, 0x00,
+        0x01, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0x01,
+        0x12, 0x34, 0x00, 0x00,
+        0x64, 0x00,
+        0x14, 0x00, 0x08, 0x05, 0x00, 0x07, 0x10, 0x00, 0x06, 0x03, 0x00, 0x09, 0x02, 0xE0,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    },
+    .range_data_payload_len = 52,
+    .range_data_sequence_offset = 0,
+    .range_data_primary_session_id_offset = 4,
+    .range_data_secondary_session_id_offset = 16,
+    .range_data_interval_offset = 9,
+    .range_data_measurement_distance_offset = 29,
+    .range_data_distance_base_cm = 100,
+    .range_data_distance_step_cm = 5,
     .supported_core_oids = {
         UCI_CORE_DEVICE_INFO,
         UCI_CORE_GET_CAPS_INFO,
@@ -114,4 +156,21 @@ int uci_sim_profile_supports_notification(const uci_sim_profile_t* profile, uint
     return list_contains(profile->supported_notification_oids,
                          profile->supported_notification_oid_count,
                          oid);
+}
+
+const uci_sim_session_transition_t* uci_sim_profile_get_session_transition(const uci_sim_profile_t* profile,
+                                                                           uint8_t oid) {
+    size_t i;
+
+    if (profile == NULL) {
+        return NULL;
+    }
+
+    for (i = 0; i < profile->session_transition_count; ++i) {
+        if (profile->session_transitions[i].oid == oid) {
+            return &profile->session_transitions[i];
+        }
+    }
+
+    return NULL;
 }

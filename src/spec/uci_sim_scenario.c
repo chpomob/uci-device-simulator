@@ -52,6 +52,8 @@ int uci_sim_scenario_should_auto_deliver_pending(uci_sim_scenario_kind_t scenari
 int uci_sim_scenario_on_session_started(uci_sim_device_t* device,
                                         uci_sim_session_t* session,
                                         uci_sim_result_t* result) {
+    const uci_sim_profile_t* profile;
+
     if (!device || !session || !result) {
         return -1;
     }
@@ -60,8 +62,12 @@ int uci_sim_scenario_on_session_started(uci_sim_device_t* device,
         return 0;
     }
 
+    profile = device->profile ? device->profile : uci_sim_default_profile();
     (void)result;
-    session->ranging_stream_remaining = 3;
+    session->ranging_stream_remaining = profile->ranging_stream_burst_count;
+    if (session->ranging_stream_remaining == 0) {
+        return 0;
+    }
     return uci_sim_device_schedule_event(device, UCI_SIM_EVENT_RANGE_DATA, session->session_id, 0);
 }
 

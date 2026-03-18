@@ -139,6 +139,10 @@ static void test_default_profile_is_applied(void) {
 
 static void test_default_profile_feature_matrix(void) {
     const uci_sim_profile_t* profile = uci_sim_default_profile();
+    const uci_sim_session_transition_t* start_transition =
+        uci_sim_profile_get_session_transition(profile, UCI_SESSION_START);
+    const uci_sim_session_transition_t* stop_transition =
+        uci_sim_profile_get_session_transition(profile, UCI_SESSION_STOP);
 
     ASSERT_TRUE(uci_sim_profile_supports_command(profile, UCI_GID_CORE, UCI_CORE_DEVICE_INFO),
                 "profile should support core device info");
@@ -156,6 +160,16 @@ static void test_default_profile_feature_matrix(void) {
                 "profile should support app config 0x00");
     ASSERT_TRUE(!uci_sim_profile_supports_session_app_config(profile, 0x99),
                 "profile should reject unknown app config");
+    ASSERT_TRUE(start_transition != NULL, "profile should define session start transition");
+    ASSERT_TRUE(stop_transition != NULL, "profile should define session stop transition");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, profile->initial_session_state, "profile initial session state");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_ACTIVE, start_transition->next_state, "profile start next state");
+    ASSERT_EQ_U8(UCI_STATUS_REJECTED, start_transition->invalid_status, "profile invalid start status");
+    ASSERT_EQ_U8(UCI_SESSION_START, profile->range_data_notification_oid, "profile range data oid");
+    ASSERT_EQ_U8(3, profile->ranging_stream_burst_count, "profile range data burst count");
+    ASSERT_EQ_U8(52, profile->range_data_payload_len, "profile range data payload len");
+    ASSERT_EQ_U8(0x12, profile->range_data_payload_template[25], "profile range data short addr lo");
+    ASSERT_EQ_U8(0x34, profile->range_data_payload_template[26], "profile range data short addr hi");
     PASS();
 }
 
@@ -376,9 +390,11 @@ static void test_ranging_stream_scenario(void) {
     uci_sim_packet_t queued;
     uci_sim_packet_t response;
     uci_sim_packet_t notification;
+    const uci_sim_profile_t* profile;
     uint32_t sequence;
 
     uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
+    profile = engine.device.profile;
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;
     request.pbf = UCI_PBF_COMPLETE;
@@ -404,15 +420,22 @@ static void test_ranging_stream_scenario(void) {
     ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, notification.oid, "ranging stream status oid");
     ASSERT_TRUE(dequeue_outbound(&engine, &queued) == 0, "ranging stream pending dequeue failed");
     ASSERT_EQ_U8(UCI_GID_SESSION_CONTROL, queued.gid, "ranging stream data gid");
-    ASSERT_EQ_U8(UCI_SESSION_START, queued.oid, "ranging stream data oid");
-    ASSERT_EQ_U8(52, (uint8_t)queued.payload_len, "ranging stream payload len");
-    ASSERT_EQ_U8(1, queued.payload[24], "ranging stream measurement count");
+    ASSERT_EQ_U8(profile->range_data_notification_oid, queued.oid, "ranging stream data oid");
+    ASSERT_EQ_U8(profile->range_data_payload_len, (uint8_t)queued.payload_len, "ranging stream payload len");
+    ASSERT_EQ_U8(profile->range_data_payload_template[24], queued.payload[24], "ranging stream measurement count");
     sequence = read_u32_le(queued.payload);
     ASSERT_EQ_U32(1, sequence, "ranging stream sequence 1");
     ASSERT_EQ_U8(0, (uint8_t)engine.device.pending_notification_count, "ranging stream pending drained after start");
     ASSERT_EQ_U8(1, (uint8_t)engine.device.sessions[0].ranging_count, "ranging stream count after start");
-    ASSERT_EQ_U8(2, engine.device.sessions[0].ranging_stream_remaining, "ranging stream remaining after start");
+    ASSERT_EQ_U8(profile->ranging_stream_burst_count - 1,
+                 engine.device.sessions[0].ranging_stream_remaining,
+                 "ranging stream remaining after start");
     ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "ranging stream scheduled after start");
+    ASSERT_EQ_U8(profile->range_data_payload_template[25], queued.payload[25], "ranging stream short addr lo");
+    ASSERT_EQ_U8(profile->range_data_payload_template[26], queued.payload[26], "ranging stream short addr hi");
+    ASSERT_EQ_U8((uint8_t)(profile->range_data_distance_base_cm & 0xFFU),
+                 queued.payload[profile->range_data_measurement_distance_offset],
+                 "ranging stream distance lo");
 
     request.gid = UCI_GID_SESSION_CONFIG;
     request.oid = UCI_SESSION_GET_STATE;
@@ -702,6 +725,46 @@ static void test_session_lifecycle(void) {
     PASS();
 }
 
+static void test_profile_enforces_session_transition_policy(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_STOP;
+    request.payload_len = 4;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "stop without session should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "stop without session status");
+
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "init before transition test failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_STOP;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "stop from init should be rejected");
+    ASSERT_EQ_U8(UCI_STATUS_REJECTED, result.response.payload[0], "stop from init status");
+
+    request.oid = UCI_SESSION_START;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "start from init should succeed");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_ACTIVE, result.notification.payload[4], "start transition notification state");
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "start from active should be rejected");
+    ASSERT_EQ_U8(UCI_STATUS_REJECTED, result.response.payload[0], "start from active status");
+    PASS();
+}
+
 int main(void) {
     test_packet_round_trip();
     test_engine_clock_poll_progression();
@@ -721,6 +784,7 @@ int main(void) {
     test_session_app_config_storage();
     test_profile_rejects_unsupported_session_features();
     test_session_lifecycle();
+    test_profile_enforces_session_transition_policy();
 
     printf("Passed: %d\n", g_passed);
     printf("Failed: %d\n", g_failed);

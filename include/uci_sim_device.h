@@ -101,6 +101,9 @@ int uci_sim_device_get_config(const uci_sim_device_t* device,
                               uint8_t config_id,
                               uint8_t* value,
                               uint8_t* value_len);
+int uci_sim_device_get_session(uci_sim_device_t* device,
+                               uint32_t session_id,
+                               uci_sim_session_t** out_session);
 int uci_sim_device_schedule_event(uci_sim_device_t* device,
                                   uci_sim_event_type_t type,
                                   uint32_t session_id,

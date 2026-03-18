@@ -325,11 +325,46 @@ static void write_u32_le(uint8_t* payload, uint32_t value) {
     payload[3] = (uint8_t)((value >> 24) & 0xFFU);
 }
 
+static uci_sim_session_t* find_session_by_id(uci_sim_device_t* device, uint32_t session_id) {
+    size_t i;
+
+    if (!device) {
+        return NULL;
+    }
+
+    for (i = 0; i < UCI_SIM_MAX_SESSIONS; ++i) {
+        if (device->sessions[i].allocated && device->sessions[i].session_id == session_id) {
+            return &device->sessions[i];
+        }
+    }
+
+    return NULL;
+}
+
+int uci_sim_device_get_session(uci_sim_device_t* device,
+                               uint32_t session_id,
+                               uci_sim_session_t** out_session) {
+    uci_sim_session_t* session;
+
+    if (!out_session) {
+        return -1;
+    }
+
+    session = find_session_by_id(device, session_id);
+    if (!session) {
+        return -1;
+    }
+
+    *out_session = session;
+    return 0;
+}
+
 int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
                                        uci_sim_session_t* session,
                                        uci_sim_result_t* result) {
     uci_sim_packet_t notification;
     uint8_t* payload;
+    const uci_sim_profile_t* profile;
     uint32_t sequence_number;
     uint32_t measurement_base_cm;
 
@@ -342,48 +377,32 @@ int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
         return 0;
     }
 
+    profile = device->profile ? device->profile : uci_sim_default_profile();
+    if (profile->range_data_payload_len == 0 ||
+        profile->range_data_payload_len > UCI_SIM_MAX_PAYLOAD) {
+        return -1;
+    }
+
     memset(&notification, 0, sizeof(notification));
     notification.mt = UCI_MT_NOTIFICATION;
     notification.pbf = UCI_PBF_COMPLETE;
     notification.gid = UCI_GID_SESSION_CONTROL;
-    notification.oid = UCI_SESSION_START;
-    notification.payload_len = 52;
+    notification.oid = profile->range_data_notification_oid;
+    notification.payload_len = profile->range_data_payload_len;
     payload = notification.payload;
+    memcpy(payload, profile->range_data_payload_template, profile->range_data_payload_len);
 
     sequence_number = device->next_ranging_sequence++;
-    measurement_base_cm = 100U + (session->ranging_count * 5U);
+    measurement_base_cm = profile->range_data_distance_base_cm +
+                          (session->ranging_count * profile->range_data_distance_step_cm);
 
-    write_u32_le(&payload[0], sequence_number);
-    write_u32_le(&payload[4], session->session_id);
-    payload[8] = 0x00;
-    write_u32_le(&payload[9], device->profile ? device->profile->ranging_interval_ms : 1000U);
-    payload[13] = 0x01;
-    payload[14] = 0x00;
-    payload[15] = 0x00;
-    write_u32_le(&payload[16], session->session_id);
-    memset(&payload[20], 0, 4);
-    payload[24] = 0x01;
-    payload[25] = 0x12;
-    payload[26] = 0x34;
-    payload[27] = 0x00;
-    payload[28] = 0x00;
-    payload[29] = (uint8_t)(measurement_base_cm & 0xFFU);
-    payload[30] = (uint8_t)((measurement_base_cm >> 8) & 0xFFU);
-    payload[31] = 0x14;
-    payload[32] = 0x00;
-    payload[33] = 0x08;
-    payload[34] = 0x05;
-    payload[35] = 0x00;
-    payload[36] = 0x07;
-    payload[37] = 0x10;
-    payload[38] = 0x00;
-    payload[39] = 0x06;
-    payload[40] = 0x03;
-    payload[41] = 0x00;
-    payload[42] = 0x09;
-    payload[43] = 0x02;
-    payload[44] = 0xE0;
-    memset(&payload[45], 0, 7);
+    write_u32_le(&payload[profile->range_data_sequence_offset], sequence_number);
+    write_u32_le(&payload[profile->range_data_primary_session_id_offset], session->session_id);
+    write_u32_le(&payload[profile->range_data_secondary_session_id_offset], session->session_id);
+    write_u32_le(&payload[profile->range_data_interval_offset], profile->ranging_interval_ms);
+    payload[profile->range_data_measurement_distance_offset] = (uint8_t)(measurement_base_cm & 0xFFU);
+    payload[profile->range_data_measurement_distance_offset + 1] =
+        (uint8_t)((measurement_base_cm >> 8) & 0xFFU);
 
     session->ranging_count++;
     session->ranging_stream_remaining--;

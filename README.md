@@ -88,3 +88,7 @@ core config IDs, and supported session app-config IDs. Handler code now
 enforces that matrix directly, so unsupported commands fail with
 `UNKNOWN_OID` and unsupported profile-gated config IDs fail with
 `INVALID_PARAM` instead of drifting through generic storage paths.
+It now also owns the session transition rules and the Cherry-aligned range-data
+template used by the `ranging_stream` scenario. That means state-change policy
+and notification payload shape can vary by profile without changing the engine,
+handlers, or transport adapters.

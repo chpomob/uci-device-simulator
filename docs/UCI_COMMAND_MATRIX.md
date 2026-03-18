@@ -104,6 +104,10 @@ stored supported TLVs below.
 | `0x1A` | `RANGING_TIME_STRUCT` | `supported` | Default-profile stored/retrievable |
 | `0x1B` | `SLOTS_PER_RR` | `supported` | Default-profile stored/retrievable |
 | `0x2E` | `RESULT_REPORT_CONFIG` | `supported` | Default-profile stored/retrievable |
+| `0x2F` | `IN_BAND_TERMINATION_ATTEMPT_COUNT` | `supported` | Default-profile stored/retrievable |
+| `0x31` | `BPRF_PHR_DATA_RATE` | `supported` | Default-profile stored/retrievable |
+| `0x32` | `MAX_NUMBER_OF_MEASUREMENTS` | `supported` | Default-profile stored/retrievable |
+| `0x33` | `UL_TDOA_TX_INTERVAL` | `supported` | Default-profile stored/retrievable |
 | `0x0A`..`0x4D` | Standard FiRa app-config range | `missing` | Not yet modeled |
 | `0xA0`..`0xEC` | CCC / vendor app-config extensions | `missing` | Not yet modeled |
 

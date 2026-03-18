@@ -46,6 +46,10 @@ Version 1 supports a focused interoperable subset:
 - `tests/`: protocol and behavior regression tests
 - `docs/`: architecture notes
 
+See [docs/UCI_COMMAND_MATRIX.md](docs/UCI_COMMAND_MATRIX.md) for the current
+supported/missing command inventory derived from local Qorvo Cherry headers and
+the simulator’s actual handler/profile surface.
+
 ## Build
 
 - `make`

@@ -87,7 +87,11 @@ start and then advances a short deterministic series of Cherry-aligned
 `RANGE_DATA_NTF (SESSION_INFO_NTF)` notifications through the internal scenario
 event queue. `SESSION_STOP` suppresses any remaining range-data notifications,
 so UCI clients can exercise stream progression and stop behavior instead of a
-one-shot synthetic event.
+one-shot synthetic event. `SESSION_INFO_NTF_CONFIG` now has validated runtime
+behavior for `0x00` (disable), `0x01` (enable), `0x02` (emit while the
+simulated distance is inside the configured proximity window), and `0x05`
+(emit on proximity enter/leave transitions). The AoA-dependent modes are still
+stored until their bound parameters are made behavioral.
 
 Current simulator behavior is owned by one explicit default device profile.
 That profile now defines the visible device versions, capability payload,

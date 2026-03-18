@@ -38,6 +38,8 @@ static uci_sim_session_t* alloc_session(uci_sim_device_t* device, uint32_t sessi
             device->sessions[i].session_type = profile->default_session_type;
             device->sessions[i].state = profile->initial_session_state;
             device->sessions[i].ranging_count = 0;
+            device->sessions[i].has_last_proximity_state = 0;
+            device->sessions[i].last_in_proximity_range = 0;
             device->sessions[i].max_data_size = device->profile
                 ? device->profile->default_session_max_data_size
                 : 0x0200;
@@ -807,6 +809,12 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
                 result->response.payload[0] = UCI_STATUS_REJECTED;
                 break;
             }
+            if (config_id == UCI_APP_CONFIG_SESSION_INFO_NTF_CONFIG ||
+                config_id == UCI_APP_CONFIG_RNG_DATA_NTF_PROXIMITY_NEAR ||
+                config_id == UCI_APP_CONFIG_RNG_DATA_NTF_PROXIMITY_FAR) {
+                session->has_last_proximity_state = 0;
+                session->last_in_proximity_range = 0;
+            }
             offset += value_len;
             processed++;
         }
@@ -1033,6 +1041,10 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
         return -1;
     }
 
+    if (request->oid == UCI_SESSION_START || request->oid == UCI_SESSION_STOP) {
+        session->has_last_proximity_state = 0;
+        session->last_in_proximity_range = 0;
+    }
     session->state = transition->next_state;
     make_status_response(request, result, UCI_STATUS_OK);
     emit_session_status_ntf(device, session_id, transition->next_state, result);

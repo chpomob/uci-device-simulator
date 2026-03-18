@@ -80,6 +80,8 @@ typedef struct uci_sim_session {
     uint16_t last_data_sequence;
     uint16_t last_data_length;
     uint8_t has_last_data_message;
+    uint8_t has_last_proximity_state;
+    uint8_t last_in_proximity_range;
     int allocated;
     uci_sim_session_config_t configs[UCI_SIM_MAX_SESSION_CONFIGS];
     uci_sim_multicast_entry_t multicast_entries[UCI_SIM_MAX_MULTICAST_ENTRIES];
@@ -136,6 +138,8 @@ int uci_sim_session_get_config(const uci_sim_session_t* session,
                                uint8_t* value,
                                uint8_t* value_len);
 uint8_t uci_sim_session_get_range_data_ntf_config(const uci_sim_session_t* session);
+uint16_t uci_sim_session_get_range_data_ntf_proximity_near(const uci_sim_session_t* session);
+uint16_t uci_sim_session_get_range_data_ntf_proximity_far(const uci_sim_session_t* session);
 int uci_sim_device_store_config(uci_sim_device_t* device,
                                 uint8_t config_id,
                                 const uint8_t* value,

@@ -31,6 +31,11 @@ static void apply_profile_defaults(uci_sim_device_t* device, const uci_sim_profi
     device->device_configs[2].value[1] = effective_profile->default_device_pan_id[1];
 }
 
+static uint16_t read_u16_le(const uint8_t* payload) {
+    return (uint16_t)payload[0] |
+           (uint16_t)((uint16_t)payload[1] << 8);
+}
+
 void uci_sim_device_set_scenario(uci_sim_device_t* device, uci_sim_scenario_kind_t scenario) {
     if (!device) {
         return;
@@ -293,6 +298,38 @@ uint8_t uci_sim_session_get_range_data_ntf_config(const uci_sim_session_t* sessi
     return value;
 }
 
+uint16_t uci_sim_session_get_range_data_ntf_proximity_near(const uci_sim_session_t* session) {
+    uint8_t value[2] = {0x00, 0x00};
+    uint8_t value_len = 0;
+
+    if (!session) {
+        return 0;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_RNG_DATA_NTF_PROXIMITY_NEAR, value, &value_len) != 0 ||
+        value_len != 2) {
+        return 0;
+    }
+
+    return read_u16_le(value);
+}
+
+uint16_t uci_sim_session_get_range_data_ntf_proximity_far(const uci_sim_session_t* session) {
+    uint8_t value[2] = {0xFF, 0xFF};
+    uint8_t value_len = 0;
+
+    if (!session) {
+        return 0xFFFFU;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_RNG_DATA_NTF_PROXIMITY_FAR, value, &value_len) != 0 ||
+        value_len != 2) {
+        return 0xFFFFU;
+    }
+
+    return read_u16_le(value);
+}
+
 
 int uci_sim_device_store_config(uci_sim_device_t* device,
                                 uint8_t config_id,
@@ -546,6 +583,10 @@ int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
     uint32_t sequence_number;
     uint32_t measurement_base_cm;
     uint8_t ntf_config;
+    uint16_t proximity_near_cm;
+    uint16_t proximity_far_cm;
+    uint8_t in_proximity_range;
+    uint8_t should_emit;
 
     if (!device || !session || !result) {
         return -1;
@@ -560,8 +601,30 @@ int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
     ntf_config = uci_sim_session_get_range_data_ntf_config(session);
     measurement_base_cm = profile->range_data_distance_base_cm +
                           (session->ranging_count * profile->range_data_distance_step_cm);
+    proximity_near_cm = uci_sim_session_get_range_data_ntf_proximity_near(session);
+    proximity_far_cm = uci_sim_session_get_range_data_ntf_proximity_far(session);
+    in_proximity_range = (proximity_near_cm <= proximity_far_cm &&
+                          measurement_base_cm >= proximity_near_cm &&
+                          measurement_base_cm <= proximity_far_cm) ? 1U : 0U;
+    should_emit = 0;
 
-    if (ntf_config != 0x00) {
+    switch (ntf_config) {
+        case 0x00:
+            should_emit = 0;
+            break;
+        case 0x02:
+            should_emit = in_proximity_range;
+            break;
+        case 0x05:
+            should_emit = session->has_last_proximity_state &&
+                (session->last_in_proximity_range != in_proximity_range);
+            break;
+        default:
+            should_emit = 1;
+            break;
+    }
+
+    if (should_emit != 0U) {
         if (profile->range_data_payload_len == 0 ||
             profile->range_data_payload_len > UCI_SIM_MAX_PAYLOAD) {
             return -1;
@@ -590,6 +653,8 @@ int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
         }
     }
 
+    session->has_last_proximity_state = 1;
+    session->last_in_proximity_range = in_proximity_range;
     session->ranging_count++;
     session->ranging_stream_remaining--;
     return 0;

@@ -40,6 +40,11 @@ typedef struct {
     const char* step_name;
 } tcp_interop_step_t;
 
+static uint16_t read_u16_le(const uint8_t* payload) {
+    return (uint16_t)payload[0] |
+           (uint16_t)((uint16_t)payload[1] << 8);
+}
+
 static ssize_t read_full(int fd, void* buffer, size_t count) {
     size_t total = 0;
     while (total < count) {
@@ -135,8 +140,9 @@ static int set_socket_timeout_ms(int fd, int timeout_ms) {
 static int start_server(test_server_t* server) {
     uci_sim_engine_t engine;
     pid_t pid;
+    static unsigned port_nonce = 0;
 
-    server->port = (uint16_t)(20000 + (((unsigned)getpid() ^ (unsigned)time(NULL)) % 20000));
+    server->port = (uint16_t)(20000 + (((unsigned)getpid() ^ (unsigned)time(NULL) ^ (++port_nonce * 7919U)) % 20000));
     pid = fork();
     if (pid < 0) {
         return -1;
@@ -1568,6 +1574,123 @@ static void test_ranging_stream_disable_info_ntf_over_tcp(void) {
     PASS();
 }
 
+static void test_ranging_stream_proximity_inside_mode_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    uint8_t packet[UCI_SIM_MAX_PACKET];
+    uint8_t packet2[UCI_SIM_MAX_PACKET];
+    uci_sim_packet_t parsed;
+    uci_sim_packet_t parsed2;
+    size_t packet_len = 0;
+    size_t packet2_len = 0;
+    int fd = -1;
+
+    server.scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
+    ASSERT_TRUE(start_server(&server) == 0, "start proximity-inside server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect proximity-inside server");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load proximity-inside init");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write proximity-inside init");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_rsp.hex",
+                          "proximity-inside init rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
+                          "proximity-inside init ntf");
+
+    memset(request, 0, sizeof(request));
+    request[0] = 0x21;
+    request[1] = 0x03;
+    request[2] = 0x00;
+    request[3] = 0x08;
+    request[4] = 0x78;
+    request[5] = 0x56;
+    request[6] = 0x34;
+    request[7] = 0x12;
+    request[8] = 0x01;
+    request[9] = 0x0E;
+    request[10] = 0x01;
+    request[11] = 0x02;
+    ASSERT_TRUE(write_full(fd, request, 12) == 12, "write proximity-inside ntf mode");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+                          "proximity-inside ntf mode rsp");
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rng_data_ntf_proximity_near_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load proximity-inside near");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write proximity-inside near");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+                          "proximity-inside near rsp");
+    memset(request, 0, sizeof(request));
+    request[0] = 0x21;
+    request[1] = 0x03;
+    request[2] = 0x00;
+    request[3] = 0x09;
+    request[4] = 0x78;
+    request[5] = 0x56;
+    request[6] = 0x34;
+    request[7] = 0x12;
+    request[8] = 0x01;
+    request[9] = 0x10;
+    request[10] = 0x02;
+    request[11] = 0x69;
+    request[12] = 0x00;
+    ASSERT_TRUE(write_full(fd, request, 13) == 13, "write proximity-inside far");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+                          "proximity-inside far rsp");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load proximity-inside start");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write proximity-inside start");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_rsp.hex",
+                          "proximity-inside start rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_ntf.hex",
+                          "proximity-inside start ntf");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read proximity-inside range 1");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse proximity-inside range 1");
+    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "proximity-inside range 1 oid");
+    ASSERT_EQ_INT(100, read_u16_le(&parsed.payload[29]), "proximity-inside range 1 distance");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_state_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load proximity-inside get state");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write proximity-inside get state");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read proximity-inside get state packet 1");
+    ASSERT_TRUE(read_packet(fd, packet2, sizeof(packet2), &packet2_len) == 0, "read proximity-inside get state packet 2");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse proximity-inside get state packet 1");
+    ASSERT_TRUE(uci_sim_packet_parse(packet2, packet2_len, &parsed2) == 0, "parse proximity-inside get state packet 2");
+    if (parsed.mt == UCI_MT_RESPONSE) {
+        ASSERT_EQ_INT(UCI_SESSION_GET_STATE, parsed.oid, "proximity-inside get state rsp oid");
+        parsed = parsed2;
+    } else {
+        ASSERT_EQ_INT(UCI_SESSION_GET_STATE, parsed2.oid, "proximity-inside get state rsp oid");
+    }
+    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "proximity-inside range 2 oid");
+    ASSERT_EQ_INT(105, read_u16_le(&parsed.payload[29]), "proximity-inside range 2 distance");
+
+    ASSERT_TRUE(set_socket_timeout_ms(fd, 1200) == 0, "set proximity-inside timeout");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) != 0, "proximity-inside should suppress out-of-range notification");
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 static void test_ranging_stream_flow_over_tcp(void) {
     test_server_t server = {0};
     uint8_t request[UCI_SIM_MAX_PACKET];
@@ -1807,6 +1930,7 @@ int main(void) {
     test_delayed_notification_flow_over_tcp();
     test_core_generic_error_flow_over_tcp();
     test_ranging_stream_disable_info_ntf_over_tcp();
+    test_ranging_stream_proximity_inside_mode_over_tcp();
     test_ranging_stream_flow_over_tcp();
     test_data_message_edge_cases_over_tcp();
     test_control_edge_cases_over_tcp();

@@ -99,9 +99,9 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x0B` | `MAC_FCS_TYPE` | `supported` | Default-profile stored/retrievable |
 | `0x0C` | `RANGING_ROUND_CONTROL` | `supported` | Default-profile stored/retrievable |
 | `0x0D` | `AOA_RESULT_REQ` | `supported` | Default-profile stored/retrievable |
-| `0x0E` | `SESSION_INFO_NTF_CONFIG` | `supported` | Stored/retrievable; validated runtime behavior for `0x00` disable and `0x01` enable on `RANGE_DATA_NTF` emission. Modes `0x02..0x07` remain stored until proximity/AoA gating is implemented. |
-| `0x0F` | `RNG_DATA_NTF_PROXIMITY_NEAR` | `supported` | Default-profile stored/retrievable |
-| `0x10` | `RNG_DATA_NTF_PROXIMITY_FAR` | `supported` | Default-profile stored/retrievable |
+| `0x0E` | `SESSION_INFO_NTF_CONFIG` | `supported` | Stored/retrievable; validated runtime behavior for `0x00` disable, `0x01` enable, `0x02` emit while inside the configured proximity window, and `0x05` emit on proximity enter/leave transitions. AoA-dependent modes remain stored until AoA gating is implemented. |
+| `0x0F` | `RNG_DATA_NTF_PROXIMITY_NEAR` | `supported` | Stored/retrievable; validated runtime impact on `SESSION_INFO_NTF_CONFIG` proximity-gated modes |
+| `0x10` | `RNG_DATA_NTF_PROXIMITY_FAR` | `supported` | Stored/retrievable; validated runtime impact on `SESSION_INFO_NTF_CONFIG` proximity-gated modes |
 | `0x11` | `DEVICE_ROLE` | `supported` | Default-profile stored/retrievable |
 | `0x12` | `RFRAME_CONFIG` | `supported` | Default-profile stored/retrievable |
 | `0x13` | `RSSI_REPORTING` | `supported` | Default-profile stored/retrievable |

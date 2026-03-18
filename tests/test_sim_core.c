@@ -11,6 +11,7 @@ static uci_sim_time_ms_t g_fake_clock_ms = 0;
 
 #define ASSERT_TRUE(cond, msg) do { if (!(cond)) { printf("FAIL: %s\n", msg); g_failed++; return; } } while (0)
 #define ASSERT_EQ_U8(exp, act, msg) do { if ((unsigned)(exp) != (unsigned)(act)) { printf("FAIL: %s\n", msg); g_failed++; return; } } while (0)
+#define ASSERT_EQ_U16(exp, act, msg) do { if ((unsigned)(exp) != (unsigned)(act)) { printf("FAIL: %s\n", msg); g_failed++; return; } } while (0)
 #define ASSERT_EQ_U32(exp, act, msg) do { if ((unsigned long)(exp) != (unsigned long)(act)) { printf("FAIL: %s\n", msg); g_failed++; return; } } while (0)
 #define PASS() do { g_passed++; } while (0)
 
@@ -19,6 +20,11 @@ static uint32_t read_u32_le(const uint8_t* payload) {
            ((uint32_t)payload[1] << 8) |
            ((uint32_t)payload[2] << 16) |
            ((uint32_t)payload[3] << 24);
+}
+
+static uint16_t read_u16_le(const uint8_t* payload) {
+    return (uint16_t)payload[0] |
+           (uint16_t)((uint16_t)payload[1] << 8);
 }
 
 static uint64_t read_u64_le(const uint8_t* payload) {
@@ -721,6 +727,138 @@ static void test_ranging_stream_respects_info_ntf_disable(void) {
     ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging disable should suppress async range data");
     ASSERT_EQ_U8(3, (uint8_t)engine.device.sessions[0].ranging_count, "ranging disable count after async tick");
     ASSERT_EQ_U8(0, engine.device.sessions[0].ranging_stream_remaining, "ranging disable remaining after async tick");
+    PASS();
+}
+
+static void test_ranging_stream_respects_proximity_inside_mode(void) {
+    uci_sim_engine_t engine;
+    uci_sim_packet_t request;
+    uci_sim_packet_t response;
+    uci_sim_packet_t notification;
+
+    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "proximity inside init failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "proximity inside init response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity inside init notification missing");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 16;
+    request.payload[4] = 3;
+    request.payload[5] = UCI_APP_CONFIG_SESSION_INFO_NTF_CONFIG;
+    request.payload[6] = 1;
+    request.payload[7] = 0x02;
+    request.payload[8] = UCI_APP_CONFIG_RNG_DATA_NTF_PROXIMITY_NEAR;
+    request.payload[9] = 2;
+    request.payload[10] = 100;
+    request.payload[11] = 0;
+    request.payload[12] = UCI_APP_CONFIG_RNG_DATA_NTF_PROXIMITY_FAR;
+    request.payload[13] = 2;
+    request.payload[14] = 105;
+    request.payload[15] = 0;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "proximity inside set_app_config failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "proximity inside set_app_config response missing");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "proximity inside start failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "proximity inside start response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity inside status notification missing");
+    ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, notification.oid, "proximity inside status oid");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity inside first range notification missing");
+    ASSERT_EQ_U8(UCI_SESSION_START, notification.oid, "proximity inside first range oid");
+    ASSERT_EQ_U16(100, read_u16_le(&notification.payload[engine.device.profile->range_data_measurement_distance_offset]),
+                  "proximity inside first range distance");
+
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_GET_STATE;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "proximity inside get state failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "proximity inside get state response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity inside second range notification missing");
+    ASSERT_EQ_U16(105, read_u16_le(&notification.payload[engine.device.profile->range_data_measurement_distance_offset]),
+                  "proximity inside second range distance");
+
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 1000) == 0, "proximity inside async tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "proximity inside should suppress out-of-range notification");
+    ASSERT_EQ_U8(3, (uint8_t)engine.device.sessions[0].ranging_count, "proximity inside count after async tick");
+    PASS();
+}
+
+static void test_ranging_stream_respects_proximity_transition_mode(void) {
+    uci_sim_engine_t engine;
+    uci_sim_packet_t request;
+    uci_sim_packet_t response;
+    uci_sim_packet_t notification;
+    uint32_t sequence;
+
+    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "proximity transition init failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "proximity transition init response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity transition init notification missing");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 16;
+    request.payload[4] = 3;
+    request.payload[5] = UCI_APP_CONFIG_SESSION_INFO_NTF_CONFIG;
+    request.payload[6] = 1;
+    request.payload[7] = 0x05;
+    request.payload[8] = UCI_APP_CONFIG_RNG_DATA_NTF_PROXIMITY_NEAR;
+    request.payload[9] = 2;
+    request.payload[10] = 103;
+    request.payload[11] = 0;
+    request.payload[12] = UCI_APP_CONFIG_RNG_DATA_NTF_PROXIMITY_FAR;
+    request.payload[13] = 2;
+    request.payload[14] = 108;
+    request.payload[15] = 0;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "proximity transition set_app_config failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "proximity transition set_app_config response missing");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "proximity transition start failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "proximity transition start response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity transition status notification missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "proximity transition should not notify on baseline");
+
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_GET_STATE;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "proximity transition get state failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "proximity transition get state response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity transition entering notification missing");
+    sequence = read_u32_le(notification.payload);
+    ASSERT_EQ_U32(1, sequence, "proximity transition entering sequence");
+    ASSERT_EQ_U16(105, read_u16_le(&notification.payload[engine.device.profile->range_data_measurement_distance_offset]),
+                  "proximity transition entering distance");
+
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 1000) == 0, "proximity transition async tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity transition leaving notification missing");
+    sequence = read_u32_le(notification.payload);
+    ASSERT_EQ_U32(2, sequence, "proximity transition leaving sequence");
+    ASSERT_EQ_U16(110, read_u16_le(&notification.payload[engine.device.profile->range_data_measurement_distance_offset]),
+                  "proximity transition leaving distance");
     PASS();
 }
 
@@ -2476,6 +2614,8 @@ int main(void) {
     test_session_query_data_size_and_ranging_count();
     test_ranging_stream_scenario();
     test_ranging_stream_respects_info_ntf_disable();
+    test_ranging_stream_respects_proximity_inside_mode();
+    test_ranging_stream_respects_proximity_transition_mode();
     test_ranging_stream_progresses_to_completion();
     test_session_app_config_storage();
     test_profile_rejects_unsupported_session_features();

@@ -87,6 +87,11 @@ static int handle_core_set_get_config(uci_sim_device_t* device,
                                       int is_set);
 
 static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request, uci_sim_result_t* result) {
+    if (!uci_sim_profile_supports_command(device->profile, request->gid, request->oid)) {
+        make_status_response(request, result, UCI_STATUS_UNKNOWN_OID);
+        return -1;
+    }
+
     switch (request->oid) {
         case UCI_CORE_DEVICE_INFO:
             result->has_response = 1;
@@ -165,6 +170,10 @@ static int handle_core_set_get_config(uci_sim_device_t* device,
                 result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
                 break;
             }
+            if (!uci_sim_profile_supports_core_config(device->profile, config_id)) {
+                result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
+                break;
+            }
             if (uci_sim_device_store_config(device, config_id, &request->payload[offset], value_len) != 0) {
                 result->response.payload[0] = UCI_STATUS_FAILED;
                 break;
@@ -193,6 +202,10 @@ static int handle_core_set_get_config(uci_sim_device_t* device,
             uint8_t value_len = 0;
             uint8_t value[UCI_SIM_MAX_CONFIG_VALUE] = {0};
 
+            if (!uci_sim_profile_supports_core_config(device->profile, config_id)) {
+                result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
+                break;
+            }
             if (uci_sim_device_get_config(device, config_id, value, &value_len) != 0) {
                 result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
                 break;
@@ -226,6 +239,11 @@ static int handle_session_config(uci_sim_device_t* device, const uci_sim_packet_
     uint32_t session_id;
     uci_sim_session_t* session;
     size_t i;
+
+    if (!uci_sim_profile_supports_command(device->profile, request->gid, request->oid)) {
+        make_status_response(request, result, UCI_STATUS_UNKNOWN_OID);
+        return -1;
+    }
 
     switch (request->oid) {
         case UCI_SESSION_INIT:
@@ -382,6 +400,10 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
                 result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
                 break;
             }
+            if (!uci_sim_profile_supports_session_app_config(device->profile, config_id)) {
+                result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
+                break;
+            }
             if (uci_sim_session_store_config(session, config_id, &request->payload[offset], value_len) != 0) {
                 result->response.payload[0] = UCI_STATUS_REJECTED;
                 break;
@@ -402,8 +424,13 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
             uint8_t config_id = request->payload[offset++];
             uint8_t value_len = 0;
             uint8_t value[UCI_SIM_MAX_CONFIG_VALUE] = {0};
+            if (!uci_sim_profile_supports_session_app_config(device->profile, config_id)) {
+                result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
+                break;
+            }
             if (uci_sim_session_get_config(session, config_id, value, &value_len) != 0) {
-                value_len = 0;
+                result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
+                break;
             }
             if (response_offset + 2 + value_len > UCI_SIM_MAX_PAYLOAD) {
                 result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
@@ -428,6 +455,11 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
     uint32_t session_id;
     uci_sim_session_t* session;
     uint8_t next_state;
+
+    if (!uci_sim_profile_supports_command(device->profile, request->gid, request->oid)) {
+        make_status_response(request, result, UCI_STATUS_UNKNOWN_OID);
+        return -1;
+    }
 
     if (request->payload_len < 4) {
         make_status_response(request, result, UCI_STATUS_INVALID_MSG_SIZE);

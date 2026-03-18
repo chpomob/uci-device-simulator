@@ -137,6 +137,28 @@ static void test_default_profile_is_applied(void) {
     PASS();
 }
 
+static void test_default_profile_feature_matrix(void) {
+    const uci_sim_profile_t* profile = uci_sim_default_profile();
+
+    ASSERT_TRUE(uci_sim_profile_supports_command(profile, UCI_GID_CORE, UCI_CORE_DEVICE_INFO),
+                "profile should support core device info");
+    ASSERT_TRUE(uci_sim_profile_supports_command(profile, UCI_GID_SESSION_CONFIG, UCI_SESSION_INIT),
+                "profile should support session init");
+    ASSERT_TRUE(uci_sim_profile_supports_command(profile, UCI_GID_SESSION_CONTROL, UCI_SESSION_START),
+                "profile should support session start");
+    ASSERT_TRUE(!uci_sim_profile_supports_command(profile, UCI_GID_CORE, UCI_CORE_DEVICE_RESET),
+                "profile should reject unsupported core reset");
+    ASSERT_TRUE(uci_sim_profile_supports_core_config(profile, UCI_DEVICE_CONFIG_DEVICE_STATE),
+                "profile should support device state config");
+    ASSERT_TRUE(!uci_sim_profile_supports_core_config(profile, 0x7FU),
+                "profile should reject unknown core config");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x00),
+                "profile should support app config 0x00");
+    ASSERT_TRUE(!uci_sim_profile_supports_session_app_config(profile, 0x99),
+                "profile should reject unknown app config");
+    PASS();
+}
+
 static void test_core_device_config_storage(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -222,6 +244,37 @@ static void test_core_additional_device_configs(void) {
     ASSERT_EQ_U8(2, result.response.payload[3], "get device pan id len");
     ASSERT_EQ_U8(0x34, result.response.payload[4], "get device pan id lo");
     ASSERT_EQ_U8(0x12, result.response.payload[5], "get device pan id hi");
+    PASS();
+}
+
+static void test_profile_rejects_unsupported_core_features(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_DEVICE_RESET;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "unsupported core command should fail");
+    ASSERT_EQ_U8(UCI_STATUS_UNKNOWN_OID, result.response.payload[0], "unsupported core command status");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_SET_CONFIG;
+    request.payload_len = 4;
+    request.payload[0] = 1;
+    request.payload[1] = 0x7F;
+    request.payload[2] = 1;
+    request.payload[3] = 0x01;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "unsupported core config set should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "unsupported core config status");
     PASS();
 }
 
@@ -555,6 +608,57 @@ static void test_session_app_config_storage(void) {
     PASS();
 }
 
+static void test_profile_rejects_unsupported_session_features(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "profile rejection init failed");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = 1;
+    request.payload[5] = 0x99;
+    request.payload[6] = 1;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "unsupported app config set should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "unsupported app config set status");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = 0x02;
+    request.payload_len = 4;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "unsupported session control command should fail");
+    ASSERT_EQ_U8(UCI_STATUS_UNKNOWN_OID, result.response.payload[0], "unsupported session control status");
+    PASS();
+}
+
 static void test_session_lifecycle(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -603,8 +707,10 @@ int main(void) {
     test_engine_clock_poll_progression();
     test_core_device_info();
     test_default_profile_is_applied();
+    test_default_profile_feature_matrix();
     test_core_device_config_storage();
     test_core_additional_device_configs();
+    test_profile_rejects_unsupported_core_features();
     test_core_caps_match_profile();
     test_default_scenario_initialization();
     test_delayed_notification_scenario();
@@ -613,6 +719,7 @@ int main(void) {
     test_ranging_stream_scenario();
     test_ranging_stream_progresses_to_completion();
     test_session_app_config_storage();
+    test_profile_rejects_unsupported_session_features();
     test_session_lifecycle();
 
     printf("Passed: %d\n", g_passed);

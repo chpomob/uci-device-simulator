@@ -39,8 +39,10 @@ The simulator now also has an explicit device-profile seam through
 `uci_sim_profile.*`. The current default profile owns the versions, capability
 payload, default device configs, default session data size, and ranging timing
 that were previously scattered across initialization code, handlers, and the
-engine. Future fidelity work should add new profiles for concrete hardware and
-firmware targets instead of editing generic simulator logic.
+engine. It now also owns the supported command/config/app-config matrix, which
+the handlers enforce before touching model storage. Future fidelity work should
+add new profiles for concrete hardware and firmware targets instead of editing
+generic simulator logic.
 
 The first non-default scenario is `delayed_notifications`, which defers
 session-state notifications until the next command exchange. This gives

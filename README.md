@@ -83,3 +83,8 @@ That profile now defines the visible device versions, capability payload,
 default configs, session data-size default, and ranging timing. Future work to
 match a specific real device should add new profiles rather than changing the
 engine or handlers directly.
+The profile also owns the supported feature matrix for command OIDs, supported
+core config IDs, and supported session app-config IDs. Handler code now
+enforces that matrix directly, so unsupported commands fail with
+`UNKNOWN_OID` and unsupported profile-gated config IDs fail with
+`INVALID_PARAM` instead of drifting through generic storage paths.

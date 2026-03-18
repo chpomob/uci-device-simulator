@@ -447,6 +447,79 @@ int uci_sim_session_remove_multicast_entry(uci_sim_session_t* session,
     return UCI_STATUS_ADDRESS_NOT_FOUND;
 }
 
+uci_sim_logical_link_t* uci_sim_session_find_logical_link(uci_sim_session_t* session,
+                                                          uint8_t link_id) {
+    uint8_t i;
+
+    if (!session) {
+        return NULL;
+    }
+
+    for (i = 0; i < session->logical_link_count; ++i) {
+        if (session->logical_links[i].in_use && session->logical_links[i].link_id == link_id) {
+            return &session->logical_links[i];
+        }
+    }
+
+    return NULL;
+}
+
+uci_sim_logical_link_t* uci_sim_session_allocate_logical_link(uci_sim_session_t* session,
+                                                              uint8_t requested_id,
+                                                              uint8_t* assigned_id) {
+    uci_sim_logical_link_t* entry;
+    uint8_t candidate;
+
+    if (!session || !assigned_id || session->logical_link_count >= UCI_SIM_MAX_LOGICAL_LINKS) {
+        return NULL;
+    }
+
+    candidate = requested_id;
+    if (candidate == 0xFF) {
+        candidate = 0;
+        while (uci_sim_session_find_logical_link(session, candidate) && candidate < 0xFF) {
+            candidate++;
+        }
+        if (candidate == 0xFF && uci_sim_session_find_logical_link(session, candidate)) {
+            return NULL;
+        }
+    }
+
+    entry = &session->logical_links[session->logical_link_count++];
+    memset(entry, 0, sizeof(*entry));
+    entry->in_use = 1;
+    entry->link_id = candidate;
+    *assigned_id = candidate;
+    return entry;
+}
+
+int uci_sim_session_remove_logical_link(uci_sim_session_t* session, uint8_t link_id) {
+    uint8_t i;
+
+    if (!session) {
+        return -1;
+    }
+
+    for (i = 0; i < session->logical_link_count; ++i) {
+        if (session->logical_links[i].in_use && session->logical_links[i].link_id == link_id) {
+            for (; i + 1 < session->logical_link_count; ++i) {
+                session->logical_links[i] = session->logical_links[i + 1];
+            }
+            if (session->logical_link_count > 0) {
+                session->logical_link_count--;
+            }
+            if (session->logical_link_count < UCI_SIM_MAX_LOGICAL_LINKS) {
+                memset(&session->logical_links[session->logical_link_count],
+                       0,
+                       sizeof(session->logical_links[session->logical_link_count]));
+            }
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
 int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
                                        uci_sim_session_t* session,
                                        uci_sim_result_t* result) {

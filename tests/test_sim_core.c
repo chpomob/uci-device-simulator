@@ -1040,6 +1040,66 @@ static void test_data_message_send_emits_credit_and_status_notifications(void) {
     PASS();
 }
 
+static void test_logical_link_lifecycle(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "logical link init failed");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_LOGICAL_LINK_CREATE;
+    request.payload_len = 7;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = 0x12;
+    request.payload[5] = 0x77;
+    request.payload[6] = 0x05;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "logical link create failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "logical link create status");
+    ASSERT_EQ_U8(0x12, result.response.payload[1], "logical link create id");
+    ASSERT_EQ_U8(0x05, result.response.payload[2], "logical link create credit");
+    ASSERT_TRUE(result.has_notification, "logical link create ntf missing");
+    ASSERT_EQ_U8(UCI_SESSION_LOGICAL_LINK_UWBS_CREATE, result.notification.oid, "logical link create ntf oid");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "logical link session lookup");
+    ASSERT_EQ_U8(1, session->logical_link_count, "logical link count after create");
+
+    request.oid = UCI_SESSION_LOGICAL_LINK_GET_PARAM;
+    request.payload_len = 5;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "logical link get param failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "logical link get param status");
+    ASSERT_EQ_U8(0x12, result.response.payload[1], "logical link get param id");
+    ASSERT_EQ_U8(0x77, result.response.payload[2], "logical link get param mode");
+    ASSERT_EQ_U8(0x05, result.response.payload[3], "logical link get param credit");
+
+    request.oid = UCI_SESSION_LOGICAL_LINK_CLOSE;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "logical link close failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "logical link close status");
+    ASSERT_TRUE(result.has_notification, "logical link close ntf missing");
+    ASSERT_EQ_U8(UCI_SESSION_LOGICAL_LINK_UWBS_CLOSE, result.notification.oid, "logical link close ntf oid");
+    ASSERT_EQ_U8(0, session->logical_link_count, "logical link count after close");
+    PASS();
+}
+
 int main(void) {
     test_packet_round_trip();
     test_engine_clock_poll_progression();
@@ -1065,6 +1125,7 @@ int main(void) {
     test_session_multicast_list_updates();
     test_session_data_transfer_phase_config();
     test_data_message_send_emits_credit_and_status_notifications();
+    test_logical_link_lifecycle();
 
     printf("Passed: %d\n", g_passed);
     printf("Failed: %d\n", g_failed);

@@ -117,6 +117,27 @@ static void emit_device_status_ntf(uci_sim_device_t* device,
     (void)uci_sim_device_deliver_notification(device, &notification, result);
 }
 
+static void emit_logical_link_notification(uci_sim_device_t* device,
+                                           uci_sim_result_t* result,
+                                           uint32_t session_id,
+                                           uint8_t oid,
+                                           uint8_t link_id,
+                                           uint8_t reason_or_credit) {
+    uci_sim_packet_t notification;
+
+    memset(&notification, 0, sizeof(notification));
+    notification.mt = UCI_MT_NOTIFICATION;
+    notification.pbf = UCI_PBF_COMPLETE;
+    notification.gid = UCI_GID_SESSION_CONTROL;
+    notification.oid = oid;
+    notification.payload_len = 6;
+    write_u32_le(notification.payload, session_id);
+    notification.payload[4] = link_id;
+    notification.payload[5] = reason_or_credit;
+
+    (void)uci_sim_device_deliver_notification(device, &notification, result);
+}
+
 static int handle_session_set_get_config(uci_sim_device_t* device,
                                          const uci_sim_packet_t* request,
                                          uci_sim_result_t* result,
@@ -134,6 +155,12 @@ static int handle_session_data_transfer_phase_config(uci_sim_device_t* device,
 static int handle_data_message_send(uci_sim_device_t* device,
                                     const uci_sim_packet_t* request,
                                     uci_sim_result_t* result);
+static void emit_logical_link_notification(uci_sim_device_t* device,
+                                           uci_sim_result_t* result,
+                                           uint32_t session_id,
+                                           uint8_t oid,
+                                           uint8_t link_id,
+                                           uint8_t reason_or_credit);
 
 static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request, uci_sim_result_t* result) {
     if (!uci_sim_profile_supports_command(device->profile, request->gid, request->oid)) {
@@ -706,6 +733,107 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
             result->response.payload[0] = UCI_STATUS_OK;
             write_u32_le(&result->response.payload[1], session->ranging_count);
             return 0;
+        case UCI_SESSION_LOGICAL_LINK_CREATE: {
+            uint8_t requested_id = (request->payload_len >= 5) ? request->payload[4] : 0xFF;
+            uint8_t mode = (request->payload_len >= 6) ? request->payload[5] : 0;
+            uint8_t credit = (request->payload_len >= 7) ? request->payload[6] : ((request->payload_len >= 6) ? 1 : 1);
+            uint8_t assigned_id = 0xFF;
+            uci_sim_logical_link_t* entry = NULL;
+            uint8_t status = UCI_STATUS_OK;
+
+            if (requested_id != 0xFF && uci_sim_session_find_logical_link(session, requested_id)) {
+                status = UCI_STATUS_INVALID_PARAM;
+            } else if (session->logical_link_count >= UCI_SIM_MAX_LOGICAL_LINKS) {
+                status = UCI_STATUS_MULTICAST_LIST_FULL;
+            } else {
+                entry = uci_sim_session_allocate_logical_link(session, requested_id, &assigned_id);
+                if (!entry) {
+                    status = UCI_STATUS_INVALID_PARAM;
+                } else {
+                    entry->mode = mode;
+                    entry->credit = credit;
+                }
+            }
+
+            result->has_response = 1;
+            result->response.mt = UCI_MT_RESPONSE;
+            result->response.pbf = UCI_PBF_COMPLETE;
+            result->response.gid = UCI_GID_SESSION_CONTROL;
+            result->response.oid = UCI_SESSION_LOGICAL_LINK_CREATE;
+            result->response.payload_len = 3;
+            result->response.payload[0] = status;
+            result->response.payload[1] = (status == UCI_STATUS_OK) ? assigned_id : 0xFF;
+            result->response.payload[2] = (status == UCI_STATUS_OK && entry) ? entry->credit : 0;
+            if (status == UCI_STATUS_OK && entry) {
+                emit_logical_link_notification(device,
+                                               result,
+                                               session_id,
+                                               UCI_SESSION_LOGICAL_LINK_UWBS_CREATE,
+                                               assigned_id,
+                                               entry->credit);
+                return 0;
+            }
+            return -1;
+        }
+        case UCI_SESSION_LOGICAL_LINK_CLOSE: {
+            uint8_t link_id;
+            uint8_t status = UCI_STATUS_OK;
+
+            if (request->payload_len < 5) {
+                make_status_response(request, result, UCI_STATUS_INVALID_MSG_SIZE);
+                return -1;
+            }
+
+            link_id = request->payload[4];
+            if (uci_sim_session_remove_logical_link(session, link_id) != 0) {
+                status = UCI_STATUS_INVALID_PARAM;
+            }
+
+            result->has_response = 1;
+            result->response.mt = UCI_MT_RESPONSE;
+            result->response.pbf = UCI_PBF_COMPLETE;
+            result->response.gid = UCI_GID_SESSION_CONTROL;
+            result->response.oid = UCI_SESSION_LOGICAL_LINK_CLOSE;
+            result->response.payload_len = 2;
+            result->response.payload[0] = status;
+            result->response.payload[1] = link_id;
+            if (status == UCI_STATUS_OK) {
+                emit_logical_link_notification(device,
+                                               result,
+                                               session_id,
+                                               UCI_SESSION_LOGICAL_LINK_UWBS_CLOSE,
+                                               link_id,
+                                               0x00);
+                return 0;
+            }
+            return -1;
+        }
+        case UCI_SESSION_LOGICAL_LINK_GET_PARAM: {
+            uint8_t link_id;
+            uci_sim_logical_link_t* entry;
+            uint8_t status;
+
+            if (request->payload_len < 5) {
+                make_status_response(request, result, UCI_STATUS_INVALID_MSG_SIZE);
+                return -1;
+            }
+
+            link_id = request->payload[4];
+            entry = uci_sim_session_find_logical_link(session, link_id);
+            status = entry ? UCI_STATUS_OK : UCI_STATUS_INVALID_PARAM;
+
+            result->has_response = 1;
+            result->response.mt = UCI_MT_RESPONSE;
+            result->response.pbf = UCI_PBF_COMPLETE;
+            result->response.gid = UCI_GID_SESSION_CONTROL;
+            result->response.oid = UCI_SESSION_LOGICAL_LINK_GET_PARAM;
+            result->response.payload_len = 4;
+            result->response.payload[0] = status;
+            result->response.payload[1] = link_id;
+            result->response.payload[2] = (entry && status == UCI_STATUS_OK) ? entry->mode : 0;
+            result->response.payload[3] = (entry && status == UCI_STATUS_OK) ? entry->credit : 0;
+            return (status == UCI_STATUS_OK) ? 0 : -1;
+        }
         default:
             transition = uci_sim_profile_get_session_transition(device->profile, request->oid);
             if (transition == NULL) {

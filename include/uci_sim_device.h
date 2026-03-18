@@ -44,6 +44,13 @@ typedef struct uci_sim_multicast_entry {
     int in_use;
 } uci_sim_multicast_entry_t;
 
+typedef struct uci_sim_logical_link {
+    uint8_t link_id;
+    uint8_t mode;
+    uint8_t credit;
+    int in_use;
+} uci_sim_logical_link_t;
+
 typedef struct uci_sim_session {
     uint32_t session_id;
     uint8_t session_type;
@@ -61,6 +68,8 @@ typedef struct uci_sim_session {
     int allocated;
     uci_sim_session_config_t configs[UCI_SIM_MAX_SESSION_CONFIGS];
     uci_sim_multicast_entry_t multicast_entries[UCI_SIM_MAX_MULTICAST_ENTRIES];
+    uci_sim_logical_link_t logical_links[UCI_SIM_MAX_LOGICAL_LINKS];
+    uint8_t logical_link_count;
 } uci_sim_session_t;
 
 typedef struct uci_sim_device {
@@ -130,6 +139,12 @@ int uci_sim_session_add_multicast_entry(uci_sim_session_t* session,
 int uci_sim_session_remove_multicast_entry(uci_sim_session_t* session,
                                            uint16_t short_address,
                                            uint32_t subsession_id);
+uci_sim_logical_link_t* uci_sim_session_find_logical_link(uci_sim_session_t* session,
+                                                          uint8_t link_id);
+uci_sim_logical_link_t* uci_sim_session_allocate_logical_link(uci_sim_session_t* session,
+                                                              uint8_t requested_id,
+                                                              uint8_t* assigned_id);
+int uci_sim_session_remove_logical_link(uci_sim_session_t* session, uint8_t link_id);
 int uci_sim_device_schedule_event(uci_sim_device_t* device,
                                   uci_sim_event_type_t type,
                                   uint32_t session_id,

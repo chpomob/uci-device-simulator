@@ -58,11 +58,11 @@ Status meanings:
 | `SESSION_CONTROL` | `0x03` | `GET_RANGING_COUNT` | `supported` | Model-backed |
 | `SESSION_CONTROL` | `0x04` | `DATA_CREDIT_NTF` | `supported` | Emitted after `DATA_MESSAGE_SND` ingress |
 | `SESSION_CONTROL` | `0x05` | `DATA_TRANSFER_STATUS_NTF` | `supported` | Emitted after `DATA_MESSAGE_SND` ingress |
-| `SESSION_CONTROL` | `0x07` | `LOGICAL_LINK_CREATE` | `missing` | Not yet modeled |
-| `SESSION_CONTROL` | `0x08` | `LOGICAL_LINK_CLOSE` | `missing` | Not yet modeled |
-| `SESSION_CONTROL` | `0x09` | `LOGICAL_LINK_UWBS_CLOSE` | `missing` | Not yet modeled |
-| `SESSION_CONTROL` | `0x0A` | `LOGICAL_LINK_UWBS_CREATE` | `missing` | Not yet modeled |
-| `SESSION_CONTROL` | `0x0B` | `LOGICAL_LINK_GET_PARAM` | `missing` | Not yet modeled |
+| `SESSION_CONTROL` | `0x07` | `LOGICAL_LINK_CREATE` | `supported` | Model-backed logical-link allocation with UWBS create notification |
+| `SESSION_CONTROL` | `0x08` | `LOGICAL_LINK_CLOSE` | `supported` | Model-backed logical-link close with UWBS close notification |
+| `SESSION_CONTROL` | `0x09` | `LOGICAL_LINK_UWBS_CLOSE` | `supported` | Emitted on successful logical-link close |
+| `SESSION_CONTROL` | `0x0A` | `LOGICAL_LINK_UWBS_CREATE` | `supported` | Emitted on successful logical-link create |
+| `SESSION_CONTROL` | `0x0B` | `LOGICAL_LINK_GET_PARAM` | `supported` | Returns mode and credit for active logical links |
 
 ## Config Coverage
 
@@ -125,7 +125,7 @@ These are present in the local Qorvo SDK headers but not yet modeled in the simu
 - Notifications: `SESSION_STATUS_NTF`, Cherry-aligned `RANGE_DATA_NTF (SESSION_INFO_NTF)`
 
 ### Highest-priority missing standard commands
-1. `LOGICAL_LINK_*`
+1. logical-link notifications for non-default device profiles
 
 ### Highest-priority missing profile/config coverage
 1. `RANGING_ROUND_USAGE`

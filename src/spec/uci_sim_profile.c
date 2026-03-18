@@ -93,9 +93,12 @@ static const uci_sim_profile_t k_default_profile = {
     .supported_session_control_oids = {
         UCI_SESSION_START,
         UCI_SESSION_STOP,
-        UCI_SESSION_GET_RANGING_COUNT
+        UCI_SESSION_GET_RANGING_COUNT,
+        UCI_SESSION_LOGICAL_LINK_CREATE,
+        UCI_SESSION_LOGICAL_LINK_CLOSE,
+        UCI_SESSION_LOGICAL_LINK_GET_PARAM
     },
-    .supported_session_control_oid_count = 3,
+    .supported_session_control_oid_count = 6,
     .supported_core_config_ids = {
         UCI_DEVICE_CONFIG_DEVICE_STATE,
         UCI_DEVICE_CONFIG_LOW_POWER_MODE,
@@ -111,9 +114,11 @@ static const uci_sim_profile_t k_default_profile = {
         UCI_SESSION_STATUS_NTF,
         UCI_SESSION_START,
         UCI_SESSION_DATA_CREDIT_NTF,
-        UCI_SESSION_DATA_TRANSFER_STATUS_NTF
+        UCI_SESSION_DATA_TRANSFER_STATUS_NTF,
+        UCI_SESSION_LOGICAL_LINK_UWBS_CREATE,
+        UCI_SESSION_LOGICAL_LINK_UWBS_CLOSE
     },
-    .supported_notification_oid_count = 5
+    .supported_notification_oid_count = 7
 };
 
 const uci_sim_profile_t* uci_sim_default_profile(void) {

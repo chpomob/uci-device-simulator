@@ -2,6 +2,7 @@
 #define UCI_SIM_DEVICE_H
 
 #include "uci_sim_packet.h"
+#include "uci_sim_profile.h"
 #include "uci_sim_scenario.h"
 
 #define UCI_SIM_MAX_PENDING_NOTIFICATIONS 8U
@@ -52,6 +53,7 @@ typedef struct uci_sim_device {
     uint16_t phy_version;
     uint16_t test_version;
     uint8_t device_state;
+    const uci_sim_profile_t* profile;
     uci_sim_device_config_t device_configs[UCI_SIM_MAX_DEVICE_CONFIGS];
     uci_sim_scenario_kind_t scenario;
     uint32_t next_ranging_sequence;
@@ -71,6 +73,9 @@ typedef struct uci_sim_result {
 
 void uci_sim_device_init(uci_sim_device_t* device);
 void uci_sim_device_init_with_scenario(uci_sim_device_t* device, uci_sim_scenario_kind_t scenario);
+void uci_sim_device_init_with_profile(uci_sim_device_t* device,
+                                      const uci_sim_profile_t* profile,
+                                      uci_sim_scenario_kind_t scenario);
 void uci_sim_device_set_scenario(uci_sim_device_t* device, uci_sim_scenario_kind_t scenario);
 int uci_sim_device_queue_notification(uci_sim_device_t* device, const uci_sim_packet_t* notification);
 int uci_sim_device_dequeue_notification(uci_sim_device_t* device, uci_sim_packet_t* notification);

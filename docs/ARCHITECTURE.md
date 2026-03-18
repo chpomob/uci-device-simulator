@@ -3,6 +3,7 @@
 ## Boundaries
 
 - `spec`: constants and protocol interpretation aligned to Qorvo SDK definitions
+- `profile`: device-specific visible defaults, capability payloads, and timing behavior
 - `core`: packet parsing, framing helpers, the device engine / outbound queue, and clock abstraction
 - `model`: mutable simulated device state
 - `handlers`: command behavior that mutates the model and emits responses/notifications
@@ -33,6 +34,13 @@ scenario preserves current immediate notification behavior, and future variants
 should change notification timing or error injection by scheduling or canceling
 events through scenario hooks instead of pushing test-only branches into the
 transport adapter or the core device model.
+
+The simulator now also has an explicit device-profile seam through
+`uci_sim_profile.*`. The current default profile owns the versions, capability
+payload, default device configs, default session data size, and ranging timing
+that were previously scattered across initialization code, handlers, and the
+engine. Future fidelity work should add new profiles for concrete hardware and
+firmware targets instead of editing generic simulator logic.
 
 The first non-default scenario is `delayed_notifications`, which defers
 session-state notifications until the next command exchange. This gives

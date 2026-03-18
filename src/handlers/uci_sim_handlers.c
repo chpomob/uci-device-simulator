@@ -35,7 +35,9 @@ static uci_sim_session_t* alloc_session(uci_sim_device_t* device, uint32_t sessi
             device->sessions[i].session_type = UCI_SESSION_TYPE_RANGING;
             device->sessions[i].state = UCI_SESSION_STATE_INIT;
             device->sessions[i].ranging_count = 0;
-            device->sessions[i].max_data_size = 0x0200;
+            device->sessions[i].max_data_size = device->profile
+                ? device->profile->default_session_max_data_size
+                : 0x0200;
             return &device->sessions[i];
         }
     }
@@ -94,14 +96,14 @@ static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request
             result->response.oid = UCI_CORE_DEVICE_INFO;
             result->response.payload_len = 10;
             result->response.payload[0] = UCI_STATUS_OK;
-            result->response.payload[1] = 0x00;
-            result->response.payload[2] = 0x01;
-            result->response.payload[3] = 0x00;
-            result->response.payload[4] = 0x02;
-            result->response.payload[5] = 0x00;
-            result->response.payload[6] = 0x02;
-            result->response.payload[7] = 0x00;
-            result->response.payload[8] = 0x01;
+            result->response.payload[1] = (uint8_t)(device->uci_version & 0xFFU);
+            result->response.payload[2] = (uint8_t)((device->uci_version >> 8) & 0xFFU);
+            result->response.payload[3] = (uint8_t)(device->mac_version & 0xFFU);
+            result->response.payload[4] = (uint8_t)((device->mac_version >> 8) & 0xFFU);
+            result->response.payload[5] = (uint8_t)(device->phy_version & 0xFFU);
+            result->response.payload[6] = (uint8_t)((device->phy_version >> 8) & 0xFFU);
+            result->response.payload[7] = (uint8_t)(device->test_version & 0xFFU);
+            result->response.payload[8] = (uint8_t)((device->test_version >> 8) & 0xFFU);
             result->response.payload[9] = 0x00;
             return 0;
         case UCI_CORE_GET_CAPS_INFO:
@@ -110,11 +112,14 @@ static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request
             result->response.pbf = UCI_PBF_COMPLETE;
             result->response.gid = UCI_GID_CORE;
             result->response.oid = UCI_CORE_GET_CAPS_INFO;
-            result->response.payload_len = 4;
-            result->response.payload[0] = UCI_STATUS_OK;
-            result->response.payload[1] = 0x01;
-            result->response.payload[2] = 0xE4;
-            result->response.payload[3] = 0x00;
+            if (!device->profile || device->profile->core_caps_payload_len == 0) {
+                make_status_response(request, result, UCI_STATUS_FAILED);
+                return -1;
+            }
+            result->response.payload_len = device->profile->core_caps_payload_len;
+            memcpy(result->response.payload,
+                   device->profile->core_caps_payload,
+                   device->profile->core_caps_payload_len);
             return 0;
         case UCI_CORE_SET_CONFIG:
             return handle_core_set_get_config(device, request, result, 1);

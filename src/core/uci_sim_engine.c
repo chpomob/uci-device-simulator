@@ -2,8 +2,6 @@
 
 #include <string.h>
 
-#define UCI_SIM_RANGING_EVENT_PERIOD_MS 1000U
-
 static int queue_outbound_packet(uci_sim_engine_t* engine, const uci_sim_packet_t* packet) {
     if (!engine || !packet) {
         return -1;
@@ -59,7 +57,9 @@ static int process_ready_event(uci_sim_engine_t* engine,
             }
             flush_device_notifications(engine);
             if (session->ranging_stream_remaining > 0 && session->state == UCI_SESSION_STATE_ACTIVE) {
-                uint32_t delay_ms = (session->ranging_count < 2) ? 0U : UCI_SIM_RANGING_EVENT_PERIOD_MS;
+                uint32_t delay_ms = (session->ranging_count < 2 || !engine->device.profile)
+                    ? 0U
+                    : engine->device.profile->ranging_event_period_ms;
                 return uci_sim_device_schedule_event(&engine->device,
                                                      UCI_SIM_EVENT_RANGE_DATA,
                                                      session->session_id,
@@ -77,12 +77,18 @@ void uci_sim_engine_init(uci_sim_engine_t* engine) {
 }
 
 void uci_sim_engine_init_with_scenario(uci_sim_engine_t* engine, uci_sim_scenario_kind_t scenario) {
+    uci_sim_engine_init_with_profile(engine, uci_sim_default_profile(), scenario);
+}
+
+void uci_sim_engine_init_with_profile(uci_sim_engine_t* engine,
+                                      const uci_sim_profile_t* profile,
+                                      uci_sim_scenario_kind_t scenario) {
     if (!engine) {
         return;
     }
 
     memset(engine, 0, sizeof(*engine));
-    uci_sim_device_init_with_scenario(&engine->device, scenario);
+    uci_sim_device_init_with_profile(&engine->device, profile, scenario);
 }
 
 void uci_sim_engine_set_clock(uci_sim_engine_t* engine, const uci_sim_clock_t* clock) {

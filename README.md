@@ -11,6 +11,7 @@ Standalone UCI device simulator intended to interoperate with:
 - TCP is the first transport. Additional transports such as pseudo-serial/chardev will be added later without changing the simulator core.
 - All externally visible packet behavior should be pinned by tests.
 - Scenario behavior must stay outside transport code and out of the protocol handlers whenever possible.
+- Device-visible defaults and timings should come from explicit device profiles, not ad hoc constants.
 
 ## Initial Scope
 
@@ -36,6 +37,7 @@ Version 1 supports a focused interoperable subset:
 
 - `include/`: public internal headers shared across modules
 - `src/spec/`: authoritative UCI definitions and small lookup helpers
+- `src/spec/uci_sim_profile.c`: default device profile and future device-specific profiles
 - `src/core/`: packet parsing/building, device-engine loop, clock abstraction, and dispatch glue
 - `src/model/`: simulator device/session state
 - `src/handlers/`: protocol family behavior
@@ -75,3 +77,9 @@ start and then advances a short deterministic series of Cherry-aligned
 event queue. `SESSION_STOP` suppresses any remaining range-data notifications,
 so UCI clients can exercise stream progression and stop behavior instead of a
 one-shot synthetic event.
+
+Current simulator behavior is owned by one explicit default device profile.
+That profile now defines the visible device versions, capability payload,
+default configs, session data-size default, and ranging timing. Future work to
+match a specific real device should add new profiles rather than changing the
+engine or handlers directly.

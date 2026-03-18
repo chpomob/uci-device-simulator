@@ -3,6 +3,7 @@
 
 #include "uci_sim_clock.h"
 #include "uci_sim_device.h"
+#include "uci_sim_profile.h"
 
 #define UCI_SIM_MAX_OUTBOUND_PACKETS 16U
 
@@ -17,6 +18,9 @@ typedef struct {
 
 void uci_sim_engine_init(uci_sim_engine_t* engine);
 void uci_sim_engine_init_with_scenario(uci_sim_engine_t* engine, uci_sim_scenario_kind_t scenario);
+void uci_sim_engine_init_with_profile(uci_sim_engine_t* engine,
+                                      const uci_sim_profile_t* profile,
+                                      uci_sim_scenario_kind_t scenario);
 void uci_sim_engine_set_clock(uci_sim_engine_t* engine, const uci_sim_clock_t* clock);
 int uci_sim_engine_submit_packet(uci_sim_engine_t* engine, const uci_sim_packet_t* request);
 int uci_sim_engine_tick(uci_sim_engine_t* engine, uint32_t elapsed_ms);

@@ -1,5 +1,6 @@
 #include "uci_sim_device.h"
 #include "uci_sim_engine.h"
+#include "uci_sim_profile.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -123,6 +124,19 @@ static void test_core_device_info(void) {
     PASS();
 }
 
+static void test_default_profile_is_applied(void) {
+    uci_sim_device_t device;
+    const uci_sim_profile_t* profile = uci_sim_default_profile();
+
+    uci_sim_device_init(&device);
+    ASSERT_TRUE(device.profile == profile, "default profile pointer");
+    ASSERT_EQ_U8(profile->default_device_state, device.device_state, "default profile device state");
+    ASSERT_EQ_U8(profile->default_low_power_mode, device.device_configs[1].value[0], "default profile low power");
+    ASSERT_EQ_U8(profile->default_device_pan_id[0], device.device_configs[2].value[0], "default profile pan lo");
+    ASSERT_EQ_U8(profile->default_device_pan_id[1], device.device_configs[2].value[1], "default profile pan hi");
+    PASS();
+}
+
 static void test_core_device_config_storage(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -208,6 +222,28 @@ static void test_core_additional_device_configs(void) {
     ASSERT_EQ_U8(2, result.response.payload[3], "get device pan id len");
     ASSERT_EQ_U8(0x34, result.response.payload[4], "get device pan id lo");
     ASSERT_EQ_U8(0x12, result.response.payload[5], "get device pan id hi");
+    PASS();
+}
+
+static void test_core_caps_match_profile(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    const uci_sim_profile_t* profile = uci_sim_default_profile();
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_GET_CAPS_INFO;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "core caps handle failed");
+    ASSERT_EQ_U8(profile->core_caps_payload_len, result.response.payload_len, "core caps profile len");
+    ASSERT_EQ_U8(profile->core_caps_payload[0], result.response.payload[0], "core caps profile status");
+    ASSERT_EQ_U8(profile->core_caps_payload[1], result.response.payload[1], "core caps profile count");
+    ASSERT_EQ_U8(profile->core_caps_payload[2], result.response.payload[2], "core caps profile tlv");
+    ASSERT_EQ_U8(profile->core_caps_payload[3], result.response.payload[3], "core caps profile len byte");
     PASS();
 }
 
@@ -566,8 +602,10 @@ int main(void) {
     test_packet_round_trip();
     test_engine_clock_poll_progression();
     test_core_device_info();
+    test_default_profile_is_applied();
     test_core_device_config_storage();
     test_core_additional_device_configs();
+    test_core_caps_match_profile();
     test_default_scenario_initialization();
     test_delayed_notification_scenario();
     test_session_get_count();

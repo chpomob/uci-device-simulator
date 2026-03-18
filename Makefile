@@ -6,6 +6,7 @@ DEPFLAGS = -MMD -MP
 
 COMMON_SRCS = \
 	src/spec/uci_sim_spec.c \
+	src/spec/uci_sim_profile.c \
 	src/spec/uci_sim_scenario.c \
 	src/core/uci_sim_clock.c \
 	src/core/uci_sim_packet.c \

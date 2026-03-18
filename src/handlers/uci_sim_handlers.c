@@ -169,6 +169,10 @@ static int handle_session_update_dt_rounds(uci_sim_device_t* device,
                                            const uci_sim_packet_t* request,
                                            uci_sim_result_t* result,
                                            int use_anchor_rounds);
+static int handle_session_set_hus_config(uci_sim_device_t* device,
+                                         const uci_sim_packet_t* request,
+                                         uci_sim_result_t* result,
+                                         int use_controller_config);
 static int handle_session_data_transfer_phase_config(uci_sim_device_t* device,
                                                      const uci_sim_packet_t* request,
                                                      uci_sim_result_t* result);
@@ -481,6 +485,10 @@ static int handle_session_config(uci_sim_device_t* device, const uci_sim_packet_
             return handle_session_update_dt_rounds(device, request, result, 1);
         case UCI_SESSION_UPDATE_DT_TAG_RANGING_ROUNDS:
             return handle_session_update_dt_rounds(device, request, result, 0);
+        case UCI_SESSION_SET_HUS_CONTROLLER_CONFIG:
+            return handle_session_set_hus_config(device, request, result, 1);
+        case UCI_SESSION_SET_HUS_CONTROLEE_CONFIG:
+            return handle_session_set_hus_config(device, request, result, 0);
         case UCI_SESSION_DATA_TRANSFER_PHASE_CONFIG:
             return handle_session_data_transfer_phase_config(device, request, result);
         default:
@@ -626,6 +634,60 @@ static int handle_session_data_transfer_phase_config(uci_sim_device_t* device,
     }
     if (payload_len < sizeof(session->dtp_payload)) {
         memset(&session->dtp_payload[payload_len], 0, sizeof(session->dtp_payload) - payload_len);
+    }
+
+    make_status_response(request, result, UCI_STATUS_OK);
+    return 0;
+}
+
+static int handle_session_set_hus_config(uci_sim_device_t* device,
+                                         const uci_sim_packet_t* request,
+                                         uci_sim_result_t* result,
+                                         int use_controller_config) {
+    uint32_t session_id;
+    uint16_t config_length;
+    uci_sim_session_t* session;
+
+    if (request->payload_len < 12) {
+        make_status_response(request, result, UCI_STATUS_INVALID_MSG_SIZE);
+        return -1;
+    }
+
+    session_id = read_u32_le(request->payload);
+    config_length = read_u16_le(&request->payload[10]);
+    if ((size_t)(12 + config_length) != request->payload_len || config_length > 250) {
+        make_status_response(request, result, UCI_STATUS_INVALID_PARAM);
+        return -1;
+    }
+    if (request->payload[8] > 1) {
+        make_status_response(request, result, UCI_STATUS_INVALID_PARAM);
+        return -1;
+    }
+
+    session = find_session(device, session_id);
+    if (session == NULL) {
+        make_status_response(request, result, UCI_STATUS_INVALID_PARAM);
+        return -1;
+    }
+
+    if (use_controller_config) {
+        session->hus_controller_primary_session_id = read_u32_le(&request->payload[4]);
+        session->hus_controller_role = request->payload[8];
+        session->hus_controller_reserved = request->payload[9];
+        session->hus_controller_config_length = config_length;
+        memset(session->hus_controller_config_data, 0, sizeof(session->hus_controller_config_data));
+        if (config_length > 0) {
+            memcpy(session->hus_controller_config_data, &request->payload[12], config_length);
+        }
+    } else {
+        session->hus_controlee_primary_session_id = read_u32_le(&request->payload[4]);
+        session->hus_controlee_role = request->payload[8];
+        session->hus_controlee_reserved = request->payload[9];
+        session->hus_controlee_config_length = config_length;
+        memset(session->hus_controlee_config_data, 0, sizeof(session->hus_controlee_config_data));
+        if (config_length > 0) {
+            memcpy(session->hus_controlee_config_data, &request->payload[12], config_length);
+        }
     }
 
     make_status_response(request, result, UCI_STATUS_OK);

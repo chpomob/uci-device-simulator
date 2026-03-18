@@ -89,9 +89,11 @@ static const uci_sim_profile_t k_default_profile = {
         UCI_SESSION_UPDATE_DT_ANCHOR_RANGING_ROUNDS,
         UCI_SESSION_UPDATE_DT_TAG_RANGING_ROUNDS,
         UCI_SESSION_DATA_TRANSFER_PHASE_CONFIG,
-        UCI_SESSION_QUERY_DATA_SIZE_IN_RANGING
+        UCI_SESSION_QUERY_DATA_SIZE_IN_RANGING,
+        UCI_SESSION_SET_HUS_CONTROLLER_CONFIG,
+        UCI_SESSION_SET_HUS_CONTROLEE_CONFIG
     },
-    .supported_session_config_oid_count = 11,
+    .supported_session_config_oid_count = 13,
     .supported_session_control_oids = {
         UCI_SESSION_START,
         UCI_SESSION_STOP,

@@ -46,8 +46,8 @@ Status meanings:
 | `SESSION_CONFIG` | `0x08` | `UPDATE_DT_ANCHOR_RANGING_ROUNDS` | `supported` | Model-backed stored round index list |
 | `SESSION_CONFIG` | `0x09` | `UPDATE_DT_TAG_RANGING_ROUNDS` | `supported` | Model-backed stored round index list |
 | `SESSION_CONFIG` | `0x0B` | `QUERY_DATA_SIZE_IN_RANGING` | `supported` | Model-backed |
-| `SESSION_CONFIG` | `0x0C` | `SET_HUS_CONTROLLER_CONFIG` | `missing` | Not yet modeled |
-| `SESSION_CONFIG` | `0x0D` | `SET_HUS_CONTROLEE_CONFIG` | `missing` | Not yet modeled |
+| `SESSION_CONFIG` | `0x0C` | `SET_HUS_CONTROLLER_CONFIG` | `supported` | Stores controller-side HUS phase payload with status-only response |
+| `SESSION_CONFIG` | `0x0D` | `SET_HUS_CONTROLEE_CONFIG` | `supported` | Stores controlee-side HUS phase payload with status-only response |
 | `SESSION_CONFIG` | `0x0E` | `DATA_TRANSFER_PHASE_CONFIG` | `supported` | Model-backed repetition/control/payload storage |
 
 | GID | OID | Command | Status | Notes |
@@ -123,17 +123,17 @@ These are present in the local Qorvo SDK headers but not yet modeled in the simu
 
 ### Supported standard commands
 - `CORE`: `DEVICE_RESET`, `DEVICE_STATUS_NTF`, `GET_DEVICE_INFO`, `GET_CAPS_INFO`, `SET_CONFIG`, `GET_CONFIG`, `QUERY_UWBS_TIMESTAMP`
-- `SESSION_CONFIG`: `SESSION_INIT`, `SESSION_DEINIT`, `SESSION_STATUS_NTF`, `SET_APP_CONFIG`, `GET_APP_CONFIG`, `GET_COUNT`, `GET_STATE`, `UPDATE_CONTROLLER_MULTICAST_LIST`, `DATA_TRANSFER_PHASE_CONFIG`, `QUERY_DATA_SIZE_IN_RANGING`
+- `SESSION_CONFIG`: `SESSION_INIT`, `SESSION_DEINIT`, `SESSION_STATUS_NTF`, `SET_APP_CONFIG`, `GET_APP_CONFIG`, `GET_COUNT`, `GET_STATE`, `UPDATE_CONTROLLER_MULTICAST_LIST`, `SET_HUS_CONTROLLER_CONFIG`, `SET_HUS_CONTROLEE_CONFIG`, `DATA_TRANSFER_PHASE_CONFIG`, `QUERY_DATA_SIZE_IN_RANGING`
 - `SESSION_CONTROL`: `SESSION_START`, `SESSION_STOP`, `GET_RANGING_COUNT`, `LOGICAL_LINK_CREATE`, `LOGICAL_LINK_CLOSE`, `LOGICAL_LINK_GET_PARAM`
 - Notifications: `SESSION_STATUS_NTF`, Cherry-aligned `RANGE_DATA_NTF (SESSION_INFO_NTF)`, `DATA_CREDIT_NTF`, `DATA_TRANSFER_STATUS_NTF`, `LOGICAL_LINK_UWBS_CREATE`, `LOGICAL_LINK_UWBS_CLOSE`
 - `DATA`: `DATA_MESSAGE_SND` ingress with model-backed transfer-status behavior
 
 ### Highest-priority missing standard commands
-1. `SET_HUS_CONTROLLER_CONFIG`
-2. `SET_HUS_CONTROLEE_CONFIG`
-3. broader `CORE_DEVICE_STATUS_NTF` policy beyond reset-triggered readiness
-4. deeper device-profile-specific error ordering/notification behavior
-5. remaining standard session app-config IDs
+1. broader `CORE_DEVICE_STATUS_NTF` policy beyond reset-triggered readiness
+2. deeper device-profile-specific error ordering/notification behavior
+3. remaining standard session app-config IDs
+4. profile-specific support/error rules for HUS and DT subfeatures
+5. more realistic async notification ordering under error conditions
 
 ### Highest-priority missing profile/config coverage
 1. `RANGING_ROUND_USAGE`

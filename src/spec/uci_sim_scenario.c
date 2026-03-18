@@ -3,6 +3,53 @@
 
 #include <string.h>
 
+static uci_sim_session_t* find_session_by_id(uci_sim_device_t* device, uint32_t session_id) {
+    size_t i;
+
+    if (!device) {
+        return NULL;
+    }
+
+    for (i = 0; i < UCI_SIM_MAX_SESSIONS; ++i) {
+        if (device->sessions[i].allocated && device->sessions[i].session_id == session_id) {
+            return &device->sessions[i];
+        }
+    }
+
+    return NULL;
+}
+
+static int process_ready_event(uci_sim_device_t* device,
+                               const uci_sim_scheduled_event_t* event,
+                               uci_sim_result_t* result) {
+    uci_sim_session_t* session;
+
+    if (!device || !event || !result) {
+        return -1;
+    }
+
+    switch (event->type) {
+        case UCI_SIM_EVENT_RANGE_DATA:
+            session = find_session_by_id(device, event->session_id);
+            if (!session) {
+                return 0;
+            }
+            if (uci_sim_device_emit_ranging_stream(device, session, result) != 0) {
+                return -1;
+            }
+            if (session->ranging_stream_remaining > 0 && session->state == UCI_SESSION_STATE_ACTIVE) {
+                return uci_sim_device_schedule_event(device,
+                                                     UCI_SIM_EVENT_RANGE_DATA,
+                                                     session->session_id,
+                                                     1);
+            }
+            return 0;
+        case UCI_SIM_EVENT_NONE:
+        default:
+            return 0;
+    }
+}
+
 const char* uci_sim_scenario_name(uci_sim_scenario_kind_t scenario) {
     switch (scenario) {
         case UCI_SIM_SCENARIO_DEFAULT:
@@ -61,36 +108,34 @@ int uci_sim_scenario_on_session_started(uci_sim_device_t* device,
     }
 
     session->ranging_stream_remaining = 3;
-    return uci_sim_device_emit_ranging_stream(device, session, result);
+    return uci_sim_device_schedule_event(device, UCI_SIM_EVENT_RANGE_DATA, session->session_id, 0);
 }
 
-void uci_sim_scenario_on_session_stopped(uci_sim_session_t* session) {
-    if (!session) {
+void uci_sim_scenario_on_session_stopped(uci_sim_device_t* device, uci_sim_session_t* session) {
+    if (!device || !session) {
         return;
     }
 
     session->ranging_stream_remaining = 0;
+    uci_sim_device_cancel_session_events(device, session->session_id);
 }
 
 int uci_sim_scenario_on_command_complete(uci_sim_device_t* device,
                                          const uci_sim_packet_t* request,
                                          uci_sim_result_t* result) {
-    size_t i;
+    uci_sim_scheduled_event_t event;
 
-    if (!device || !request || !result || device->scenario != UCI_SIM_SCENARIO_RANGING_STREAM) {
+    (void)request;
+    if (!device || !request || !result) {
         return 0;
     }
-    if (request->gid == UCI_GID_SESSION_CONTROL &&
-        (request->oid == UCI_SESSION_START || request->oid == UCI_SESSION_STOP)) {
+    if (device->scenario != UCI_SIM_SCENARIO_RANGING_STREAM) {
         return 0;
     }
 
-    for (i = 0; i < UCI_SIM_MAX_SESSIONS; ++i) {
-        if (device->sessions[i].allocated &&
-            device->sessions[i].state == UCI_SESSION_STATE_ACTIVE &&
-            device->sessions[i].ranging_stream_remaining > 0) {
-            return uci_sim_device_emit_ranging_stream(device, &device->sessions[i], result);
-        }
+    uci_sim_device_tick_events(device);
+    if (uci_sim_device_dequeue_ready_event(device, &event) == 0) {
+        return process_ready_event(device, &event, result);
     }
 
     return 0;

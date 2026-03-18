@@ -464,7 +464,7 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
     if (request->oid == UCI_SESSION_START) {
         (void)uci_sim_scenario_on_session_started(device, session, result);
     } else if (request->oid == UCI_SESSION_STOP) {
-        uci_sim_scenario_on_session_stopped(session);
+        uci_sim_scenario_on_session_stopped(device, session);
     }
     return 0;
 }

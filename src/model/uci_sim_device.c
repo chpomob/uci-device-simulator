@@ -66,6 +66,81 @@ int uci_sim_device_dequeue_notification(uci_sim_device_t* device, uci_sim_packet
     return 0;
 }
 
+int uci_sim_device_schedule_event(uci_sim_device_t* device,
+                                  uci_sim_event_type_t type,
+                                  uint32_t session_id,
+                                  uint8_t delay_steps) {
+    uci_sim_scheduled_event_t* event;
+
+    if (!device || type == UCI_SIM_EVENT_NONE) {
+        return -1;
+    }
+    if (device->scheduled_event_count >= UCI_SIM_MAX_SCENARIO_EVENTS) {
+        return -1;
+    }
+
+    event = &device->scheduled_events[device->scheduled_event_count++];
+    event->type = type;
+    event->session_id = session_id;
+    event->delay_steps = delay_steps;
+    return 0;
+}
+
+void uci_sim_device_cancel_session_events(uci_sim_device_t* device, uint32_t session_id) {
+    size_t i;
+    size_t out = 0;
+
+    if (!device) {
+        return;
+    }
+
+    for (i = 0; i < device->scheduled_event_count; ++i) {
+        if (device->scheduled_events[i].session_id == session_id) {
+            continue;
+        }
+        if (out != i) {
+            device->scheduled_events[out] = device->scheduled_events[i];
+        }
+        out++;
+    }
+    device->scheduled_event_count = out;
+}
+
+void uci_sim_device_tick_events(uci_sim_device_t* device) {
+    size_t i;
+
+    if (!device) {
+        return;
+    }
+
+    for (i = 0; i < device->scheduled_event_count; ++i) {
+        if (device->scheduled_events[i].delay_steps > 0) {
+            device->scheduled_events[i].delay_steps--;
+        }
+    }
+}
+
+int uci_sim_device_dequeue_ready_event(uci_sim_device_t* device, uci_sim_scheduled_event_t* event) {
+    size_t i;
+
+    if (!device || !event) {
+        return -1;
+    }
+
+    for (i = 0; i < device->scheduled_event_count; ++i) {
+        if (device->scheduled_events[i].delay_steps == 0) {
+            *event = device->scheduled_events[i];
+            for (; i + 1 < device->scheduled_event_count; ++i) {
+                device->scheduled_events[i] = device->scheduled_events[i + 1];
+            }
+            device->scheduled_event_count--;
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
 int uci_sim_device_deliver_notification(uci_sim_device_t* device,
                                         const uci_sim_packet_t* notification,
                                         uci_sim_result_t* result) {

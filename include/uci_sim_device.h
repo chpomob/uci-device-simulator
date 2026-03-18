@@ -5,9 +5,21 @@
 #include "uci_sim_scenario.h"
 
 #define UCI_SIM_MAX_PENDING_NOTIFICATIONS 8U
+#define UCI_SIM_MAX_SCENARIO_EVENTS 8U
 #define UCI_SIM_MAX_DEVICE_CONFIGS 8U
 #define UCI_SIM_MAX_SESSION_CONFIGS 16U
 #define UCI_SIM_MAX_CONFIG_VALUE 64U
+
+typedef enum {
+    UCI_SIM_EVENT_NONE = 0,
+    UCI_SIM_EVENT_RANGE_DATA = 1,
+} uci_sim_event_type_t;
+
+typedef struct uci_sim_scheduled_event {
+    uci_sim_event_type_t type;
+    uint32_t session_id;
+    uint8_t delay_steps;
+} uci_sim_scheduled_event_t;
 
 typedef struct uci_sim_session_config {
     uint8_t config_id;
@@ -44,6 +56,8 @@ typedef struct uci_sim_device {
     uci_sim_scenario_kind_t scenario;
     uint32_t next_ranging_sequence;
     uci_sim_session_t sessions[UCI_SIM_MAX_SESSIONS];
+    uci_sim_scheduled_event_t scheduled_events[UCI_SIM_MAX_SCENARIO_EVENTS];
+    size_t scheduled_event_count;
     uci_sim_packet_t pending_notifications[UCI_SIM_MAX_PENDING_NOTIFICATIONS];
     size_t pending_notification_count;
 } uci_sim_device_t;
@@ -82,6 +96,13 @@ int uci_sim_device_get_config(const uci_sim_device_t* device,
                               uint8_t config_id,
                               uint8_t* value,
                               uint8_t* value_len);
+int uci_sim_device_schedule_event(uci_sim_device_t* device,
+                                  uci_sim_event_type_t type,
+                                  uint32_t session_id,
+                                  uint8_t delay_steps);
+void uci_sim_device_cancel_session_events(uci_sim_device_t* device, uint32_t session_id);
+void uci_sim_device_tick_events(uci_sim_device_t* device);
+int uci_sim_device_dequeue_ready_event(uci_sim_device_t* device, uci_sim_scheduled_event_t* event);
 int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
                                        uci_sim_session_t* session,
                                        uci_sim_result_t* result);

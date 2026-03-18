@@ -24,7 +24,7 @@ int uci_sim_scenario_should_auto_deliver_pending(uci_sim_scenario_kind_t scenari
 int uci_sim_scenario_on_session_started(uci_sim_device_t* device,
                                         uci_sim_session_t* session,
                                         uci_sim_result_t* result);
-void uci_sim_scenario_on_session_stopped(uci_sim_session_t* session);
+void uci_sim_scenario_on_session_stopped(uci_sim_device_t* device, uci_sim_session_t* session);
 int uci_sim_scenario_on_command_complete(uci_sim_device_t* device,
                                          const uci_sim_packet_t* request,
                                          uci_sim_result_t* result);

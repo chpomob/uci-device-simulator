@@ -659,11 +659,71 @@ static void test_data_message_edge_cases_over_tcp(void) {
     PASS();
 }
 
+static void test_control_edge_cases_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    size_t request_len = 0;
+    int fd = -1;
+
+    server.scenario = UCI_SIM_SCENARIO_DEFAULT;
+    ASSERT_TRUE(start_server(&server) == 0, "start control edge server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect control edge server");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load control edge init");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write control edge init");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_rsp.hex",
+                          "control edge init rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
+                          "control edge init ntf");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_update_multicast_invalid_action_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load multicast invalid action");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write multicast invalid action");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_update_multicast_invalid_action_rsp.hex",
+                          "multicast invalid action rsp");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_data_transfer_phase_config_missing_session_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load dtp missing session");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write dtp missing session");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_data_transfer_phase_config_missing_session_rsp.hex",
+                          "dtp missing session rsp");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_logical_link_close_short_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load logical link short close");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write logical link short close");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_logical_link_close_short_rsp.hex",
+                          "logical link short close rsp");
+
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 int main(void) {
     test_shell_compatible_core_and_session_flow_over_tcp();
     test_delayed_notification_flow_over_tcp();
     test_ranging_stream_flow_over_tcp();
     test_data_message_edge_cases_over_tcp();
+    test_control_edge_cases_over_tcp();
 
     printf("Passed: %d\n", g_passed);
     printf("Failed: %d\n", g_failed);

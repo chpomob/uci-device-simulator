@@ -925,6 +925,15 @@ static void test_session_multicast_list_updates(void) {
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "multicast missing remove should fail");
     ASSERT_EQ_U8(UCI_STATUS_FAILED, result.response.payload[0], "multicast missing remove overall");
     ASSERT_EQ_U8(UCI_STATUS_ADDRESS_NOT_FOUND, result.response.payload[8], "multicast missing remove entry");
+
+    request.payload[5] = 0xFF;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "multicast invalid action should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "multicast invalid action status");
+
+    request.payload[5] = UCI_MULTICAST_ACTION_ADD_SHORT_KEY;
+    request.payload_len = 11;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "multicast truncated entry should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "multicast truncated entry status");
     PASS();
 }
 
@@ -978,6 +987,14 @@ static void test_session_data_transfer_phase_config(void) {
     request.payload_len = 9;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "dtp wrong size should fail");
     ASSERT_EQ_U8(UCI_STATUS_INVALID_MSG_SIZE, result.response.payload[0], "dtp wrong size status");
+
+    request.payload_len = 10;
+    request.payload[0] = 0x11;
+    request.payload[1] = 0x22;
+    request.payload[2] = 0x33;
+    request.payload[3] = 0x44;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "dtp missing session should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "dtp missing session status");
     PASS();
 }
 
@@ -1225,6 +1242,11 @@ static void test_logical_link_edge_cases(void) {
     request.oid = UCI_SESSION_LOGICAL_LINK_CLOSE;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "logical link missing close should fail");
     ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "logical link missing close status");
+
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "logical link short close should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_MSG_SIZE, result.response.payload[0], "logical link short close status");
+    request.payload_len = 5;
 
     memset(session->logical_links, 0, sizeof(session->logical_links));
     session->logical_link_count = UCI_SIM_MAX_LOGICAL_LINKS;

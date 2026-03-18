@@ -14,11 +14,22 @@
 
 #define UCI_SIM_ENGINE_TICK_MS 10
 
+static int is_retryable_errno(int err) {
+    return err == EINTR || err == EAGAIN || err == EWOULDBLOCK;
+}
+
+static int is_benign_disconnect_errno(int err) {
+    return err == EPIPE || err == ECONNRESET;
+}
+
 static ssize_t read_full(int fd, void* buffer, size_t count) {
     size_t total = 0;
     while (total < count) {
         ssize_t rc = recv(fd, (char*)buffer + total, count - total, 0);
         if (rc <= 0) {
+            if (rc < 0 && is_retryable_errno(errno)) {
+                continue;
+            }
             return rc;
         }
         total += (size_t)rc;
@@ -31,6 +42,9 @@ static ssize_t write_full(int fd, const void* buffer, size_t count) {
     while (total < count) {
         ssize_t rc = send(fd, (const char*)buffer + total, count - total, 0);
         if (rc <= 0) {
+            if (rc < 0 && is_retryable_errno(errno)) {
+                continue;
+            }
             return rc;
         }
         total += (size_t)rc;
@@ -58,6 +72,9 @@ static int flush_engine_outbound(int client_fd,
 
     while (uci_sim_engine_dequeue_outbound_packet(engine, &packet) == 0) {
         if (write_packet(client_fd, buffer, buffer_capacity, &packet) != 0) {
+            if (is_benign_disconnect_errno(errno)) {
+                return 1;
+            }
             return -1;
         }
     }
@@ -83,13 +100,20 @@ static int process_client(int client_fd, uci_sim_engine_t* engine) {
 
         rc = select(client_fd + 1, &read_fds, NULL, NULL, &timeout);
         if (rc < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
             return -1;
         }
         if (rc == 0) {
             if (uci_sim_engine_poll(engine) != 0) {
                 return -1;
             }
-            if (flush_engine_outbound(client_fd, buffer, sizeof(buffer), engine) != 0) {
+            rc = flush_engine_outbound(client_fd, buffer, sizeof(buffer), engine);
+            if (rc > 0) {
+                return 0;
+            }
+            if (rc < 0) {
                 return -1;
             }
             continue;
@@ -100,6 +124,9 @@ static int process_client(int client_fd, uci_sim_engine_t* engine) {
             return 0;
         }
         if (rc < 0) {
+            if (is_benign_disconnect_errno(errno)) {
+                return 0;
+            }
             return -1;
         }
 
@@ -111,6 +138,9 @@ static int process_client(int client_fd, uci_sim_engine_t* engine) {
         if (packet_len > 0) {
             rc = read_full(client_fd, buffer + UCI_SIM_HEADER_SIZE, packet_len);
             if (rc <= 0) {
+                if (rc < 0 && is_benign_disconnect_errno(errno)) {
+                    return 0;
+                }
                 return -1;
             }
         }
@@ -121,7 +151,11 @@ static int process_client(int client_fd, uci_sim_engine_t* engine) {
         if (uci_sim_engine_submit_packet(engine, &request) != 0) {
             return -1;
         }
-        if (flush_engine_outbound(client_fd, buffer, sizeof(buffer), engine) != 0) {
+        rc = flush_engine_outbound(client_fd, buffer, sizeof(buffer), engine);
+        if (rc > 0) {
+            return 0;
+        }
+        if (rc < 0) {
             return -1;
         }
     }

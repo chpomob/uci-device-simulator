@@ -590,10 +590,80 @@ static void test_ranging_stream_flow_over_tcp(void) {
     PASS();
 }
 
+static void test_data_message_edge_cases_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    size_t request_len = 0;
+    int fd = -1;
+
+    server.scenario = UCI_SIM_SCENARIO_DEFAULT;
+    ASSERT_TRUE(start_server(&server) == 0, "start data edge server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect data edge server");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load data edge init");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write data edge init");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_rsp.hex",
+                          "data edge init rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
+                          "data edge init ntf");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/data_message_send_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load inactive data send");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write inactive data send");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_data_transfer_status_rejected_ntf.hex",
+                          "inactive data send status");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load data edge start");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write data edge start");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_rsp.hex",
+                          "data edge start rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_ntf.hex",
+                          "data edge start ntf");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/data_message_send_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load repeated data send");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write repeated data send 1");
+    assert_two_fixture_packets_any_order(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_data_credit_ntf.hex",
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_data_transfer_status_ntf.hex",
+                          "repeated data send first pair");
+
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write repeated data send 2");
+    assert_two_fixture_packets_any_order(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_data_credit_ntf.hex",
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_data_transfer_status_repetition_ntf.hex",
+                          "repeated data send second pair");
+
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 int main(void) {
     test_shell_compatible_core_and_session_flow_over_tcp();
     test_delayed_notification_flow_over_tcp();
     test_ranging_stream_flow_over_tcp();
+    test_data_message_edge_cases_over_tcp();
 
     printf("Passed: %d\n", g_passed);
     printf("Failed: %d\n", g_failed);

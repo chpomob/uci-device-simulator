@@ -914,6 +914,7 @@ static int handle_data_message_send(uci_sim_device_t* device,
     uci_sim_session_t* session;
     uint16_t sequence_number;
     uint16_t declared_length;
+    uint8_t transfer_status;
     uint8_t credit_payload[5];
     uint8_t status_payload[8];
 
@@ -962,8 +963,17 @@ static int handle_data_message_send(uci_sim_device_t* device,
         return -1;
     }
 
+    if (session->has_last_data_message &&
+        session->last_data_sequence == sequence_number &&
+        session->last_data_length == declared_length) {
+        transfer_status = UCI_DATA_TRANSFER_STATUS_REPETITION_OK;
+    } else {
+        transfer_status = UCI_DATA_TRANSFER_STATUS_OK;
+    }
+
     session->last_data_sequence = sequence_number;
     session->last_data_length = declared_length;
+    session->has_last_data_message = 1;
 
     write_u32_le(credit_payload, session_id);
     credit_payload[4] = 1;
@@ -977,7 +987,7 @@ static int handle_data_message_send(uci_sim_device_t* device,
 
     write_u32_le(status_payload, session_id);
     write_u16_le(&status_payload[4], sequence_number);
-    status_payload[6] = UCI_DATA_TRANSFER_STATUS_OK;
+    status_payload[6] = transfer_status;
     status_payload[7] = 1;
 
     {

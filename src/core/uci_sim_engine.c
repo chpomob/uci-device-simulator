@@ -115,7 +115,9 @@ int uci_sim_engine_submit_packet(uci_sim_engine_t* engine, const uci_sim_packet_
         return -1;
     }
 
-    if (uci_sim_device_handle_packet(&engine->device, request, &result) != 0 && !result.has_response) {
+    if (uci_sim_device_handle_packet(&engine->device, request, &result) != 0 &&
+        !result.has_response &&
+        !result.has_notification) {
         return -1;
     }
 

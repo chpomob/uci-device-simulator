@@ -1040,6 +1040,81 @@ static void test_data_message_send_emits_credit_and_status_notifications(void) {
     PASS();
 }
 
+static void test_data_message_send_edge_cases(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "data edge init failed");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_DATA;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_DATA_PACKET_FORMAT_SEND;
+    request.oid = 0x00;
+    request.payload_len = 18;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = 0x44;
+    request.payload[5] = 0x33;
+    request.payload[6] = 0x22;
+    request.payload[7] = 0x11;
+    request.payload[8] = 0x00;
+    request.payload[9] = 0x00;
+    request.payload[10] = 0x00;
+    request.payload[11] = 0x00;
+    request.payload[12] = 0x0F;
+    request.payload[13] = 0x00;
+    request.payload[14] = 0x02;
+    request.payload[15] = 0x00;
+    request.payload[16] = 0xAA;
+    request.payload[17] = 0xBB;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "inactive data send should fail");
+    ASSERT_TRUE(result.has_notification, "inactive data send status missing");
+    ASSERT_EQ_U8(UCI_SESSION_DATA_TRANSFER_STATUS_NTF, result.notification.oid, "inactive data send oid");
+    ASSERT_EQ_U8(UCI_DATA_TRANSFER_STATUS_ERROR_REJECTED, result.notification.payload[6], "inactive data send status");
+
+    request.payload[14] = 0x03;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "invalid-format data send should fail");
+    ASSERT_TRUE(result.has_notification, "invalid-format data send status missing");
+    ASSERT_EQ_U8(UCI_DATA_TRANSFER_STATUS_INVALID_FORMAT, result.notification.payload[6], "invalid-format data send status");
+
+    request.payload[14] = 0x02;
+    request.mt = UCI_MT_COMMAND;
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "data edge start failed");
+
+    request.mt = UCI_MT_DATA;
+    request.gid = UCI_DATA_PACKET_FORMAT_SEND;
+    request.oid = 0x00;
+    request.payload_len = 18;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "first repeated-send baseline failed");
+    ASSERT_EQ_U8(UCI_DATA_TRANSFER_STATUS_OK, device.pending_notifications[0].payload[6], "first repeated-send status");
+    device.pending_notification_count = 0;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "duplicate repeated-send failed");
+    ASSERT_EQ_U8(UCI_DATA_TRANSFER_STATUS_REPETITION_OK, device.pending_notifications[0].payload[6], "duplicate repeated-send status");
+    PASS();
+}
+
 static void test_logical_link_lifecycle(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -1193,6 +1268,7 @@ int main(void) {
     test_session_multicast_list_updates();
     test_session_data_transfer_phase_config();
     test_data_message_send_emits_credit_and_status_notifications();
+    test_data_message_send_edge_cases();
     test_logical_link_lifecycle();
     test_logical_link_edge_cases();
 

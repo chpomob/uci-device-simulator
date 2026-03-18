@@ -65,6 +65,7 @@ typedef struct uci_sim_session {
     uint8_t dtp_payload[64];
     uint16_t last_data_sequence;
     uint16_t last_data_length;
+    uint8_t has_last_data_message;
     int allocated;
     uci_sim_session_config_t configs[UCI_SIM_MAX_SESSION_CONFIGS];
     uci_sim_multicast_entry_t multicast_entries[UCI_SIM_MAX_MULTICAST_ENTRIES];

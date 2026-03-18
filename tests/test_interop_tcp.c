@@ -222,21 +222,49 @@ static int load_hex_fixture(const char* path, uint8_t* buffer, size_t capacity, 
     return 0;
 }
 
+static size_t packet_stream_next_len(const uint8_t* buffer, size_t total_len, size_t offset) {
+    size_t payload_len;
+
+    if (!buffer || offset + UCI_SIM_HEADER_SIZE > total_len) {
+        return 0;
+    }
+
+    payload_len = (((buffer[offset] >> 5) & 0x03) == UCI_MT_DATA)
+        ? ((size_t)buffer[offset + 2] | ((size_t)buffer[offset + 3] << 8))
+        : (size_t)buffer[offset + 3];
+    if (offset + UCI_SIM_HEADER_SIZE + payload_len > total_len) {
+        return 0;
+    }
+
+    return UCI_SIM_HEADER_SIZE + payload_len;
+}
+
 static void assert_fixture_packet(int fd, const char* fixture_path, const char* step_name) {
     uint8_t expected[UCI_SIM_MAX_PACKET];
     uint8_t actual[UCI_SIM_MAX_PACKET];
     size_t expected_len = 0;
     size_t actual_len = 0;
+    size_t expected_offset = 0;
+    size_t actual_offset = 0;
     char message[160];
 
     snprintf(message, sizeof(message), "%s fixture load", step_name);
     ASSERT_TRUE(load_hex_fixture(fixture_path, expected, sizeof(expected), &expected_len) == 0, message);
-    snprintf(message, sizeof(message), "%s packet read", step_name);
-    ASSERT_TRUE(read_packet(fd, actual, sizeof(actual), &actual_len) == 0, message);
-    snprintf(message, sizeof(message), "%s length", step_name);
-    ASSERT_EQ_INT((int)expected_len, (int)actual_len, message);
-    snprintf(message, sizeof(message), "%s bytes", step_name);
-    ASSERT_MEMEQ(expected, actual, actual_len, message);
+
+    while (expected_offset < expected_len) {
+        size_t expected_packet_len = packet_stream_next_len(expected, expected_len, expected_offset);
+
+        snprintf(message, sizeof(message), "%s expected packet framing", step_name);
+        ASSERT_TRUE(expected_packet_len > 0, message);
+        snprintf(message, sizeof(message), "%s packet read", step_name);
+        ASSERT_TRUE(read_packet(fd, actual + actual_offset, sizeof(actual) - actual_offset, &actual_len) == 0, message);
+        snprintf(message, sizeof(message), "%s packet length", step_name);
+        ASSERT_EQ_INT((int)expected_packet_len, (int)actual_len, message);
+        snprintf(message, sizeof(message), "%s packet bytes", step_name);
+        ASSERT_MEMEQ(expected + expected_offset, actual + actual_offset, actual_len, message);
+        expected_offset += expected_packet_len;
+        actual_offset += actual_len;
+    }
 }
 
 static void assert_two_fixture_packets_any_order(int fd,
@@ -560,6 +588,60 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
             NULL,
             "session_set_app_config_dl_tdoa_time_reference_anchor"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_session_key_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_session_key"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_subsession_key_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_subsession_key"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_session_data_transfer_status_ntf_config_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_session_data_transfer_status_ntf_config"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_session_time_base_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_session_time_base"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_dl_tdoa_responder_tof_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_dl_tdoa_responder_tof"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_secure_ranging_nefa_level_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_secure_ranging_nefa_level"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_secure_ranging_csw_length_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_secure_ranging_csw_length"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_application_data_endpoint_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_application_data_endpoint"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_owr_aoa_measurement_ntf_period_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+            NULL,
+            "session_set_app_config_owr_aoa_measurement_ntf_period"
         },
         {
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_min_frames_per_rr_cmd.hex",
@@ -914,6 +996,60 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_dl_tdoa_time_reference_anchor_rsp.hex",
             NULL,
             "session_get_app_config_dl_tdoa_time_reference_anchor"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_session_key_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_session_key_rsp.hex",
+            NULL,
+            "session_get_app_config_session_key"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_subsession_key_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_subsession_key_rsp.hex",
+            NULL,
+            "session_get_app_config_subsession_key"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_session_data_transfer_status_ntf_config_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_session_data_transfer_status_ntf_config_rsp.hex",
+            NULL,
+            "session_get_app_config_session_data_transfer_status_ntf_config"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_session_time_base_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_session_time_base_rsp.hex",
+            NULL,
+            "session_get_app_config_session_time_base"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_dl_tdoa_responder_tof_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_dl_tdoa_responder_tof_rsp.hex",
+            NULL,
+            "session_get_app_config_dl_tdoa_responder_tof"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_secure_ranging_nefa_level_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_secure_ranging_nefa_level_rsp.hex",
+            NULL,
+            "session_get_app_config_secure_ranging_nefa_level"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_secure_ranging_csw_length_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_secure_ranging_csw_length_rsp.hex",
+            NULL,
+            "session_get_app_config_secure_ranging_csw_length"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_application_data_endpoint_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_application_data_endpoint_rsp.hex",
+            NULL,
+            "session_get_app_config_application_data_endpoint"
+        },
+        {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_owr_aoa_measurement_ntf_period_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_owr_aoa_measurement_ntf_period_rsp.hex",
+            NULL,
+            "session_get_app_config_owr_aoa_measurement_ntf_period"
         },
         {
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_app_config_min_frames_per_rr_cmd.hex",

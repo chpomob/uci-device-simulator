@@ -154,7 +154,16 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x42` | `DL_TDOA_TX_ACTIVE_RANGING_ROUNDS` | `supported` | Default-profile stored/retrievable |
 | `0x43` | `DL_TDOA_BLOCK_STRIDING` | `supported` | Default-profile stored/retrievable |
 | `0x44` | `DL_TDOA_TIME_REFERENCE_ANCHOR` | `supported` | Default-profile stored/retrievable |
-| remaining uncovered IDs in the standard FiRa app-config range | Standard FiRa app-config range | `missing` | Not yet modeled |
+| `0x45` | `SESSION_KEY` | `supported` | Default-profile stored/retrievable; simulator and shell accept 16-byte and 32-byte hex values |
+| `0x46` | `SUBSESSION_KEY` | `supported` | Default-profile stored/retrievable; simulator and shell accept 16-byte and 32-byte hex values |
+| `0x47` | `SESSION_DATA_TRANSFER_STATUS_NTF_CONFIG` | `supported` | Default-profile stored/retrievable |
+| `0x48` | `SESSION_TIME_BASE` | `supported` | Default-profile stored/retrievable as the 9-byte local Qorvo/Cherry structure |
+| `0x49` | `DL_TDOA_RESPONDER_TOF` | `supported` | Default-profile stored/retrievable |
+| `0x4A` | `SECURE_RANGING_NEFA_LEVEL` | `supported` | Default-profile stored/retrievable |
+| `0x4B` | `SECURE_RANGING_CSW_LENGTH` | `supported` | Default-profile stored/retrievable |
+| `0x4C` | `APPLICATION_DATA_ENDPOINT` | `supported` | Default-profile stored/retrievable as the inferred minimal 1-byte endpoint form |
+| `0x4D` | `OWR_AOA_MEASUREMENT_NTF_PERIOD` | `supported` | Default-profile stored/retrievable |
+| `0x00`..`0x4D` | Standard FiRa app-config range | `supported` | Default-profile stored/retrievable coverage now spans the full standard range; `0x41` and `0x4C` currently use the local minimal forms noted above |
 | `0xA0`..`0xEC` | CCC / vendor app-config extensions | `missing` | Not yet modeled |
 
 ## Vendor and Extended Groups

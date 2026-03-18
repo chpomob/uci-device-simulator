@@ -54,6 +54,29 @@ static ssize_t write_full(int fd, const void* buffer, size_t count) {
 
 static int write_packet(int fd, uint8_t* buffer, size_t buffer_capacity, const uci_sim_packet_t* packet) {
     size_t written = 0;
+    size_t offset = 0;
+    const size_t max_control_payload = 255U;
+
+    if (packet->mt != UCI_MT_DATA && packet->payload_len > max_control_payload) {
+        while (offset < packet->payload_len) {
+            uci_sim_packet_t fragment = *packet;
+            size_t remaining = packet->payload_len - offset;
+            size_t chunk_len = remaining > max_control_payload ? max_control_payload : remaining;
+
+            fragment.pbf = (offset + chunk_len < packet->payload_len) ? UCI_PBF_NOT_COMPLETE : UCI_PBF_COMPLETE;
+            fragment.payload_len = (uint16_t)chunk_len;
+            memcpy(fragment.payload, packet->payload + offset, chunk_len);
+
+            if (uci_sim_packet_serialize(&fragment, buffer, buffer_capacity, &written) != 0) {
+                return -1;
+            }
+            if (write_full(fd, buffer, written) <= 0) {
+                return -1;
+            }
+            offset += chunk_len;
+        }
+        return 0;
+    }
 
     if (uci_sim_packet_serialize(packet, buffer, buffer_capacity, &written) != 0) {
         return -1;

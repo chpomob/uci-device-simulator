@@ -1199,6 +1199,61 @@ static void test_session_app_config_storage(void) {
     request.payload[7] = 0x01;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set dl tdoa time reference anchor app config failed");
 
+    request.payload_len = 23;
+    request.payload[5] = 0x45;
+    request.payload[6] = 16;
+    memcpy(&request.payload[7], (const uint8_t[]){
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+        0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF
+    }, 16);
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set session key app config failed");
+
+    request.payload[5] = 0x46;
+    request.payload[6] = 16;
+    memcpy(&request.payload[7], (const uint8_t[]){
+        0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0x99, 0x88,
+        0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00
+    }, 16);
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set subsession key app config failed");
+
+    request.payload_len = 8;
+    request.payload[5] = 0x47;
+    request.payload[6] = 1;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set session data transfer status ntf config failed");
+
+    request.payload_len = 16;
+    request.payload[5] = 0x48;
+    request.payload[6] = 9;
+    memcpy(&request.payload[7], (const uint8_t[]){ 0x01, 0x78, 0x56, 0x34, 0x12, 0x08, 0x07, 0x06, 0x05 }, 9);
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set session time base app config failed");
+
+    request.payload_len = 8;
+    request.payload[5] = 0x49;
+    request.payload[6] = 1;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set dl tdoa responder tof app config failed");
+
+    request.payload[5] = 0x4A;
+    request.payload[6] = 1;
+    request.payload[7] = 0x02;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set secure ranging nefa level app config failed");
+
+    request.payload[5] = 0x4B;
+    request.payload[6] = 1;
+    request.payload[7] = 0x03;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set secure ranging csw length app config failed");
+
+    request.payload[5] = 0x4C;
+    request.payload[6] = 1;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set application data endpoint app config failed");
+
+    request.payload[5] = 0x4D;
+    request.payload[6] = 1;
+    request.payload[7] = 0x0A;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set owr aoa measurement ntf period app config failed");
+
     request.payload[5] = 0x3A;
     request.payload[6] = 1;
     request.payload[7] = 0x02;
@@ -1269,12 +1324,12 @@ static void test_session_app_config_storage(void) {
     ASSERT_EQ_U8(0x03, result.response.payload[5], "get multi app config second id");
     ASSERT_EQ_U8(0x02, result.response.payload[7], "get multi app config second value");
 
-    request.payload_len = 70;
+    request.payload_len = 79;
     request.payload[0] = 0x78;
     request.payload[1] = 0x56;
     request.payload[2] = 0x34;
     request.payload[3] = 0x12;
-    request.payload[4] = 65;
+    request.payload[4] = 74;
     request.payload[5] = 0x01;
     request.payload[6] = 0x02;
     request.payload[7] = 0x04;
@@ -1334,15 +1389,24 @@ static void test_session_app_config_storage(void) {
     request.payload[61] = 0x42;
     request.payload[62] = 0x43;
     request.payload[63] = 0x44;
-    request.payload[64] = 0x3A;
-    request.payload[65] = 0x3B;
-    request.payload[66] = 0x3C;
-    request.payload[67] = 0x3D;
-    request.payload[68] = 0x3E;
-    request.payload[69] = 0x3F;
+    request.payload[64] = 0x45;
+    request.payload[65] = 0x46;
+    request.payload[66] = 0x47;
+    request.payload[67] = 0x48;
+    request.payload[68] = 0x49;
+    request.payload[69] = 0x4A;
+    request.payload[70] = 0x4B;
+    request.payload[71] = 0x4C;
+    request.payload[72] = 0x4D;
+    request.payload[73] = 0x3A;
+    request.payload[74] = 0x3B;
+    request.payload[75] = 0x3C;
+    request.payload[76] = 0x3D;
+    request.payload[77] = 0x3E;
+    request.payload[78] = 0x3F;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get extended app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get extended app config status");
-    ASSERT_EQ_U8(65, result.response.payload[1], "get extended app config count");
+    ASSERT_EQ_U8(74, result.response.payload[1], "get extended app config count");
     ASSERT_EQ_U8(0x01, result.response.payload[2], "get extended app config first id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x0A,
                                              (const uint8_t[]){ 0x05, 0x00, 0x00, 0x00 }, 4),
@@ -1458,6 +1522,35 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x44,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get extended app config missing dl tdoa time reference anchor");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x45,
+                                             (const uint8_t[]){ 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+                                                                0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF }, 16),
+                "get extended app config missing session key");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x46,
+                                             (const uint8_t[]){ 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0x99, 0x88,
+                                                                0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00 }, 16),
+                "get extended app config missing subsession key");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x47,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get extended app config missing session data transfer status ntf config");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x48,
+                                             (const uint8_t[]){ 0x01, 0x78, 0x56, 0x34, 0x12, 0x08, 0x07, 0x06, 0x05 }, 9),
+                "get extended app config missing session time base");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x49,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get extended app config missing dl tdoa responder tof");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x4A,
+                                             (const uint8_t[]){ 0x02 }, 1),
+                "get extended app config missing secure ranging nefa level");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x4B,
+                                             (const uint8_t[]){ 0x03 }, 1),
+                "get extended app config missing secure ranging csw length");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x4C,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get extended app config missing application data endpoint");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x4D,
+                                             (const uint8_t[]){ 0x0A }, 1),
+                "get extended app config missing owr aoa measurement ntf period");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x3F,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get extended app config missing dl tdoa hop count");
@@ -1469,7 +1562,7 @@ static void test_session_app_config_storage(void) {
     request.payload[4] = 0;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get all app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get all app config status");
-    ASSERT_EQ_U8(69, result.response.payload[1], "get all app config count");
+    ASSERT_EQ_U8(78, result.response.payload[1], "get all app config count");
     ASSERT_EQ_U8(0x00, result.response.payload[2], "get all app config first id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x0A,
                                              (const uint8_t[]){ 0x05, 0x00, 0x00, 0x00 }, 4),
@@ -1588,6 +1681,35 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x44,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing dl tdoa time reference anchor");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x45,
+                                             (const uint8_t[]){ 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+                                                                0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF }, 16),
+                "get all app config missing session key");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x46,
+                                             (const uint8_t[]){ 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0x99, 0x88,
+                                                                0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00 }, 16),
+                "get all app config missing subsession key");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x47,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get all app config missing session data transfer status ntf config");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x48,
+                                             (const uint8_t[]){ 0x01, 0x78, 0x56, 0x34, 0x12, 0x08, 0x07, 0x06, 0x05 }, 9),
+                "get all app config missing session time base");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x49,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get all app config missing dl tdoa responder tof");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x4A,
+                                             (const uint8_t[]){ 0x02 }, 1),
+                "get all app config missing secure ranging nefa level");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x4B,
+                                             (const uint8_t[]){ 0x03 }, 1),
+                "get all app config missing secure ranging csw length");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x4C,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get all app config missing application data endpoint");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x4D,
+                                             (const uint8_t[]){ 0x0A }, 1),
+                "get all app config missing owr aoa measurement ntf period");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x3F,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing dl tdoa hop count");

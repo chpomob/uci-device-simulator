@@ -368,3 +368,185 @@ The highest-value next behavior work, on the basis of this audit, is:
 
 These parameters have strong enough local evidence and they fit the same future
 measurement-policy architecture.
+
+## Detailed Parameter Notes
+
+This section goes deeper on the next highest-value parameters, because they are
+the best candidates for future behavior work.
+
+### `RANGING_INTERVAL` (`0x09`)
+
+Sources:
+
+- `uci_spec_fira.h`: identified as `RANGING_INTERVAL (aka RANGING_DURATION)`
+- `cherry_session_client.h`: setter comment says "Interval between ranging, in
+  milliseconds"
+- `cherry_fira_client.h`: measurement/result structures expose
+  `ranging_interval_ms`
+- `cherry_fira_client.c`: result population copies `data->ranging_interval_ms`
+
+Conclusion:
+
+- `RANGING_INTERVAL` is a scheduler-facing session parameter, not just a value
+  to echo back.
+- It also appears in emitted result data as part of the visible measurement
+  information.
+
+Confidence: `proven`
+
+Simulator implication:
+
+- the engine should use the session-stored `RANGING_INTERVAL`, not only the
+  profile default, when scheduling future ranging events
+- the emitted `RANGE_DATA_NTF` should serialize the same interval value into
+  the current ranging interval field
+
+Architecture implication:
+
+- interval should move into the future measurement-policy / scheduler seam
+- this is a clean case where one app-config affects both:
+  - scheduler timing
+  - visible payload content
+
+Current gap:
+
+- the simulator currently writes the profile interval into the payload and uses
+  profile-driven timing; it does not yet let session app-config override that
+
+### `RESULT_REPORT_CONFIG` (`0x2E`)
+
+Sources:
+
+- `uci_spec_fira.h`: identified as `RESULT_REPORT_CONFIG`
+- `cherry_session_client.h`: explicit setter comment:
+  - `b0 = TOF report`
+  - `b1 = AOA Azimuth report`
+  - `b2 = AOA elevation report`
+  - `b3 = AOA FOM report`
+  - applicable when Controlee transmits RRRM or MRM Type 3
+  - default `0x01`
+- Cherry getter side exposes:
+  - `result_report_phase`
+  - `report_tof`
+  - `report_aoa_azimuth`
+  - `report_aoa_elevation`
+  - `report_aoa_fom`
+
+Conclusion:
+
+- `RESULT_REPORT_CONFIG` is a payload-shape policy control.
+- It is not merely a capabilities or metadata field.
+- Cherry treats it as decomposable reporting flags.
+
+Confidence: `proven`
+
+Simulator implication:
+
+- this parameter should control which measurement components are meaningful or
+  serialized in range-result payloads
+- it belongs in a measurement-policy layer, not in handler-local code
+
+Architecture implication:
+
+- this is the best anchor parameter for introducing an internal measurement
+  representation separate from raw packet bytes
+- future fields like RSSI and AoA request should compose with it
+
+Current gap:
+
+- the simulator currently stores the value but does not let it change emitted
+  measurement content
+
+### `AOA_RESULT_REQ` (`0x0D`)
+
+Sources:
+
+- `uci_spec_fira.h`: identified as `AOA result requirement`
+- local shell exposes it as a `0..3` single-byte parameter
+- Cherry getter side exposes separate report semantics for:
+  - AoA azimuth
+  - AoA elevation
+  - AoA FOM
+
+Conclusion:
+
+- `AOA_RESULT_REQ` is not sufficient on its own to define complete output
+  payload shape, but it clearly belongs to the same reporting domain as
+  `RESULT_REPORT_CONFIG`
+- It should influence whether AoA results are generated or considered valid for
+  a session
+
+Confidence: `strong_inference`
+
+Simulator implication:
+
+- AoA-related measurement fields should not remain fixed template bytes
+- the simulator should eventually derive AoA field presence/meaning from the
+  combination of:
+  - `AOA_RESULT_REQ`
+  - `RESULT_REPORT_CONFIG`
+  - later AoA-bound gating
+
+Architecture implication:
+
+- another reason to introduce a measurement-policy seam before more behavior
+  changes
+
+Current gap:
+
+- the simulator stores this parameter but does not change AoA field behavior or
+  report policy from it
+
+### `RSSI_REPORTING` (`0x13`)
+
+Sources:
+
+- `uci_spec_fira.h`: identified as `RSSI report`
+- `cherry_session_client.h`: explicit setter/getter comments say:
+  - false = no report
+  - true = report
+- local shell decoders already know how to display RSSI when it exists in
+  supported measurement layouts
+
+Conclusion:
+
+- `RSSI_REPORTING` is a direct reporting on/off control.
+- This is a much stronger basis than many other still-stored-only parameters.
+
+Confidence: `proven`
+
+Simulator implication:
+
+- if the chosen measurement/result shape includes RSSI, this parameter should
+  decide whether RSSI is meaningful/present
+- if the payload layout is fixed for now, the simulator should still at least
+  control whether the RSSI field is populated with meaningful data or a neutral
+  suppressed value
+
+Architecture implication:
+
+- `RSSI_REPORTING` should be implemented through the same measurement-policy
+  layer as `RESULT_REPORT_CONFIG`, not as a special case in the emitter
+
+Current gap:
+
+- the simulator stores this parameter but does not affect measurement output
+
+## Parameter Dependency Summary
+
+The next behavior work should follow this dependency order:
+
+1. introduce an internal measurement-policy layer
+2. move emitted measurement content decisions into that layer
+3. make these parameters behavioral in this order:
+   - `RESULT_REPORT_CONFIG`
+   - `AOA_RESULT_REQ`
+   - `RSSI_REPORTING`
+   - `RANGING_INTERVAL`
+
+Why this order:
+
+- `RESULT_REPORT_CONFIG` defines the strongest payload-shape contract
+- `AOA_RESULT_REQ` and `RSSI_REPORTING` naturally compose with it
+- `RANGING_INTERVAL` then extends the same seam into scheduler behavior and the
+  visible range-data header

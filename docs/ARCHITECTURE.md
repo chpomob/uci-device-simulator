@@ -3,7 +3,7 @@
 ## Boundaries
 
 - `spec`: constants and protocol interpretation aligned to Qorvo SDK definitions
-- `core`: packet parsing, framing helpers, and the device engine / outbound queue
+- `core`: packet parsing, framing helpers, the device engine / outbound queue, and clock abstraction
 - `model`: mutable simulated device state
 - `handlers`: command behavior that mutates the model and emits responses/notifications
 - `scenario`: notification policy and deterministic behavior variants layered on top of the model
@@ -15,12 +15,15 @@ TCP comes first because it is simple to automate, inspect, and test. The
 transport now talks to a device engine, not directly to the handlers. Host
 packets are submitted into the engine, the engine advances its internal clock,
 and outbound packets are drained from the engine queue.
+The engine clock is injectable: tests use explicit/manual time progression,
+while runtime transports can attach a wall-clock source.
 
 ## Evolution Plan
 
 Future transports should only adapt raw bytes to `uci_sim_packet_t` and the
 engine API. Session/ranging scenarios should live in dedicated model or
-scenario modules rather than transport or CLI code.
+scenario modules rather than transport or CLI code. Future runtime work should
+continue to keep “what time is it?” outside the engine logic itself.
 
 ## Scenario Direction
 

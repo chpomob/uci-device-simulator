@@ -6,6 +6,7 @@
 
 static int g_failed = 0;
 static int g_passed = 0;
+static uci_sim_time_ms_t g_fake_clock_ms = 0;
 
 #define ASSERT_TRUE(cond, msg) do { if (!(cond)) { printf("FAIL: %s\n", msg); g_failed++; return; } } while (0)
 #define ASSERT_EQ_U8(exp, act, msg) do { if ((unsigned)(exp) != (unsigned)(act)) { printf("FAIL: %s\n", msg); g_failed++; return; } } while (0)
@@ -19,8 +20,64 @@ static uint32_t read_u32_le(const uint8_t* payload) {
            ((uint32_t)payload[3] << 24);
 }
 
+static uci_sim_time_ms_t fake_clock_now_ms(void* context) {
+    (void)context;
+    return g_fake_clock_ms;
+}
+
 static int dequeue_outbound(uci_sim_engine_t* engine, uci_sim_packet_t* packet) {
     return uci_sim_engine_dequeue_outbound_packet(engine, packet);
+}
+
+static void test_engine_clock_poll_progression(void) {
+    uci_sim_engine_t engine;
+    uci_sim_packet_t request;
+    uci_sim_packet_t packet;
+    uci_sim_clock_t clock = { fake_clock_now_ms, NULL };
+
+    g_fake_clock_ms = 1;
+    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
+    uci_sim_engine_set_clock(&engine, &clock);
+    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine initial poll failed");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "engine clock init failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock init rsp missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock init ntf missing");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "engine clock start failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock start rsp missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock start ntf missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock range 1 missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine clock range 2 should wait for next poll");
+
+    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine zero-delta poll failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock range 2 missing");
+    ASSERT_EQ_U32(2, read_u32_le(packet.payload), "engine clock range 2 sequence");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine clock range 3 should not be immediate");
+
+    g_fake_clock_ms = 1000;
+    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine pre-deadline poll failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine clock range 3 should wait for deadline");
+
+    g_fake_clock_ms = 1001;
+    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine deadline poll failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock range 3 missing");
+    ASSERT_EQ_U32(3, read_u32_le(packet.payload), "engine clock range 3 sequence");
+    PASS();
 }
 
 static void test_packet_round_trip(void) {
@@ -507,6 +564,7 @@ static void test_session_lifecycle(void) {
 
 int main(void) {
     test_packet_round_trip();
+    test_engine_clock_poll_progression();
     test_core_device_info();
     test_core_device_config_storage();
     test_core_additional_device_configs();

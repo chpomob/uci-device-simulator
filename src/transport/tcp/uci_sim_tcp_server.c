@@ -1,4 +1,5 @@
 #include "uci_sim_tcp_server.h"
+#include "uci_sim_clock.h"
 #include "uci_sim_packet.h"
 
 #include <arpa/inet.h>
@@ -85,7 +86,7 @@ static int process_client(int client_fd, uci_sim_engine_t* engine) {
             return -1;
         }
         if (rc == 0) {
-            if (uci_sim_engine_tick(engine, UCI_SIM_ENGINE_TICK_MS) != 0) {
+            if (uci_sim_engine_poll(engine) != 0) {
                 return -1;
             }
             if (flush_engine_outbound(client_fd, buffer, sizeof(buffer), engine) != 0) {
@@ -131,6 +132,15 @@ int uci_sim_tcp_serve(const char* host, uint16_t port, uci_sim_engine_t* engine)
     int client_fd;
     int reuse_addr = 1;
     struct sockaddr_in addr;
+    uci_sim_clock_t clock;
+
+    if (!engine) {
+        return -1;
+    }
+
+    uci_sim_clock_init_system(&clock);
+    uci_sim_engine_set_clock(engine, &clock);
+    (void)uci_sim_engine_poll(engine);
 
     listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd < 0) {

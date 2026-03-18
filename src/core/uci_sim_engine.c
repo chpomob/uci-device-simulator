@@ -85,6 +85,23 @@ void uci_sim_engine_init_with_scenario(uci_sim_engine_t* engine, uci_sim_scenari
     uci_sim_device_init_with_scenario(&engine->device, scenario);
 }
 
+void uci_sim_engine_set_clock(uci_sim_engine_t* engine, const uci_sim_clock_t* clock) {
+    if (!engine) {
+        return;
+    }
+
+    if (!clock || !clock->now_ms) {
+        memset(&engine->clock, 0, sizeof(engine->clock));
+        engine->has_clock = 0;
+        engine->last_clock_ms = 0;
+        return;
+    }
+
+    engine->clock = *clock;
+    engine->has_clock = 1;
+    engine->last_clock_ms = 0;
+}
+
 int uci_sim_engine_submit_packet(uci_sim_engine_t* engine, const uci_sim_packet_t* request) {
     uci_sim_result_t result;
 
@@ -122,6 +139,32 @@ int uci_sim_engine_tick(uci_sim_engine_t* engine, uint32_t elapsed_ms) {
     }
 
     return 0;
+}
+
+int uci_sim_engine_poll(uci_sim_engine_t* engine) {
+    uci_sim_time_ms_t now_ms;
+    uint32_t elapsed_ms;
+
+    if (!engine || !engine->has_clock || !engine->clock.now_ms) {
+        return -1;
+    }
+
+    now_ms = engine->clock.now_ms(engine->clock.context);
+    if (engine->last_clock_ms == 0) {
+        engine->last_clock_ms = now_ms;
+        return 0;
+    }
+
+    if (now_ms <= engine->last_clock_ms) {
+        elapsed_ms = 0;
+    } else if ((now_ms - engine->last_clock_ms) > 0xFFFFFFFFULL) {
+        elapsed_ms = 0xFFFFFFFFU;
+    } else {
+        elapsed_ms = (uint32_t)(now_ms - engine->last_clock_ms);
+    }
+
+    engine->last_clock_ms = now_ms;
+    return uci_sim_engine_tick(engine, elapsed_ms);
 }
 
 int uci_sim_engine_dequeue_outbound_packet(uci_sim_engine_t* engine, uci_sim_packet_t* packet) {

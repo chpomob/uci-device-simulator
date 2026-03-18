@@ -28,6 +28,7 @@ static uci_sim_session_t* find_session(uci_sim_device_t* device, uint32_t sessio
 
 static uci_sim_session_t* alloc_session(uci_sim_device_t* device, uint32_t session_id) {
     size_t i;
+    size_t config_index;
     const uci_sim_profile_t* profile = device && device->profile ? device->profile : uci_sim_default_profile();
 
     for (i = 0; i < UCI_SIM_MAX_SESSIONS; ++i) {
@@ -40,6 +41,12 @@ static uci_sim_session_t* alloc_session(uci_sim_device_t* device, uint32_t sessi
             device->sessions[i].max_data_size = device->profile
                 ? device->profile->default_session_max_data_size
                 : 0x0200;
+            for (config_index = 0; config_index < profile->default_session_app_config_count; ++config_index) {
+                (void)uci_sim_session_store_config(&device->sessions[i],
+                                                   profile->default_session_app_config_ids[config_index],
+                                                   profile->default_session_app_config_values[config_index],
+                                                   profile->default_session_app_config_value_lens[config_index]);
+            }
             return &device->sessions[i];
         }
     }

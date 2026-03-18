@@ -6,6 +6,7 @@
 #define UCI_SIM_MAX_PROFILE_FEATURES 16U
 #define UCI_SIM_MAX_RANGE_DATA_TEMPLATE 64U
 #define UCI_SIM_MAX_SESSION_TRANSITIONS 4U
+#define UCI_SIM_MAX_PROFILE_APP_CONFIG_LEN 8U
 
 typedef struct {
     uint8_t oid;
@@ -56,6 +57,10 @@ typedef struct {
     size_t supported_core_config_id_count;
     uint8_t supported_session_app_config_ids[UCI_SIM_MAX_PROFILE_FEATURES];
     size_t supported_session_app_config_id_count;
+    uint8_t default_session_app_config_ids[UCI_SIM_MAX_PROFILE_FEATURES];
+    uint8_t default_session_app_config_value_lens[UCI_SIM_MAX_PROFILE_FEATURES];
+    uint8_t default_session_app_config_values[UCI_SIM_MAX_PROFILE_FEATURES][UCI_SIM_MAX_PROFILE_APP_CONFIG_LEN];
+    size_t default_session_app_config_count;
     uint8_t supported_notification_oids[UCI_SIM_MAX_PROFILE_FEATURES];
     size_t supported_notification_oid_count;
 } uci_sim_profile_t;

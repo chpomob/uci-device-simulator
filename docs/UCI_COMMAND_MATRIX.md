@@ -89,12 +89,12 @@ stored supported TLVs below.
 | `0x01` | `RANGING_ROUND_USAGE` | `missing` | In Cherry/Qorvo headers, not yet modeled |
 | `0x02` | `STS_CONFIG` | `missing` | Not yet modeled |
 | `0x03` | `MULTI_NODE_MODE` | `supported` | Default-profile stored/retrievable |
-| `0x04` | `CHANNEL_NUMBER` | `missing` | Not yet modeled |
-| `0x05` | `NUMBER_OF_CONTROLEES` | `missing` | Not yet modeled |
+| `0x04` | `CHANNEL_NUMBER` | `supported` | Default-profile stored/retrievable |
+| `0x05` | `NUMBER_OF_CONTROLEES` | `supported` | Default-profile stored/retrievable |
 | `0x06` | `DEVICE_MAC_ADDRESS` | `missing` | Not yet modeled |
-| `0x07` | `DST_MAC_ADDRESS` | `missing` | Not yet modeled |
+| `0x07` | `DST_MAC_ADDRESS` | `supported` | Default-profile stored/retrievable |
 | `0x08` | `SLOT_DURATION` | `missing` | Not yet modeled |
-| `0x09` | `RANGING_INTERVAL` | `missing` | Simulator uses a profile timing value but not app-config command support yet |
+| `0x09` | `RANGING_INTERVAL` | `supported` | Default-profile stored/retrievable as `RANGING_DURATION` in the current shell surface |
 | `0x11` | `DEVICE_ROLE` | `supported` | Default-profile stored/retrievable |
 | `0x0A`..`0x4D` | Standard FiRa app-config range | `missing` | Not yet modeled |
 | `0xA0`..`0xEC` | CCC / vendor app-config extensions | `missing` | Not yet modeled |
@@ -132,17 +132,17 @@ These are present in the local Qorvo SDK headers but not yet modeled in the simu
 1. broader `CORE_DEVICE_STATUS_NTF` policy beyond reset-triggered readiness
 2. deeper device-profile-specific error ordering/notification behavior
 3. remaining standard session app-config IDs
-4. profile-specific support/error rules for HUS and DT subfeatures
+4. `DEVICE_MAC_ADDRESS`, `SLOT_DURATION`, `RANGING_ROUND_USAGE`, and `STS_CONFIG`
 5. more realistic async notification ordering under error conditions
 
 ### Highest-priority missing profile/config coverage
 1. `RANGING_ROUND_USAGE`
 2. `STS_CONFIG`
-3. `CHANNEL_NUMBER`
-4. `NUMBER_OF_CONTROLEES`
-5. `DST_MAC_ADDRESS`
-6. `RANGING_INTERVAL`
-7. `RESULT_REPORT_CONFIG` / notification-related app-configs
+3. `DEVICE_MAC_ADDRESS`
+4. `SLOT_DURATION`
+5. `RESULT_REPORT_CONFIG` / notification-related app-configs
+6. `SESSION_INFO_NTF_CONFIG` / reporting controls
+7. addressing and scheduling profile variants beyond current defaults
 
 ## Notes
 

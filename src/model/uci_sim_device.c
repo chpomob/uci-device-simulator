@@ -22,6 +22,7 @@ void uci_sim_device_init_with_profile(uci_sim_device_t* device,
     device->phy_version = effective_profile->phy_version;
     device->test_version = effective_profile->test_version;
     device->device_state = effective_profile->default_device_state;
+    device->next_uwbs_timestamp = effective_profile->initial_uwbs_timestamp;
     device->device_configs[0].in_use = 1;
     device->device_configs[0].config_id = UCI_DEVICE_CONFIG_DEVICE_STATE;
     device->device_configs[0].value_len = 1;

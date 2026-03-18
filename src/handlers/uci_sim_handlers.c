@@ -60,6 +60,17 @@ static void write_u32_le(uint8_t* payload, uint32_t value) {
     payload[3] = (uint8_t)((value >> 24) & 0xFFU);
 }
 
+static void write_u64_le(uint8_t* payload, uint64_t value) {
+    payload[0] = (uint8_t)(value & 0xFFU);
+    payload[1] = (uint8_t)((value >> 8) & 0xFFU);
+    payload[2] = (uint8_t)((value >> 16) & 0xFFU);
+    payload[3] = (uint8_t)((value >> 24) & 0xFFU);
+    payload[4] = (uint8_t)((value >> 32) & 0xFFU);
+    payload[5] = (uint8_t)((value >> 40) & 0xFFU);
+    payload[6] = (uint8_t)((value >> 48) & 0xFFU);
+    payload[7] = (uint8_t)((value >> 56) & 0xFFU);
+}
+
 static void emit_session_status_ntf(uci_sim_device_t* device,
                                     uint32_t session_id,
                                     uint8_t state,
@@ -133,6 +144,23 @@ static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request
             return handle_core_set_get_config(device, request, result, 1);
         case UCI_CORE_GET_CONFIG:
             return handle_core_set_get_config(device, request, result, 0);
+        case UCI_CORE_QUERY_UWBS_TIMESTAMP:
+            if (request->payload_len != 0) {
+                make_status_response(request, result, UCI_STATUS_INVALID_MSG_SIZE);
+                return -1;
+            }
+            result->has_response = 1;
+            result->response.mt = UCI_MT_RESPONSE;
+            result->response.pbf = UCI_PBF_COMPLETE;
+            result->response.gid = UCI_GID_CORE;
+            result->response.oid = UCI_CORE_QUERY_UWBS_TIMESTAMP;
+            result->response.payload_len = 9;
+            result->response.payload[0] = UCI_STATUS_OK;
+            write_u64_le(&result->response.payload[1], device->next_uwbs_timestamp);
+            device->next_uwbs_timestamp += device->profile
+                ? device->profile->uwbs_timestamp_increment
+                : 1ULL;
+            return 0;
         default:
             make_status_response(request, result, UCI_STATUS_UNKNOWN_OID);
             return -1;

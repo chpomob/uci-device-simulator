@@ -23,6 +23,8 @@ typedef struct {
     uint8_t default_device_state;
     uint8_t default_low_power_mode;
     uint8_t default_device_pan_id[2];
+    uint64_t initial_uwbs_timestamp;
+    uint64_t uwbs_timestamp_increment;
     uint8_t default_session_type;
     uint8_t initial_session_state;
     uint8_t session_status_reason_code;

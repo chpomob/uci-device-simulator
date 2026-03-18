@@ -292,6 +292,12 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
             "core_get_caps_info"
         },
         {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_query_timestamp_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_query_timestamp_rsp.hex",
+            NULL,
+            "core_query_timestamp"
+        },
+        {
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_set_config_device_state_cmd.hex",
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_set_config_device_state_rsp.hex",
             NULL,

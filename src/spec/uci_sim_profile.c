@@ -20,6 +20,8 @@ static const uci_sim_profile_t k_default_profile = {
     .default_device_state = UCI_DEVICE_STATE_READY,
     .default_low_power_mode = 0x00,
     .default_device_pan_id = { 0x00, 0x00 },
+    .initial_uwbs_timestamp = 0x1122334455667788ULL,
+    .uwbs_timestamp_increment = 1ULL,
     .default_session_type = UCI_SESSION_TYPE_RANGING,
     .initial_session_state = UCI_SESSION_STATE_INIT,
     .session_status_reason_code = UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
@@ -71,9 +73,10 @@ static const uci_sim_profile_t k_default_profile = {
         UCI_CORE_DEVICE_INFO,
         UCI_CORE_GET_CAPS_INFO,
         UCI_CORE_SET_CONFIG,
-        UCI_CORE_GET_CONFIG
+        UCI_CORE_GET_CONFIG,
+        UCI_CORE_QUERY_UWBS_TIMESTAMP
     },
-    .supported_core_oid_count = 4,
+    .supported_core_oid_count = 5,
     .supported_session_config_oids = {
         UCI_SESSION_INIT,
         UCI_SESSION_DEINIT,

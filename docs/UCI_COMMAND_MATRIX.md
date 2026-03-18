@@ -31,7 +31,7 @@ Status meanings:
 | `CORE` | `0x04` | `SET_CONFIG` | `supported` | Profile-gated config IDs |
 | `CORE` | `0x05` | `GET_CONFIG` | `supported` | Profile-gated config IDs |
 | `CORE` | `0x07` | `GENERIC_ERROR` | `missing` | No generator or parse surface yet |
-| `CORE` | `0x08` | `QUERY_UWBS_TIMESTAMP` | `profile-rejected` | In Cherry/Qorvo headers, not implemented in handlers |
+| `CORE` | `0x08` | `QUERY_UWBS_TIMESTAMP` | `supported` | Profile-backed deterministic timestamp counter |
 
 | GID | OID | Command | Status | Notes |
 |---|---:|---|---|---|
@@ -125,13 +125,12 @@ These are present in the local Qorvo SDK headers but not yet modeled in the simu
 - Notifications: `SESSION_STATUS_NTF`, Cherry-aligned `RANGE_DATA_NTF (SESSION_INFO_NTF)`
 
 ### Highest-priority missing standard commands
-1. `CORE_QUERY_UWBS_TIMESTAMP`
-2. `CORE_DEVICE_RESET`
-3. `SESSION_UPDATE_CONTROLLER_MULTICAST_LIST`
-4. `SESSION_DATA_TRANSFER_PHASE_CONFIG`
-5. `SESSION_DATA_CREDIT_NTF`
-6. `SESSION_DATA_TRANSFER_STATUS_NTF`
-7. `LOGICAL_LINK_*`
+1. `CORE_DEVICE_RESET`
+2. `SESSION_UPDATE_CONTROLLER_MULTICAST_LIST`
+3. `SESSION_DATA_TRANSFER_PHASE_CONFIG`
+4. `SESSION_DATA_CREDIT_NTF`
+5. `SESSION_DATA_TRANSFER_STATUS_NTF`
+6. `LOGICAL_LINK_*`
 
 ### Highest-priority missing profile/config coverage
 1. `RANGING_ROUND_USAGE`

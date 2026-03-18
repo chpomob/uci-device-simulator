@@ -53,6 +53,7 @@ typedef struct uci_sim_device {
     uint16_t phy_version;
     uint16_t test_version;
     uint8_t device_state;
+    uint64_t next_uwbs_timestamp;
     const uci_sim_profile_t* profile;
     uci_sim_device_config_t device_configs[UCI_SIM_MAX_DEVICE_CONFIGS];
     uci_sim_scenario_kind_t scenario;

@@ -21,6 +21,17 @@ static uint32_t read_u32_le(const uint8_t* payload) {
            ((uint32_t)payload[3] << 24);
 }
 
+static uint64_t read_u64_le(const uint8_t* payload) {
+    return (uint64_t)payload[0] |
+           ((uint64_t)payload[1] << 8) |
+           ((uint64_t)payload[2] << 16) |
+           ((uint64_t)payload[3] << 24) |
+           ((uint64_t)payload[4] << 32) |
+           ((uint64_t)payload[5] << 40) |
+           ((uint64_t)payload[6] << 48) |
+           ((uint64_t)payload[7] << 56);
+}
+
 static uci_sim_time_ms_t fake_clock_now_ms(void* context) {
     (void)context;
     return g_fake_clock_ms;
@@ -162,6 +173,8 @@ static void test_default_profile_feature_matrix(void) {
                 "profile should reject unknown app config");
     ASSERT_TRUE(start_transition != NULL, "profile should define session start transition");
     ASSERT_TRUE(stop_transition != NULL, "profile should define session stop transition");
+    ASSERT_TRUE(uci_sim_profile_supports_command(profile, UCI_GID_CORE, UCI_CORE_QUERY_UWBS_TIMESTAMP),
+                "profile should support query timestamp");
     ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, profile->initial_session_state, "profile initial session state");
     ASSERT_EQ_U8(UCI_SESSION_STATE_ACTIVE, start_transition->next_state, "profile start next state");
     ASSERT_EQ_U8(UCI_STATUS_REJECTED, start_transition->invalid_status, "profile invalid start status");
@@ -170,6 +183,10 @@ static void test_default_profile_feature_matrix(void) {
     ASSERT_EQ_U8(52, profile->range_data_payload_len, "profile range data payload len");
     ASSERT_EQ_U8(0x12, profile->range_data_payload_template[25], "profile range data short addr lo");
     ASSERT_EQ_U8(0x34, profile->range_data_payload_template[26], "profile range data short addr hi");
+    ASSERT_TRUE(profile->initial_uwbs_timestamp == 0x1122334455667788ULL,
+                "profile initial timestamp");
+    ASSERT_TRUE(profile->uwbs_timestamp_increment == 1ULL,
+                "profile timestamp increment");
     PASS();
 }
 
@@ -311,6 +328,32 @@ static void test_core_caps_match_profile(void) {
     ASSERT_EQ_U8(profile->core_caps_payload[1], result.response.payload[1], "core caps profile count");
     ASSERT_EQ_U8(profile->core_caps_payload[2], result.response.payload[2], "core caps profile tlv");
     ASSERT_EQ_U8(profile->core_caps_payload[3], result.response.payload[3], "core caps profile len byte");
+    PASS();
+}
+
+static void test_core_query_timestamp_response(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    const uci_sim_profile_t* profile = uci_sim_default_profile();
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_QUERY_UWBS_TIMESTAMP;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "query timestamp first failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "query timestamp first status");
+    ASSERT_TRUE(read_u64_le(&result.response.payload[1]) == profile->initial_uwbs_timestamp,
+                "query timestamp first value");
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "query timestamp second failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "query timestamp second status");
+    ASSERT_TRUE(read_u64_le(&result.response.payload[1]) ==
+                (profile->initial_uwbs_timestamp + profile->uwbs_timestamp_increment),
+                "query timestamp second value");
     PASS();
 }
 
@@ -775,6 +818,7 @@ int main(void) {
     test_core_additional_device_configs();
     test_profile_rejects_unsupported_core_features();
     test_core_caps_match_profile();
+    test_core_query_timestamp_response();
     test_default_scenario_initialization();
     test_delayed_notification_scenario();
     test_session_get_count();

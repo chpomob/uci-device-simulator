@@ -4,11 +4,14 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <sys/select.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#define UCI_SIM_ENGINE_TICK_MS 10
 
 static ssize_t read_full(int fd, void* buffer, size_t count) {
     size_t total = 0;
@@ -46,15 +49,52 @@ static int write_packet(int fd, uint8_t* buffer, size_t buffer_capacity, const u
     return 0;
 }
 
-static int process_client(int client_fd, uci_sim_device_t* device) {
+static int flush_engine_outbound(int client_fd,
+                                 uint8_t* buffer,
+                                 size_t buffer_capacity,
+                                 uci_sim_engine_t* engine) {
+    uci_sim_packet_t packet;
+
+    while (uci_sim_engine_dequeue_outbound_packet(engine, &packet) == 0) {
+        if (write_packet(client_fd, buffer, buffer_capacity, &packet) != 0) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static int process_client(int client_fd, uci_sim_engine_t* engine) {
     uint8_t header[UCI_SIM_HEADER_SIZE];
     uint8_t buffer[UCI_SIM_MAX_PACKET];
 
     while (1) {
         uci_sim_packet_t request;
-        uci_sim_result_t result;
         size_t packet_len;
-        ssize_t rc = read_full(client_fd, header, sizeof(header));
+        ssize_t rc;
+        fd_set read_fds;
+        struct timeval timeout;
+
+        FD_ZERO(&read_fds);
+        FD_SET(client_fd, &read_fds);
+        timeout.tv_sec = 0;
+        timeout.tv_usec = UCI_SIM_ENGINE_TICK_MS * 1000;
+
+        rc = select(client_fd + 1, &read_fds, NULL, NULL, &timeout);
+        if (rc < 0) {
+            return -1;
+        }
+        if (rc == 0) {
+            if (uci_sim_engine_tick(engine, UCI_SIM_ENGINE_TICK_MS) != 0) {
+                return -1;
+            }
+            if (flush_engine_outbound(client_fd, buffer, sizeof(buffer), engine) != 0) {
+                return -1;
+            }
+            continue;
+        }
+
+        rc = read_full(client_fd, header, sizeof(header));
         if (rc == 0) {
             return 0;
         }
@@ -77,32 +117,16 @@ static int process_client(int client_fd, uci_sim_device_t* device) {
         if (uci_sim_packet_parse(buffer, UCI_SIM_HEADER_SIZE + packet_len, &request) != 0) {
             return -1;
         }
-        if (uci_sim_device_handle_packet(device, &request, &result) != 0 && !result.has_response) {
+        if (uci_sim_engine_submit_packet(engine, &request) != 0) {
             return -1;
         }
-
-        if (result.has_response) {
-            if (write_packet(client_fd, buffer, sizeof(buffer), &result.response) != 0) {
-                return -1;
-            }
-        }
-        if (result.has_notification) {
-            if (write_packet(client_fd, buffer, sizeof(buffer), &result.notification) != 0) {
-                return -1;
-            }
-        }
-        if (!uci_sim_scenario_should_defer_notification(device->scenario)) {
-            uci_sim_packet_t pending_notification;
-            while (uci_sim_device_dequeue_notification(device, &pending_notification) == 0) {
-                if (write_packet(client_fd, buffer, sizeof(buffer), &pending_notification) != 0) {
-                    return -1;
-                }
-            }
+        if (flush_engine_outbound(client_fd, buffer, sizeof(buffer), engine) != 0) {
+            return -1;
         }
     }
 }
 
-int uci_sim_tcp_serve(const char* host, uint16_t port, uci_sim_device_t* device) {
+int uci_sim_tcp_serve(const char* host, uint16_t port, uci_sim_engine_t* engine) {
     int listen_fd;
     int client_fd;
     int reuse_addr = 1;
@@ -150,7 +174,7 @@ int uci_sim_tcp_serve(const char* host, uint16_t port, uci_sim_device_t* device)
         return -1;
     }
 
-    if (process_client(client_fd, device) != 0) {
+    if (process_client(client_fd, engine) != 0) {
         fprintf(stderr, "Client processing failed: %s\n", strerror(errno));
     }
 

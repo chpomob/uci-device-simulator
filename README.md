@@ -36,7 +36,7 @@ Version 1 supports a focused interoperable subset:
 
 - `include/`: public internal headers shared across modules
 - `src/spec/`: authoritative UCI definitions and small lookup helpers
-- `src/core/`: packet parsing/building and dispatch glue
+- `src/core/`: packet parsing/building, device-engine loop, and dispatch glue
 - `src/model/`: simulator device/session state
 - `src/handlers/`: protocol family behavior
 - `src/scenario/` and `src/spec/uci_sim_scenario.c`: scenario selection, notification policy, and event scheduling hooks
@@ -61,6 +61,12 @@ The sibling `uci_interactive_shell` repo also provides an opt-in `make tcp-simul
 `./build/uci-device-sim 127.0.0.1 9000 [default|delayed_notifications|ranging_stream]`
 
 The server accepts one TCP client at a time and exchanges raw UCI packets.
+
+Internally, TCP now talks to a device engine rather than directly to the
+command handlers. Host packets are submitted into the engine, the engine
+advances its own clock, and outbound packets are drained from the engine queue.
+That keeps the transport as an adapter and makes background notification
+behavior closer to a real device.
 
 The `ranging_stream` scenario emits a standard `SESSION_STATUS_NTF` on session
 start and then advances a short deterministic series of Cherry-aligned

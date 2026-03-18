@@ -18,7 +18,7 @@ typedef enum {
 typedef struct uci_sim_scheduled_event {
     uci_sim_event_type_t type;
     uint32_t session_id;
-    uint8_t delay_steps;
+    uint32_t delay_ms;
 } uci_sim_scheduled_event_t;
 
 typedef struct uci_sim_session_config {
@@ -99,9 +99,9 @@ int uci_sim_device_get_config(const uci_sim_device_t* device,
 int uci_sim_device_schedule_event(uci_sim_device_t* device,
                                   uci_sim_event_type_t type,
                                   uint32_t session_id,
-                                  uint8_t delay_steps);
+                                  uint32_t delay_ms);
 void uci_sim_device_cancel_session_events(uci_sim_device_t* device, uint32_t session_id);
-void uci_sim_device_tick_events(uci_sim_device_t* device);
+void uci_sim_device_tick_events(uci_sim_device_t* device, uint32_t elapsed_ms);
 int uci_sim_device_dequeue_ready_event(uci_sim_device_t* device, uci_sim_scheduled_event_t* event);
 int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
                                        uci_sim_session_t* session,

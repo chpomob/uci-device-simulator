@@ -69,7 +69,7 @@ int uci_sim_device_dequeue_notification(uci_sim_device_t* device, uci_sim_packet
 int uci_sim_device_schedule_event(uci_sim_device_t* device,
                                   uci_sim_event_type_t type,
                                   uint32_t session_id,
-                                  uint8_t delay_steps) {
+                                  uint32_t delay_ms) {
     uci_sim_scheduled_event_t* event;
 
     if (!device || type == UCI_SIM_EVENT_NONE) {
@@ -82,7 +82,7 @@ int uci_sim_device_schedule_event(uci_sim_device_t* device,
     event = &device->scheduled_events[device->scheduled_event_count++];
     event->type = type;
     event->session_id = session_id;
-    event->delay_steps = delay_steps;
+    event->delay_ms = delay_ms;
     return 0;
 }
 
@@ -106,7 +106,7 @@ void uci_sim_device_cancel_session_events(uci_sim_device_t* device, uint32_t ses
     device->scheduled_event_count = out;
 }
 
-void uci_sim_device_tick_events(uci_sim_device_t* device) {
+void uci_sim_device_tick_events(uci_sim_device_t* device, uint32_t elapsed_ms) {
     size_t i;
 
     if (!device) {
@@ -114,8 +114,10 @@ void uci_sim_device_tick_events(uci_sim_device_t* device) {
     }
 
     for (i = 0; i < device->scheduled_event_count; ++i) {
-        if (device->scheduled_events[i].delay_steps > 0) {
-            device->scheduled_events[i].delay_steps--;
+        if (device->scheduled_events[i].delay_ms > elapsed_ms) {
+            device->scheduled_events[i].delay_ms -= elapsed_ms;
+        } else {
+            device->scheduled_events[i].delay_ms = 0;
         }
     }
 }
@@ -128,7 +130,7 @@ int uci_sim_device_dequeue_ready_event(uci_sim_device_t* device, uci_sim_schedul
     }
 
     for (i = 0; i < device->scheduled_event_count; ++i) {
-        if (device->scheduled_events[i].delay_steps == 0) {
+        if (device->scheduled_events[i].delay_ms == 0) {
             *event = device->scheduled_events[i];
             for (; i + 1 < device->scheduled_event_count; ++i) {
                 device->scheduled_events[i] = device->scheduled_events[i + 1];

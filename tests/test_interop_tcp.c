@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include "uci_sim_device.h"
+#include "uci_sim_engine.h"
 #include "uci_sim_packet.h"
 #include "uci_sim_tcp_server.h"
 
@@ -133,7 +133,7 @@ static int set_socket_timeout_ms(int fd, int timeout_ms) {
 }
 
 static int start_server(test_server_t* server) {
-    uci_sim_device_t device;
+    uci_sim_engine_t engine;
     pid_t pid;
 
     server->port = (uint16_t)(20000 + (((unsigned)getpid() ^ (unsigned)time(NULL)) % 20000));
@@ -142,8 +142,8 @@ static int start_server(test_server_t* server) {
         return -1;
     }
     if (pid == 0) {
-        uci_sim_device_init_with_scenario(&device, server->scenario);
-        if (uci_sim_tcp_serve("127.0.0.1", server->port, &device) != 0) {
+        uci_sim_engine_init_with_scenario(&engine, server->scenario);
+        if (uci_sim_tcp_serve("127.0.0.1", server->port, &engine) != 0) {
             _exit(1);
         }
         _exit(0);
@@ -237,6 +237,44 @@ static void assert_fixture_packet(int fd, const char* fixture_path, const char* 
     ASSERT_EQ_INT((int)expected_len, (int)actual_len, message);
     snprintf(message, sizeof(message), "%s bytes", step_name);
     ASSERT_MEMEQ(expected, actual, actual_len, message);
+}
+
+static void assert_two_fixture_packets_any_order(int fd,
+                                                 const char* fixture_a,
+                                                 const char* fixture_b,
+                                                 const char* step_name) {
+    uint8_t expected_a[UCI_SIM_MAX_PACKET];
+    uint8_t expected_b[UCI_SIM_MAX_PACKET];
+    uint8_t actual_1[UCI_SIM_MAX_PACKET];
+    uint8_t actual_2[UCI_SIM_MAX_PACKET];
+    size_t expected_a_len = 0;
+    size_t expected_b_len = 0;
+    size_t actual_1_len = 0;
+    size_t actual_2_len = 0;
+    char message[160];
+    int direct_match;
+
+    snprintf(message, sizeof(message), "%s fixture A load", step_name);
+    ASSERT_TRUE(load_hex_fixture(fixture_a, expected_a, sizeof(expected_a), &expected_a_len) == 0, message);
+    snprintf(message, sizeof(message), "%s fixture B load", step_name);
+    ASSERT_TRUE(load_hex_fixture(fixture_b, expected_b, sizeof(expected_b), &expected_b_len) == 0, message);
+    snprintf(message, sizeof(message), "%s packet 1 read", step_name);
+    ASSERT_TRUE(read_packet(fd, actual_1, sizeof(actual_1), &actual_1_len) == 0, message);
+    snprintf(message, sizeof(message), "%s packet 2 read", step_name);
+    ASSERT_TRUE(read_packet(fd, actual_2, sizeof(actual_2), &actual_2_len) == 0, message);
+
+    direct_match = (actual_1_len == expected_a_len &&
+                    actual_2_len == expected_b_len &&
+                    memcmp(actual_1, expected_a, actual_1_len) == 0 &&
+                    memcmp(actual_2, expected_b, actual_2_len) == 0);
+    if (!direct_match) {
+        int swapped_match = (actual_1_len == expected_b_len &&
+                             actual_2_len == expected_a_len &&
+                             memcmp(actual_1, expected_b, actual_1_len) == 0 &&
+                             memcmp(actual_2, expected_a, actual_2_len) == 0);
+        snprintf(message, sizeof(message), "%s packet ordering", step_name);
+        ASSERT_TRUE(swapped_match, message);
+    }
 }
 
 static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
@@ -462,12 +500,10 @@ static void test_ranging_stream_flow_over_tcp(void) {
                                  &request_len) == 0,
                 "load ranging stream get state");
     ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write ranging stream get state");
-    assert_fixture_packet(fd,
+    assert_two_fixture_packets_any_order(fd,
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_state_rsp.hex",
-                          "ranging stream get state rsp");
-    assert_fixture_packet(fd,
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_range_data_ntf_2.hex",
-                          "ranging stream range ntf 2");
+                          "ranging stream get state pair");
 
     ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_stop_cmd.hex",
                                  request,

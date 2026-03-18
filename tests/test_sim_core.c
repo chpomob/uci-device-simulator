@@ -1,4 +1,5 @@
 #include "uci_sim_device.h"
+#include "uci_sim_engine.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -16,6 +17,10 @@ static uint32_t read_u32_le(const uint8_t* payload) {
            ((uint32_t)payload[1] << 8) |
            ((uint32_t)payload[2] << 16) |
            ((uint32_t)payload[3] << 24);
+}
+
+static int dequeue_outbound(uci_sim_engine_t* engine, uci_sim_packet_t* packet) {
+    return uci_sim_engine_dequeue_outbound_packet(engine, packet);
 }
 
 static void test_packet_round_trip(void) {
@@ -220,13 +225,14 @@ static void test_session_query_data_size_and_ranging_count(void) {
 }
 
 static void test_ranging_stream_scenario(void) {
-    uci_sim_device_t device;
+    uci_sim_engine_t engine;
     uci_sim_packet_t request;
-    uci_sim_result_t result;
     uci_sim_packet_t queued;
+    uci_sim_packet_t response;
+    uci_sim_packet_t notification;
     uint32_t sequence;
 
-    uci_sim_device_init_with_scenario(&device, UCI_SIM_SCENARIO_RANGING_STREAM);
+    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;
     request.pbf = UCI_PBF_COMPLETE;
@@ -238,65 +244,71 @@ static void test_ranging_stream_scenario(void) {
     request.payload[2] = 0x34;
     request.payload[3] = 0x12;
     request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging stream init failed");
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging stream init failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging stream init response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging stream init notification missing");
 
     request.gid = UCI_GID_SESSION_CONTROL;
     request.oid = UCI_SESSION_START;
     request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging stream start failed");
-    ASSERT_TRUE(result.has_notification, "ranging stream status notification missing");
-    ASSERT_EQ_U8(UCI_GID_SESSION_CONFIG, result.notification.gid, "ranging stream status gid");
-    ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, result.notification.oid, "ranging stream status oid");
-    ASSERT_EQ_U8(1, (uint8_t)device.pending_notification_count, "ranging stream pending count after start");
-    ASSERT_TRUE(uci_sim_device_dequeue_notification(&device, &queued) == 0, "ranging stream pending dequeue failed");
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging stream start failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging stream start response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging stream status notification missing");
+    ASSERT_EQ_U8(UCI_GID_SESSION_CONFIG, notification.gid, "ranging stream status gid");
+    ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, notification.oid, "ranging stream status oid");
+    ASSERT_TRUE(dequeue_outbound(&engine, &queued) == 0, "ranging stream pending dequeue failed");
     ASSERT_EQ_U8(UCI_GID_SESSION_CONTROL, queued.gid, "ranging stream data gid");
     ASSERT_EQ_U8(UCI_SESSION_START, queued.oid, "ranging stream data oid");
     ASSERT_EQ_U8(52, (uint8_t)queued.payload_len, "ranging stream payload len");
     ASSERT_EQ_U8(1, queued.payload[24], "ranging stream measurement count");
     sequence = read_u32_le(queued.payload);
     ASSERT_EQ_U32(1, sequence, "ranging stream sequence 1");
-    ASSERT_EQ_U8(0, (uint8_t)device.pending_notification_count, "ranging stream pending drained after start");
-    ASSERT_EQ_U8(1, (uint8_t)device.sessions[0].ranging_count, "ranging stream count after start");
-    ASSERT_EQ_U8(2, device.sessions[0].ranging_stream_remaining, "ranging stream remaining after start");
-    ASSERT_EQ_U8(1, (uint8_t)device.scheduled_event_count, "ranging stream scheduled after start");
+    ASSERT_EQ_U8(0, (uint8_t)engine.device.pending_notification_count, "ranging stream pending drained after start");
+    ASSERT_EQ_U8(1, (uint8_t)engine.device.sessions[0].ranging_count, "ranging stream count after start");
+    ASSERT_EQ_U8(2, engine.device.sessions[0].ranging_stream_remaining, "ranging stream remaining after start");
+    ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "ranging stream scheduled after start");
 
     request.gid = UCI_GID_SESSION_CONFIG;
     request.oid = UCI_SESSION_GET_STATE;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging stream get state failed");
-    ASSERT_TRUE(result.has_notification, "ranging stream follow-up notification missing");
-    ASSERT_EQ_U8(UCI_GID_SESSION_CONTROL, result.notification.gid, "ranging stream follow-up gid");
-    ASSERT_EQ_U8(UCI_SESSION_START, result.notification.oid, "ranging stream follow-up oid");
-    sequence = read_u32_le(result.notification.payload);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging stream get state failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging stream get state response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging stream follow-up notification missing");
+    ASSERT_EQ_U8(UCI_GID_SESSION_CONTROL, notification.gid, "ranging stream follow-up gid");
+    ASSERT_EQ_U8(UCI_SESSION_START, notification.oid, "ranging stream follow-up oid");
+    sequence = read_u32_le(notification.payload);
     ASSERT_EQ_U32(2, sequence, "ranging stream sequence 2");
-    ASSERT_EQ_U8(2, (uint8_t)device.sessions[0].ranging_count, "ranging stream count after follow-up");
-    ASSERT_EQ_U8(1, device.sessions[0].ranging_stream_remaining, "ranging stream remaining after follow-up");
-    ASSERT_EQ_U8(1, (uint8_t)device.scheduled_event_count, "ranging stream scheduled after follow-up");
+    ASSERT_EQ_U8(2, (uint8_t)engine.device.sessions[0].ranging_count, "ranging stream count after follow-up");
+    ASSERT_EQ_U8(1, engine.device.sessions[0].ranging_stream_remaining, "ranging stream remaining after follow-up");
+    ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "ranging stream scheduled after follow-up");
 
     request.gid = UCI_GID_SESSION_CONTROL;
     request.oid = UCI_SESSION_STOP;
     request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging stream stop failed");
-    ASSERT_TRUE(result.has_notification, "ranging stream stop notification missing");
-    ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, result.notification.oid, "ranging stream stop status oid");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_IDLE, result.notification.payload[4], "ranging stream stop state");
-    ASSERT_EQ_U8(0, device.sessions[0].ranging_stream_remaining, "ranging stream remaining after stop");
-    ASSERT_EQ_U8(0, (uint8_t)device.scheduled_event_count, "ranging stream scheduled after stop");
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging stream stop failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging stream stop response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging stream stop notification missing");
+    ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, notification.oid, "ranging stream stop status oid");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_IDLE, notification.payload[4], "ranging stream stop state");
+    ASSERT_EQ_U8(0, engine.device.sessions[0].ranging_stream_remaining, "ranging stream remaining after stop");
+    ASSERT_EQ_U8(0, (uint8_t)engine.device.scheduled_event_count, "ranging stream scheduled after stop");
 
     request.gid = UCI_GID_SESSION_CONTROL;
     request.oid = UCI_SESSION_GET_RANGING_COUNT;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging stream get count failed");
-    ASSERT_TRUE(!result.has_notification, "ranging stream should not emit after stop");
-    ASSERT_EQ_U32(2, read_u32_le(&result.response.payload[1]), "ranging stream final count");
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging stream get count failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging stream count response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging stream should not emit after stop");
+    ASSERT_EQ_U32(2, read_u32_le(&response.payload[1]), "ranging stream final count");
     PASS();
 }
 
 static void test_ranging_stream_progresses_to_completion(void) {
-    uci_sim_device_t device;
+    uci_sim_engine_t engine;
     uci_sim_packet_t request;
-    uci_sim_result_t result;
+    uci_sim_packet_t response;
+    uci_sim_packet_t notification;
     uint32_t sequence;
 
-    uci_sim_device_init_with_scenario(&device, UCI_SIM_SCENARIO_RANGING_STREAM);
+    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;
     request.pbf = UCI_PBF_COMPLETE;
@@ -308,36 +320,44 @@ static void test_ranging_stream_progresses_to_completion(void) {
     request.payload[2] = 0x34;
     request.payload[3] = 0x12;
     request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging progression init failed");
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging progression init failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging progression init response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging progression init notification missing");
 
     request.gid = UCI_GID_SESSION_CONTROL;
     request.oid = UCI_SESSION_START;
     request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging progression start failed");
-    ASSERT_TRUE(uci_sim_device_dequeue_notification(&device, &result.notification) == 0, "ranging progression dequeue 1 failed");
-    sequence = read_u32_le(result.notification.payload);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging progression start failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging progression start response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging progression start notification missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging progression dequeue 1 failed");
+    sequence = read_u32_le(notification.payload);
     ASSERT_EQ_U32(1, sequence, "ranging progression sequence 1");
-    ASSERT_EQ_U8(1, (uint8_t)device.scheduled_event_count, "ranging progression scheduled after first");
+    ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "ranging progression scheduled after first");
 
     request.gid = UCI_GID_SESSION_CONFIG;
     request.oid = UCI_SESSION_GET_STATE;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging progression get state 1 failed");
-    sequence = read_u32_le(result.notification.payload);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging progression get state 1 failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging progression get state 1 response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging progression get state 1 notification missing");
+    sequence = read_u32_le(notification.payload);
     ASSERT_EQ_U32(2, sequence, "ranging progression sequence 2");
-    ASSERT_EQ_U8(1, (uint8_t)device.scheduled_event_count, "ranging progression scheduled after second");
+    ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "ranging progression scheduled after second");
 
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging progression get state 2 failed");
-    sequence = read_u32_le(result.notification.payload);
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 1000) == 0, "ranging progression async tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging progression get state 2 notification missing");
+    sequence = read_u32_le(notification.payload);
     ASSERT_EQ_U32(3, sequence, "ranging progression sequence 3");
-    ASSERT_EQ_U8(0, device.sessions[0].ranging_stream_remaining, "ranging progression remaining");
-    ASSERT_EQ_U8(0, (uint8_t)device.scheduled_event_count, "ranging progression scheduled after completion");
+    ASSERT_EQ_U8(0, engine.device.sessions[0].ranging_stream_remaining, "ranging progression remaining");
+    ASSERT_EQ_U8(0, (uint8_t)engine.device.scheduled_event_count, "ranging progression scheduled after completion");
 
     request.gid = UCI_GID_SESSION_CONTROL;
     request.oid = UCI_SESSION_GET_RANGING_COUNT;
     request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging progression get count failed");
-    ASSERT_TRUE(!result.has_notification, "ranging progression should complete cleanly");
-    ASSERT_EQ_U32(3, read_u32_le(&result.response.payload[1]), "ranging progression final count");
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging progression get count failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging progression count response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging progression should complete cleanly");
+    ASSERT_EQ_U32(3, read_u32_le(&response.payload[1]), "ranging progression final count");
     PASS();
 }
 

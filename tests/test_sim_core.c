@@ -294,6 +294,9 @@ static void test_profile_rejects_unsupported_core_features(void) {
 
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "unsupported core command should fail");
     ASSERT_EQ_U8(UCI_STATUS_UNKNOWN_OID, result.response.payload[0], "unsupported core command status");
+    ASSERT_TRUE(result.has_notification, "unsupported core command should emit generic error notification");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "unsupported core command generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_UNKNOWN_OID, result.notification.payload[0], "unsupported core command generic error status");
 
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;
@@ -308,6 +311,9 @@ static void test_profile_rejects_unsupported_core_features(void) {
 
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "unsupported core config set should fail");
     ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "unsupported core config status");
+    ASSERT_TRUE(result.has_notification, "unsupported core config should emit generic error notification");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "unsupported core config generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "unsupported core config generic error status");
     PASS();
 }
 

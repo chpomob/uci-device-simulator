@@ -117,6 +117,22 @@ static void emit_device_status_ntf(uci_sim_device_t* device,
     (void)uci_sim_device_deliver_notification(device, &notification, result);
 }
 
+static void emit_core_generic_error_ntf(uci_sim_device_t* device,
+                                        uint8_t status,
+                                        uci_sim_result_t* result) {
+    uci_sim_packet_t notification;
+
+    memset(&notification, 0, sizeof(notification));
+    notification.mt = UCI_MT_NOTIFICATION;
+    notification.pbf = UCI_PBF_COMPLETE;
+    notification.gid = UCI_GID_CORE;
+    notification.oid = UCI_CORE_GENERIC_ERROR;
+    notification.payload_len = 1;
+    notification.payload[0] = status;
+
+    (void)uci_sim_device_deliver_notification(device, &notification, result);
+}
+
 static void emit_logical_link_notification(uci_sim_device_t* device,
                                            uci_sim_result_t* result,
                                            uint32_t session_id,
@@ -929,6 +945,10 @@ int uci_sim_device_handle_packet(uci_sim_device_t* device,
             make_status_response(request, result, UCI_STATUS_UNKNOWN_GID);
             rc = -1;
             break;
+    }
+
+    if (rc != 0 && result->has_response && result->response.payload_len >= 1) {
+        emit_core_generic_error_ntf(device, result->response.payload[0], result);
     }
 
     (void)uci_sim_scenario_on_command_complete(device, request, result);

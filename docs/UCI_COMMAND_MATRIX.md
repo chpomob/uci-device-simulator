@@ -30,7 +30,7 @@ Status meanings:
 | `CORE` | `0x03` | `GET_CAPS_INFO` | `supported` | Profile-backed capability payload |
 | `CORE` | `0x04` | `SET_CONFIG` | `supported` | Profile-gated config IDs |
 | `CORE` | `0x05` | `GET_CONFIG` | `supported` | Profile-gated config IDs |
-| `CORE` | `0x07` | `GENERIC_ERROR` | `missing` | No explicit simulator generator path yet |
+| `CORE` | `0x07` | `GENERIC_ERROR` | `supported` | Emitted as `CORE_GENERIC_ERROR_NTF` on command error responses |
 | `CORE` | `0x08` | `QUERY_UWBS_TIMESTAMP` | `supported` | Profile-backed deterministic timestamp counter |
 
 | GID | OID | Command | Status | Notes |
@@ -129,11 +129,11 @@ These are present in the local Qorvo SDK headers but not yet modeled in the simu
 - `DATA`: `DATA_MESSAGE_SND` ingress with model-backed transfer-status behavior
 
 ### Highest-priority missing standard commands
-1. `CORE_GENERIC_ERROR`
-2. `UPDATE_DT_ANCHOR_RANGING_ROUNDS`
-3. `UPDATE_DT_TAG_RANGING_ROUNDS`
-4. `SET_HUS_CONTROLLER_CONFIG`
-5. `SET_HUS_CONTROLEE_CONFIG`
+1. `UPDATE_DT_ANCHOR_RANGING_ROUNDS`
+2. `UPDATE_DT_TAG_RANGING_ROUNDS`
+3. `SET_HUS_CONTROLLER_CONFIG`
+4. `SET_HUS_CONTROLEE_CONFIG`
+5. broader `CORE_DEVICE_STATUS_NTF` policy beyond reset-triggered readiness
 
 ### Highest-priority missing profile/config coverage
 1. `RANGING_ROUND_USAGE`

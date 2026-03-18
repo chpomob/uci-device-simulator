@@ -530,6 +530,34 @@ static void test_delayed_notification_flow_over_tcp(void) {
     PASS();
 }
 
+static void test_core_generic_error_flow_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    size_t request_len = 0;
+    int fd = -1;
+
+    ASSERT_TRUE(start_server(&server) == 0, "start generic error server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect generic error server");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_set_config_invalid_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load invalid core set_config");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write invalid core set_config");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_set_config_invalid_rsp.hex",
+                          "invalid core set_config rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_generic_error_invalid_param_ntf.hex",
+                          "invalid core set_config generic error ntf");
+
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 static void test_ranging_stream_flow_over_tcp(void) {
     test_server_t server = {0};
     uint8_t request[UCI_SIM_MAX_PACKET];
@@ -716,6 +744,9 @@ static void test_control_edge_cases_over_tcp(void) {
     assert_fixture_packet(fd,
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_update_multicast_invalid_action_rsp.hex",
                           "multicast invalid action rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_generic_error_invalid_param_ntf.hex",
+                          "multicast invalid action generic error ntf");
 
     ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_data_transfer_phase_config_missing_session_cmd.hex",
                                  request,
@@ -726,6 +757,9 @@ static void test_control_edge_cases_over_tcp(void) {
     assert_fixture_packet(fd,
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_data_transfer_phase_config_missing_session_rsp.hex",
                           "dtp missing session rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_generic_error_invalid_param_ntf.hex",
+                          "dtp missing session generic error ntf");
 
     ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_logical_link_close_short_cmd.hex",
                                  request,
@@ -736,6 +770,9 @@ static void test_control_edge_cases_over_tcp(void) {
     assert_fixture_packet(fd,
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_logical_link_close_short_rsp.hex",
                           "logical link short close rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_generic_error_invalid_msg_size_ntf.hex",
+                          "logical link short close generic error ntf");
 
     ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_logical_link_create_short_cmd.hex",
                                  request,
@@ -746,6 +783,9 @@ static void test_control_edge_cases_over_tcp(void) {
     assert_fixture_packet(fd,
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_logical_link_create_short_rsp.hex",
                           "logical link short create rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_generic_error_invalid_msg_size_ntf.hex",
+                          "logical link short create generic error ntf");
 
     close(fd);
     stop_server(&server);
@@ -755,6 +795,7 @@ static void test_control_edge_cases_over_tcp(void) {
 int main(void) {
     test_shell_compatible_core_and_session_flow_over_tcp();
     test_delayed_notification_flow_over_tcp();
+    test_core_generic_error_flow_over_tcp();
     test_ranging_stream_flow_over_tcp();
     test_data_message_edge_cases_over_tcp();
     test_control_edge_cases_over_tcp();

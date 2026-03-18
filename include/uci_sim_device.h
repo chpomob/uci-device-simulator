@@ -135,6 +135,7 @@ int uci_sim_session_get_config(const uci_sim_session_t* session,
                                uint8_t config_id,
                                uint8_t* value,
                                uint8_t* value_len);
+uint8_t uci_sim_session_get_range_data_ntf_config(const uci_sim_session_t* session);
 int uci_sim_device_store_config(uci_sim_device_t* device,
                                 uint8_t config_id,
                                 const uint8_t* value,

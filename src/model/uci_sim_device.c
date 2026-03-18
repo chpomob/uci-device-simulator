@@ -277,6 +277,23 @@ int uci_sim_session_get_config(const uci_sim_session_t* session,
     return -1;
 }
 
+uint8_t uci_sim_session_get_range_data_ntf_config(const uci_sim_session_t* session) {
+    uint8_t value = 0x01;
+    uint8_t value_len = 0;
+
+    if (!session) {
+        return 0x01;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_SESSION_INFO_NTF_CONFIG, &value, &value_len) != 0 ||
+        value_len != 1) {
+        return 0x01;
+    }
+
+    return value;
+}
+
+
 int uci_sim_device_store_config(uci_sim_device_t* device,
                                 uint8_t config_id,
                                 const uint8_t* value,
@@ -528,6 +545,7 @@ int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
     const uci_sim_profile_t* profile;
     uint32_t sequence_number;
     uint32_t measurement_base_cm;
+    uint8_t ntf_config;
 
     if (!device || !session || !result) {
         return -1;
@@ -539,37 +557,40 @@ int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
     }
 
     profile = device->profile ? device->profile : uci_sim_default_profile();
-    if (profile->range_data_payload_len == 0 ||
-        profile->range_data_payload_len > UCI_SIM_MAX_PAYLOAD) {
-        return -1;
-    }
-
-    memset(&notification, 0, sizeof(notification));
-    notification.mt = UCI_MT_NOTIFICATION;
-    notification.pbf = UCI_PBF_COMPLETE;
-    notification.gid = UCI_GID_SESSION_CONTROL;
-    notification.oid = profile->range_data_notification_oid;
-    notification.payload_len = profile->range_data_payload_len;
-    payload = notification.payload;
-    memcpy(payload, profile->range_data_payload_template, profile->range_data_payload_len);
-
-    sequence_number = device->next_ranging_sequence++;
+    ntf_config = uci_sim_session_get_range_data_ntf_config(session);
     measurement_base_cm = profile->range_data_distance_base_cm +
                           (session->ranging_count * profile->range_data_distance_step_cm);
 
-    write_u32_le(&payload[profile->range_data_sequence_offset], sequence_number);
-    write_u32_le(&payload[profile->range_data_primary_session_id_offset], session->session_id);
-    write_u32_le(&payload[profile->range_data_secondary_session_id_offset], session->session_id);
-    write_u32_le(&payload[profile->range_data_interval_offset], profile->ranging_interval_ms);
-    payload[profile->range_data_measurement_distance_offset] = (uint8_t)(measurement_base_cm & 0xFFU);
-    payload[profile->range_data_measurement_distance_offset + 1] =
-        (uint8_t)((measurement_base_cm >> 8) & 0xFFU);
+    if (ntf_config != 0x00) {
+        if (profile->range_data_payload_len == 0 ||
+            profile->range_data_payload_len > UCI_SIM_MAX_PAYLOAD) {
+            return -1;
+        }
+
+        memset(&notification, 0, sizeof(notification));
+        notification.mt = UCI_MT_NOTIFICATION;
+        notification.pbf = UCI_PBF_COMPLETE;
+        notification.gid = UCI_GID_SESSION_CONTROL;
+        notification.oid = profile->range_data_notification_oid;
+        notification.payload_len = profile->range_data_payload_len;
+        payload = notification.payload;
+        memcpy(payload, profile->range_data_payload_template, profile->range_data_payload_len);
+
+        sequence_number = device->next_ranging_sequence++;
+        write_u32_le(&payload[profile->range_data_sequence_offset], sequence_number);
+        write_u32_le(&payload[profile->range_data_primary_session_id_offset], session->session_id);
+        write_u32_le(&payload[profile->range_data_secondary_session_id_offset], session->session_id);
+        write_u32_le(&payload[profile->range_data_interval_offset], profile->ranging_interval_ms);
+        payload[profile->range_data_measurement_distance_offset] = (uint8_t)(measurement_base_cm & 0xFFU);
+        payload[profile->range_data_measurement_distance_offset + 1] =
+            (uint8_t)((measurement_base_cm >> 8) & 0xFFU);
+
+        if (uci_sim_device_queue_notification(device, &notification) != 0) {
+            return -1;
+        }
+    }
 
     session->ranging_count++;
     session->ranging_stream_remaining--;
-    if (uci_sim_device_queue_notification(device, &notification) != 0) {
-        return -1;
-    }
-
     return 0;
 }

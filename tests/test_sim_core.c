@@ -664,6 +664,66 @@ static void test_ranging_stream_scenario(void) {
     PASS();
 }
 
+
+static void test_ranging_stream_respects_info_ntf_disable(void) {
+    uci_sim_engine_t engine;
+    uci_sim_packet_t request;
+    uci_sim_packet_t response;
+    uci_sim_packet_t notification;
+
+    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging disable init failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging disable init response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging disable init notification missing");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 1;
+    request.payload[5] = UCI_APP_CONFIG_SESSION_INFO_NTF_CONFIG;
+    request.payload[6] = 1;
+    request.payload[7] = 0x00;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging disable set_app_config failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging disable set_app_config response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging disable set_app_config should not notify");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging disable start failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging disable start response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging disable status notification missing");
+    ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, notification.oid, "ranging disable status oid");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging disable should suppress range data after start");
+    ASSERT_EQ_U8(1, (uint8_t)engine.device.sessions[0].ranging_count, "ranging disable count after start");
+    ASSERT_EQ_U8(engine.device.profile->ranging_stream_burst_count - 1,
+                 engine.device.sessions[0].ranging_stream_remaining,
+                 "ranging disable remaining after start");
+
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_GET_STATE;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging disable get state failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging disable get state response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging disable should suppress follow-up range data");
+    ASSERT_EQ_U8(2, (uint8_t)engine.device.sessions[0].ranging_count, "ranging disable count after follow-up");
+
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 1000) == 0, "ranging disable async tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging disable should suppress async range data");
+    ASSERT_EQ_U8(3, (uint8_t)engine.device.sessions[0].ranging_count, "ranging disable count after async tick");
+    ASSERT_EQ_U8(0, engine.device.sessions[0].ranging_stream_remaining, "ranging disable remaining after async tick");
+    PASS();
+}
+
 static void test_ranging_stream_progresses_to_completion(void) {
     uci_sim_engine_t engine;
     uci_sim_packet_t request;
@@ -2415,6 +2475,7 @@ int main(void) {
     test_session_get_count();
     test_session_query_data_size_and_ranging_count();
     test_ranging_stream_scenario();
+    test_ranging_stream_respects_info_ntf_disable();
     test_ranging_stream_progresses_to_completion();
     test_session_app_config_storage();
     test_profile_rejects_unsupported_session_features();

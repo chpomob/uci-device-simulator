@@ -113,6 +113,10 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x19` | `DATA_REPETITION_COUNT` | `supported` | Default-profile stored/retrievable |
 | `0x1A` | `RANGING_TIME_STRUCT` | `supported` | Default-profile stored/retrievable |
 | `0x1B` | `SLOTS_PER_RR` | `supported` | Default-profile stored/retrievable |
+| `0x1C` | `TX_ADAPTIVE_PAYLOAD_POWER` | `supported` | Default-profile stored/retrievable |
+| `0x1D` | `RNG_DATA_NTF_AOA_BOUND` | `supported` | Default-profile stored/retrievable |
+| `0x1E` | `RESPONDER_SLOT_INDEX` | `supported` | Default-profile stored/retrievable |
+| `0x1F` | `PRF_MODE` | `supported` | Default-profile stored/retrievable |
 | `0x26` | `MAC_ADDRESS_MODE` | `supported` | Default-profile stored/retrievable |
 | `0x2C` | `HOPPING_MODE` | `supported` | Default-profile stored/retrievable |
 | `0x2E` | `RESULT_REPORT_CONFIG` | `supported` | Default-profile stored/retrievable |
@@ -126,7 +130,7 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x3D` | `DL_TDOA_RANGING_METHOD` | `supported` | Default-profile stored/retrievable |
 | `0x3E` | `DL_TDOA_TX_TIMESTAMP_CONF` | `supported` | Default-profile stored/retrievable |
 | `0x3F` | `DL_TDOA_HOP_COUNT` | `supported` | Default-profile stored/retrievable |
-| `0x0A`..`0x4D` | Standard FiRa app-config range | `missing` | Not yet modeled |
+| remaining `0x20`..`0x4D` and uncovered IDs below `0x20` | Standard FiRa app-config range | `missing` | Not yet modeled |
 | `0xA0`..`0xEC` | CCC / vendor app-config extensions | `missing` | Not yet modeled |
 
 ## Vendor and Extended Groups

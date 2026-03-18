@@ -81,7 +81,7 @@ Cherry/Qorvo standard device config parameters are intentionally small in the st
 
 Standard session app-config coverage is still narrow, but the default profile
 now supports multi-item and zero-count `GET_APP_CONFIG` retrieval for the
-stored supported TLVs below.
+stored supported TLVs below. This now includes the basic ranging/session control fields that shape PHY/session behavior in the default profile.
 
 | Config ID | Name | Status | Notes |
 |---|---:|---|---|
@@ -95,12 +95,22 @@ stored supported TLVs below.
 | `0x07` | `DST_MAC_ADDRESS` | `supported` | Default-profile stored/retrievable |
 | `0x08` | `SLOT_DURATION` | `supported` | Default-profile stored/retrievable |
 | `0x09` | `RANGING_INTERVAL` | `supported` | Default-profile stored/retrievable as `RANGING_DURATION` in the current shell surface |
+| `0x0A` | `STS_INDEX` | `supported` | Default-profile stored/retrievable |
 | `0x0B` | `MAC_FCS_TYPE` | `supported` | Default-profile stored/retrievable |
 | `0x0C` | `RANGING_ROUND_CONTROL` | `supported` | Default-profile stored/retrievable |
 | `0x0D` | `AOA_RESULT_REQ` | `supported` | Default-profile stored/retrievable |
 | `0x0E` | `SESSION_INFO_NTF_CONFIG` | `supported` | Default-profile stored/retrievable through the current shell surface as `rng_data_ntf` |
+| `0x0F` | `RNG_DATA_NTF_PROXIMITY_NEAR` | `supported` | Default-profile stored/retrievable |
+| `0x10` | `RNG_DATA_NTF_PROXIMITY_FAR` | `supported` | Default-profile stored/retrievable |
 | `0x11` | `DEVICE_ROLE` | `supported` | Default-profile stored/retrievable |
 | `0x12` | `RFRAME_CONFIG` | `supported` | Default-profile stored/retrievable |
+| `0x13` | `RSSI_REPORTING` | `supported` | Default-profile stored/retrievable |
+| `0x14` | `PREAMBLE_CODE_INDEX` | `supported` | Default-profile stored/retrievable |
+| `0x15` | `SFD_ID` | `supported` | Default-profile stored/retrievable |
+| `0x16` | `PSDU_DATA_RATE` | `supported` | Default-profile stored/retrievable |
+| `0x17` | `PREAMBLE_DURATION` | `supported` | Default-profile stored/retrievable |
+| `0x18` | `LINK_LAYER_MODE` | `supported` | Default-profile stored/retrievable |
+| `0x19` | `DATA_REPETITION_COUNT` | `supported` | Default-profile stored/retrievable |
 | `0x1A` | `RANGING_TIME_STRUCT` | `supported` | Default-profile stored/retrievable |
 | `0x1B` | `SLOTS_PER_RR` | `supported` | Default-profile stored/retrievable |
 | `0x26` | `MAC_ADDRESS_MODE` | `supported` | Default-profile stored/retrievable |

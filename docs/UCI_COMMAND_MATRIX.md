@@ -137,6 +137,12 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x31` | `BPRF_PHR_DATA_RATE` | `supported` | Default-profile stored/retrievable |
 | `0x32` | `MAX_NUMBER_OF_MEASUREMENTS` | `supported` | Default-profile stored/retrievable |
 | `0x33` | `UL_TDOA_TX_INTERVAL` | `supported` | Default-profile stored/retrievable |
+| `0x34` | `UL_TDOA_RANDOM_WINDOW` | `supported` | Default-profile stored/retrievable |
+| `0x35` | `STS_LENGTH` | `supported` | Default-profile stored/retrievable |
+| `0x36` | `SUSPEND_RANGING_ROUNDS` | `supported` | Default-profile stored/retrievable |
+| `0x37` | `UL_TDOA_NTF_REPORT_CONFIG` | `supported` | Default-profile stored/retrievable |
+| `0x38` | `UL_TDOA_DEVICE_ID` | `supported` | Default-profile stored/retrievable |
+| `0x39` | `UL_TDOA_TX_TIMESTAMP` | `supported` | Default-profile stored/retrievable |
 | `0x3A` | `MIN_FRAMES_PER_RR` | `supported` | Default-profile stored/retrievable |
 | `0x3B` | `MTU_SIZE` | `supported` | Default-profile stored/retrievable |
 | `0x3C` | `INTER_FRAME_INTERVAL` | `supported` | Default-profile stored/retrievable |

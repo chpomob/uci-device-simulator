@@ -1136,7 +1136,44 @@ static void test_session_app_config_storage(void) {
     request.payload[10] = 0x00;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set ul tdoa tx interval app config failed");
 
+    request.payload[5] = 0x34;
+    request.payload[6] = 4;
+    request.payload[7] = 0xFA;
+    request.payload[8] = 0x00;
+    request.payload[9] = 0x00;
+    request.payload[10] = 0x00;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set ul tdoa random window app config failed");
+
     request.payload_len = 8;
+    request.payload[5] = 0x35;
+    request.payload[6] = 1;
+    request.payload[7] = 0x02;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set sts length app config failed");
+
+    request.payload[5] = 0x36;
+    request.payload[6] = 1;
+    request.payload[7] = 0x03;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set suspend ranging rounds app config failed");
+
+    request.payload_len = 10;
+    request.payload[5] = 0x37;
+    request.payload[6] = 3;
+    request.payload[7] = 0x01;
+    request.payload[8] = 0x02;
+    request.payload[9] = 0x03;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set ul tdoa ntf report config app config failed");
+
+    request.payload_len = 8;
+    request.payload[5] = 0x38;
+    request.payload[6] = 1;
+    request.payload[7] = 0x07;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set ul tdoa device id app config failed");
+
+    request.payload[5] = 0x39;
+    request.payload[6] = 1;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set ul tdoa tx timestamp app config failed");
+
     request.payload[5] = 0x3A;
     request.payload[6] = 1;
     request.payload[7] = 0x02;
@@ -1207,12 +1244,12 @@ static void test_session_app_config_storage(void) {
     ASSERT_EQ_U8(0x03, result.response.payload[5], "get multi app config second id");
     ASSERT_EQ_U8(0x02, result.response.payload[7], "get multi app config second value");
 
-    request.payload_len = 59;
+    request.payload_len = 65;
     request.payload[0] = 0x78;
     request.payload[1] = 0x56;
     request.payload[2] = 0x34;
     request.payload[3] = 0x12;
-    request.payload[4] = 54;
+    request.payload[4] = 60;
     request.payload[5] = 0x01;
     request.payload[6] = 0x02;
     request.payload[7] = 0x04;
@@ -1261,15 +1298,21 @@ static void test_session_app_config_storage(void) {
     request.payload[50] = 0x31;
     request.payload[51] = 0x32;
     request.payload[52] = 0x33;
-    request.payload[53] = 0x3A;
-    request.payload[54] = 0x3B;
-    request.payload[55] = 0x3C;
-    request.payload[56] = 0x3D;
-    request.payload[57] = 0x3E;
-    request.payload[58] = 0x3F;
+    request.payload[53] = 0x34;
+    request.payload[54] = 0x35;
+    request.payload[55] = 0x36;
+    request.payload[56] = 0x37;
+    request.payload[57] = 0x38;
+    request.payload[58] = 0x39;
+    request.payload[59] = 0x3A;
+    request.payload[60] = 0x3B;
+    request.payload[61] = 0x3C;
+    request.payload[62] = 0x3D;
+    request.payload[63] = 0x3E;
+    request.payload[64] = 0x3F;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get extended app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get extended app config status");
-    ASSERT_EQ_U8(54, result.response.payload[1], "get extended app config count");
+    ASSERT_EQ_U8(60, result.response.payload[1], "get extended app config count");
     ASSERT_EQ_U8(0x01, result.response.payload[2], "get extended app config first id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x0A,
                                              (const uint8_t[]){ 0x05, 0x00, 0x00, 0x00 }, 4),
@@ -1352,6 +1395,24 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x30,
                                              (const uint8_t[]){ 0x78, 0x56, 0x34, 0x12 }, 4),
                 "get extended app config missing sub session id");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x34,
+                                             (const uint8_t[]){ 0xFA, 0x00, 0x00, 0x00 }, 4),
+                "get extended app config missing ul tdoa random window");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x35,
+                                             (const uint8_t[]){ 0x02 }, 1),
+                "get extended app config missing sts length");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x36,
+                                             (const uint8_t[]){ 0x03 }, 1),
+                "get extended app config missing suspend ranging rounds");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x37,
+                                             (const uint8_t[]){ 0x01, 0x02, 0x03 }, 3),
+                "get extended app config missing ul tdoa ntf report config");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x38,
+                                             (const uint8_t[]){ 0x07 }, 1),
+                "get extended app config missing ul tdoa device id");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x39,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get extended app config missing ul tdoa tx timestamp");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x3F,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get extended app config missing dl tdoa hop count");
@@ -1363,7 +1424,7 @@ static void test_session_app_config_storage(void) {
     request.payload[4] = 0;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get all app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get all app config status");
-    ASSERT_EQ_U8(58, result.response.payload[1], "get all app config count");
+    ASSERT_EQ_U8(64, result.response.payload[1], "get all app config count");
     ASSERT_EQ_U8(0x00, result.response.payload[2], "get all app config first id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x0A,
                                              (const uint8_t[]){ 0x05, 0x00, 0x00, 0x00 }, 4),
@@ -1449,6 +1510,24 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x30,
                                              (const uint8_t[]){ 0x78, 0x56, 0x34, 0x12 }, 4),
                 "get all app config missing sub session id");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x34,
+                                             (const uint8_t[]){ 0xFA, 0x00, 0x00, 0x00 }, 4),
+                "get all app config missing ul tdoa random window");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x35,
+                                             (const uint8_t[]){ 0x02 }, 1),
+                "get all app config missing sts length");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x36,
+                                             (const uint8_t[]){ 0x03 }, 1),
+                "get all app config missing suspend ranging rounds");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x37,
+                                             (const uint8_t[]){ 0x01, 0x02, 0x03 }, 3),
+                "get all app config missing ul tdoa ntf report config");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x38,
+                                             (const uint8_t[]){ 0x07 }, 1),
+                "get all app config missing ul tdoa device id");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x39,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get all app config missing ul tdoa tx timestamp");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x3F,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing dl tdoa hop count");

@@ -713,6 +713,16 @@ static void test_control_edge_cases_over_tcp(void) {
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_logical_link_close_short_rsp.hex",
                           "logical link short close rsp");
 
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_logical_link_create_short_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load logical link short create");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write logical link short create");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_logical_link_create_short_rsp.hex",
+                          "logical link short create rsp");
+
     close(fd);
     stop_server(&server);
     PASS();

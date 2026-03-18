@@ -741,6 +741,11 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
             uci_sim_logical_link_t* entry = NULL;
             uint8_t status = UCI_STATUS_OK;
 
+            if (request->payload_len < 5) {
+                make_status_response(request, result, UCI_STATUS_INVALID_MSG_SIZE);
+                return -1;
+            }
+
             if (requested_id != 0xFF && uci_sim_session_find_logical_link(session, requested_id)) {
                 status = UCI_STATUS_INVALID_PARAM;
             } else if (session->logical_link_count >= UCI_SIM_MAX_LOGICAL_LINKS) {

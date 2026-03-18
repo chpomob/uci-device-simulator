@@ -1158,6 +1158,14 @@ static void test_logical_link_lifecycle(void) {
     request.pbf = UCI_PBF_COMPLETE;
     request.gid = UCI_GID_SESSION_CONTROL;
     request.oid = UCI_SESSION_LOGICAL_LINK_CREATE;
+    request.payload_len = 4;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "logical link short create should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_MSG_SIZE, result.response.payload[0], "logical link short create status");
+
     request.payload_len = 7;
     request.payload[0] = 0x78;
     request.payload[1] = 0x56;

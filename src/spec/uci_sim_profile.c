@@ -106,9 +106,11 @@ static const uci_sim_profile_t k_default_profile = {
     },
     .supported_core_config_id_count = 3,
     .supported_session_app_config_ids = {
-        0x00
+        0x00,
+        0x03,
+        0x11
     },
-    .supported_session_app_config_id_count = 1,
+    .supported_session_app_config_id_count = 3,
     .supported_notification_oids = {
         UCI_CORE_DEVICE_STATUS_NTF,
         UCI_SESSION_STATUS_NTF,

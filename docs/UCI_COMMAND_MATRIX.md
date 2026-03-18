@@ -79,20 +79,23 @@ Cherry/Qorvo standard device config parameters are intentionally small in the st
 
 ### Session App Config IDs
 
-Standard session app-config coverage is still very narrow today.
+Standard session app-config coverage is still narrow, but the default profile
+now supports multi-item and zero-count `GET_APP_CONFIG` retrieval for the
+stored supported TLVs below.
 
 | Config ID | Name | Status | Notes |
 |---|---:|---|---|
-| `0x00` | `DEVICE_TYPE` | `supported` | Only app-config currently enabled in default profile |
+| `0x00` | `DEVICE_TYPE` | `supported` | Default-profile stored/retrievable |
 | `0x01` | `RANGING_ROUND_USAGE` | `missing` | In Cherry/Qorvo headers, not yet modeled |
 | `0x02` | `STS_CONFIG` | `missing` | Not yet modeled |
-| `0x03` | `MULTI_NODE_MODE` | `missing` | Not yet modeled |
+| `0x03` | `MULTI_NODE_MODE` | `supported` | Default-profile stored/retrievable |
 | `0x04` | `CHANNEL_NUMBER` | `missing` | Not yet modeled |
 | `0x05` | `NUMBER_OF_CONTROLEES` | `missing` | Not yet modeled |
 | `0x06` | `DEVICE_MAC_ADDRESS` | `missing` | Not yet modeled |
 | `0x07` | `DST_MAC_ADDRESS` | `missing` | Not yet modeled |
 | `0x08` | `SLOT_DURATION` | `missing` | Not yet modeled |
 | `0x09` | `RANGING_INTERVAL` | `missing` | Simulator uses a profile timing value but not app-config command support yet |
+| `0x11` | `DEVICE_ROLE` | `supported` | Default-profile stored/retrievable |
 | `0x0A`..`0x4D` | Standard FiRa app-config range | `missing` | Not yet modeled |
 | `0xA0`..`0xEC` | CCC / vendor app-config extensions | `missing` | Not yet modeled |
 

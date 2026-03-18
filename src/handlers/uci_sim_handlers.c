@@ -666,7 +666,34 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
 
     {
         size_t response_offset = 2;
-        while (processed < count && offset < request->payload_len) {
+        if (count == 0) {
+            size_t i;
+            const uci_sim_profile_t* profile = device->profile ? device->profile : uci_sim_default_profile();
+
+            for (i = 0; i < profile->supported_session_app_config_id_count; ++i) {
+                uint8_t config_id = profile->supported_session_app_config_ids[i];
+                uint8_t value_len = 0;
+                uint8_t value[UCI_SIM_MAX_CONFIG_VALUE] = {0};
+
+                if (uci_sim_session_get_config(session, config_id, value, &value_len) != 0) {
+                    continue;
+                }
+                if (response_offset + 2 + value_len > UCI_SIM_MAX_PAYLOAD) {
+                    result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
+                    break;
+                }
+
+                result->response.payload[response_offset++] = config_id;
+                result->response.payload[response_offset++] = value_len;
+                if (value_len > 0) {
+                    memcpy(&result->response.payload[response_offset], value, value_len);
+                    response_offset += value_len;
+                }
+                processed++;
+            }
+        }
+
+        while (count > 0 && processed < count && offset < request->payload_len) {
             uint8_t config_id = request->payload[offset++];
             uint8_t value_len = 0;
             uint8_t value[UCI_SIM_MAX_CONFIG_VALUE] = {0};

@@ -712,6 +712,14 @@ static void test_session_app_config_storage(void) {
     ASSERT_EQ_U8(0, result.response.payload[1], "set app config count");
     ASSERT_EQ_U8(2, result.response.payload_len, "set app config response length");
 
+    request.payload[5] = 0x03;
+    request.payload[7] = 0x02;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set second app config failed");
+
+    request.payload[5] = 0x11;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set third app config failed");
+
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;
     request.pbf = UCI_PBF_COMPLETE;
@@ -731,6 +739,35 @@ static void test_session_app_config_storage(void) {
     ASSERT_EQ_U8(0x00, result.response.payload[2], "get app config id");
     ASSERT_EQ_U8(1, result.response.payload[3], "get app config len");
     ASSERT_EQ_U8(0x01, result.response.payload[4], "get app config value");
+
+    request.payload_len = 7;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = 2;
+    request.payload[5] = 0x00;
+    request.payload[6] = 0x03;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get multi app config failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get multi app config status");
+    ASSERT_EQ_U8(2, result.response.payload[1], "get multi app config count");
+    ASSERT_EQ_U8(0x00, result.response.payload[2], "get multi app config first id");
+    ASSERT_EQ_U8(0x01, result.response.payload[4], "get multi app config first value");
+    ASSERT_EQ_U8(0x03, result.response.payload[5], "get multi app config second id");
+    ASSERT_EQ_U8(0x02, result.response.payload[7], "get multi app config second value");
+
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = 0;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get all app config failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get all app config status");
+    ASSERT_EQ_U8(3, result.response.payload[1], "get all app config count");
+    ASSERT_EQ_U8(0x00, result.response.payload[2], "get all app config first id");
+    ASSERT_EQ_U8(0x03, result.response.payload[5], "get all app config second id");
+    ASSERT_EQ_U8(0x11, result.response.payload[8], "get all app config third id");
     PASS();
 }
 

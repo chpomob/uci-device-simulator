@@ -103,6 +103,8 @@ stored supported TLVs below.
 | `0x12` | `RFRAME_CONFIG` | `supported` | Default-profile stored/retrievable |
 | `0x1A` | `RANGING_TIME_STRUCT` | `supported` | Default-profile stored/retrievable |
 | `0x1B` | `SLOTS_PER_RR` | `supported` | Default-profile stored/retrievable |
+| `0x26` | `MAC_ADDRESS_MODE` | `supported` | Default-profile stored/retrievable |
+| `0x2C` | `HOPPING_MODE` | `supported` | Default-profile stored/retrievable |
 | `0x2E` | `RESULT_REPORT_CONFIG` | `supported` | Default-profile stored/retrievable |
 | `0x2F` | `IN_BAND_TERMINATION_ATTEMPT_COUNT` | `supported` | Default-profile stored/retrievable |
 | `0x31` | `BPRF_PHR_DATA_RATE` | `supported` | Default-profile stored/retrievable |
@@ -112,6 +114,8 @@ stored supported TLVs below.
 | `0x3B` | `MTU_SIZE` | `supported` | Default-profile stored/retrievable |
 | `0x3C` | `INTER_FRAME_INTERVAL` | `supported` | Default-profile stored/retrievable |
 | `0x3D` | `DL_TDOA_RANGING_METHOD` | `supported` | Default-profile stored/retrievable |
+| `0x3E` | `DL_TDOA_TX_TIMESTAMP_CONF` | `supported` | Default-profile stored/retrievable |
+| `0x3F` | `DL_TDOA_HOP_COUNT` | `supported` | Default-profile stored/retrievable |
 | `0x0A`..`0x4D` | Standard FiRa app-config range | `missing` | Not yet modeled |
 | `0xA0`..`0xEC` | CCC / vendor app-config extensions | `missing` | Not yet modeled |
 

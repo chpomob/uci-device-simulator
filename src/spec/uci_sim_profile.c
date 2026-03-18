@@ -149,9 +149,16 @@ static const uci_sim_profile_t k_default_profile = {
         0x24,
         0x25,
         0x26,
+        0x27,
+        0x28,
+        0x29,
+        0x2A,
+        0x2B,
         0x2C,
+        0x2D,
         0x2E,
         0x2F,
+        0x30,
         0x31,
         0x32,
         0x33,
@@ -162,7 +169,7 @@ static const uci_sim_profile_t k_default_profile = {
         0x3E,
         0x3F
     },
-    .supported_session_app_config_id_count = 51,
+    .supported_session_app_config_id_count = 58,
     .default_session_app_config_ids = {
         0x00,
         0x01,
@@ -203,9 +210,16 @@ static const uci_sim_profile_t k_default_profile = {
         0x24,
         0x25,
         0x26,
+        0x27,
+        0x28,
+        0x29,
+        0x2A,
+        0x2B,
         0x2C,
+        0x2D,
         0x2E,
         0x2F,
+        0x30,
         0x31,
         0x32,
         0x33,
@@ -217,7 +231,7 @@ static const uci_sim_profile_t k_default_profile = {
         0x3F
     },
     .default_session_app_config_value_lens = {
-        1, 1, 1, 1, 1, 1, 2, 2, 2, 4, 4, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 2, 1, 1, 2, 1, 1, 1, 1, 1, 2, 4, 1, 2, 1, 1, 1, 1
+        1, 1, 1, 1, 1, 1, 2, 2, 2, 4, 4, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 2, 1, 1, 2, 1, 1, 2, 8, 1, 1, 4, 1, 1, 1, 2, 1, 4, 2, 4, 1, 2, 1, 1, 1, 1
     },
     .default_session_app_config_values = {
         { 0x01 },
@@ -258,6 +272,12 @@ static const uci_sim_profile_t k_default_profile = {
         { 0x00 },
         { 0x00, 0x00 },
         { 0x32 },
+        { 0x00, 0x00 },
+        { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+        { 0x01 },
+        { 0x03 },
+        { 0x00, 0x00, 0x00, 0x00 },
+        { 0x00 },
         { 0x00 },
         { 0x00 },
         { 0x00 },
@@ -272,7 +292,7 @@ static const uci_sim_profile_t k_default_profile = {
         { 0x03 },
         { 0x01 }
     },
-    .default_session_app_config_count = 51,
+    .default_session_app_config_count = 58,
     .supported_notification_oids = {
         UCI_CORE_DEVICE_STATUS_NTF,
         UCI_SESSION_STATUS_NTF,

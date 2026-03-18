@@ -124,9 +124,16 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x24` | `KEY_ROTATION_RATE` | `supported` | Default-profile stored/retrievable |
 | `0x25` | `SESSION_PRIORITY` | `supported` | Default-profile stored/retrievable |
 | `0x26` | `MAC_ADDRESS_MODE` | `supported` | Default-profile stored/retrievable |
+| `0x27` | `VENDOR_ID` | `supported` | Default-profile stored/retrievable |
+| `0x28` | `STATIC_STS_IV` | `supported` | Default-profile stored/retrievable |
+| `0x29` | `NUMBER_OF_STS_SEGMENTS` | `supported` | Default-profile stored/retrievable |
+| `0x2A` | `MAX_RR_RETRY` | `supported` | Default-profile stored/retrievable |
+| `0x2B` | `UWB_INITIATION_TIME` | `supported` | Default-profile stored/retrievable |
 | `0x2C` | `HOPPING_MODE` | `supported` | Default-profile stored/retrievable |
+| `0x2D` | `BLOCK_STRIDE_LENGTH` | `supported` | Default-profile stored/retrievable |
 | `0x2E` | `RESULT_REPORT_CONFIG` | `supported` | Default-profile stored/retrievable |
 | `0x2F` | `IN_BAND_TERMINATION_ATTEMPT_COUNT` | `supported` | Default-profile stored/retrievable |
+| `0x30` | `SUB_SESSION_ID` | `supported` | Default-profile stored/retrievable |
 | `0x31` | `BPRF_PHR_DATA_RATE` | `supported` | Default-profile stored/retrievable |
 | `0x32` | `MAX_NUMBER_OF_MEASUREMENTS` | `supported` | Default-profile stored/retrievable |
 | `0x33` | `UL_TDOA_TX_INTERVAL` | `supported` | Default-profile stored/retrievable |
@@ -136,7 +143,7 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x3D` | `DL_TDOA_RANGING_METHOD` | `supported` | Default-profile stored/retrievable |
 | `0x3E` | `DL_TDOA_TX_TIMESTAMP_CONF` | `supported` | Default-profile stored/retrievable |
 | `0x3F` | `DL_TDOA_HOP_COUNT` | `supported` | Default-profile stored/retrievable |
-| remaining `0x20`..`0x4D` and uncovered IDs below `0x20` | Standard FiRa app-config range | `missing` | Not yet modeled |
+| remaining uncovered IDs in the standard FiRa app-config range | Standard FiRa app-config range | `missing` | Not yet modeled |
 | `0xA0`..`0xEC` | CCC / vendor app-config extensions | `missing` | Not yet modeled |
 
 ## Vendor and Extended Groups

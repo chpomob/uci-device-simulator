@@ -217,12 +217,26 @@ static void test_default_profile_feature_matrix(void) {
                 "profile should support app config 0x1B");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x26),
                 "profile should support app config 0x26");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x27),
+                "profile should support app config 0x27");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x28),
+                "profile should support app config 0x28");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x29),
+                "profile should support app config 0x29");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x2A),
+                "profile should support app config 0x2A");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x2B),
+                "profile should support app config 0x2B");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x2C),
                 "profile should support app config 0x2C");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x2D),
+                "profile should support app config 0x2D");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x2E),
                 "profile should support app config 0x2E");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x2F),
                 "profile should support app config 0x2F");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x30),
+                "profile should support app config 0x30");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x31),
                 "profile should support app config 0x31");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x32),
@@ -1031,10 +1045,56 @@ static void test_session_app_config_storage(void) {
     request.payload[7] = 0x01;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set mac address mode app config failed");
 
+    request.payload_len = 9;
+    request.payload[5] = 0x27;
+    request.payload[6] = 2;
+    request.payload[7] = 0x34;
+    request.payload[8] = 0x12;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set vendor id app config failed");
+
+    request.payload_len = 15;
+    request.payload[5] = 0x28;
+    request.payload[6] = 8;
+    request.payload[7] = 0x01;
+    request.payload[8] = 0x02;
+    request.payload[9] = 0x03;
+    request.payload[10] = 0x04;
+    request.payload[11] = 0x05;
+    request.payload[12] = 0x06;
+    request.payload[13] = 0x07;
+    request.payload[14] = 0x08;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set static sts iv app config failed");
+
+    request.payload_len = 8;
+    request.payload[5] = 0x29;
+    request.payload[6] = 1;
+    request.payload[7] = 0x02;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set number of sts segments app config failed");
+
+    request.payload[5] = 0x2A;
+    request.payload[6] = 1;
+    request.payload[7] = 0x04;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set max rr retry app config failed");
+
+    request.payload_len = 11;
+    request.payload[5] = 0x2B;
+    request.payload[6] = 4;
+    request.payload[7] = 0xE8;
+    request.payload[8] = 0x03;
+    request.payload[9] = 0x00;
+    request.payload[10] = 0x00;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set uwb initiation time app config failed");
+
     request.payload[5] = 0x2C;
     request.payload[6] = 1;
     request.payload[7] = 0x01;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set hopping mode app config failed");
+
+    request.payload_len = 8;
+    request.payload[5] = 0x2D;
+    request.payload[6] = 1;
+    request.payload[7] = 0x05;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set block stride length app config failed");
 
     request.payload[5] = 0x2E;
     request.payload[6] = 1;
@@ -1045,6 +1105,15 @@ static void test_session_app_config_storage(void) {
     request.payload[6] = 1;
     request.payload[7] = 0x04;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set in-band termination attempt count app config failed");
+
+    request.payload_len = 11;
+    request.payload[5] = 0x30;
+    request.payload[6] = 4;
+    request.payload[7] = 0x78;
+    request.payload[8] = 0x56;
+    request.payload[9] = 0x34;
+    request.payload[10] = 0x12;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set sub session id app config failed");
 
     request.payload[5] = 0x31;
     request.payload[6] = 1;
@@ -1138,12 +1207,12 @@ static void test_session_app_config_storage(void) {
     ASSERT_EQ_U8(0x03, result.response.payload[5], "get multi app config second id");
     ASSERT_EQ_U8(0x02, result.response.payload[7], "get multi app config second value");
 
-    request.payload_len = 52;
+    request.payload_len = 59;
     request.payload[0] = 0x78;
     request.payload[1] = 0x56;
     request.payload[2] = 0x34;
     request.payload[3] = 0x12;
-    request.payload[4] = 47;
+    request.payload[4] = 54;
     request.payload[5] = 0x01;
     request.payload[6] = 0x02;
     request.payload[7] = 0x04;
@@ -1179,21 +1248,28 @@ static void test_session_app_config_storage(void) {
     request.payload[37] = 0x24;
     request.payload[38] = 0x25;
     request.payload[39] = 0x26;
-    request.payload[40] = 0x2C;
-    request.payload[41] = 0x2E;
-    request.payload[42] = 0x2F;
-    request.payload[43] = 0x31;
-    request.payload[44] = 0x32;
-    request.payload[45] = 0x33;
-    request.payload[46] = 0x3A;
-    request.payload[47] = 0x3B;
-    request.payload[48] = 0x3C;
-    request.payload[49] = 0x3D;
-    request.payload[50] = 0x3E;
-    request.payload[51] = 0x3F;
+    request.payload[40] = 0x27;
+    request.payload[41] = 0x28;
+    request.payload[42] = 0x29;
+    request.payload[43] = 0x2A;
+    request.payload[44] = 0x2B;
+    request.payload[45] = 0x2C;
+    request.payload[46] = 0x2D;
+    request.payload[47] = 0x2E;
+    request.payload[48] = 0x2F;
+    request.payload[49] = 0x30;
+    request.payload[50] = 0x31;
+    request.payload[51] = 0x32;
+    request.payload[52] = 0x33;
+    request.payload[53] = 0x3A;
+    request.payload[54] = 0x3B;
+    request.payload[55] = 0x3C;
+    request.payload[56] = 0x3D;
+    request.payload[57] = 0x3E;
+    request.payload[58] = 0x3F;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get extended app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get extended app config status");
-    ASSERT_EQ_U8(47, result.response.payload[1], "get extended app config count");
+    ASSERT_EQ_U8(54, result.response.payload[1], "get extended app config count");
     ASSERT_EQ_U8(0x01, result.response.payload[2], "get extended app config first id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x0A,
                                              (const uint8_t[]){ 0x05, 0x00, 0x00, 0x00 }, 4),
@@ -1255,6 +1331,27 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x25,
                                              (const uint8_t[]){ 0x4B }, 1),
                 "get extended app config missing session priority");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x27,
+                                             (const uint8_t[]){ 0x34, 0x12 }, 2),
+                "get extended app config missing vendor id");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x28,
+                                             (const uint8_t[]){ 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 }, 8),
+                "get extended app config missing static sts iv");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x29,
+                                             (const uint8_t[]){ 0x02 }, 1),
+                "get extended app config missing number of sts segments");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x2A,
+                                             (const uint8_t[]){ 0x04 }, 1),
+                "get extended app config missing max rr retry");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x2B,
+                                             (const uint8_t[]){ 0xE8, 0x03, 0x00, 0x00 }, 4),
+                "get extended app config missing uwb initiation time");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x2D,
+                                             (const uint8_t[]){ 0x05 }, 1),
+                "get extended app config missing block stride length");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x30,
+                                             (const uint8_t[]){ 0x78, 0x56, 0x34, 0x12 }, 4),
+                "get extended app config missing sub session id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x3F,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get extended app config missing dl tdoa hop count");
@@ -1266,7 +1363,7 @@ static void test_session_app_config_storage(void) {
     request.payload[4] = 0;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get all app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get all app config status");
-    ASSERT_EQ_U8(51, result.response.payload[1], "get all app config count");
+    ASSERT_EQ_U8(58, result.response.payload[1], "get all app config count");
     ASSERT_EQ_U8(0x00, result.response.payload[2], "get all app config first id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x0A,
                                              (const uint8_t[]){ 0x05, 0x00, 0x00, 0x00 }, 4),
@@ -1328,9 +1425,30 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x25,
                                              (const uint8_t[]){ 0x4B }, 1),
                 "get all app config missing session priority");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x27,
+                                             (const uint8_t[]){ 0x34, 0x12 }, 2),
+                "get all app config missing vendor id");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x28,
+                                             (const uint8_t[]){ 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 }, 8),
+                "get all app config missing static sts iv");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x29,
+                                             (const uint8_t[]){ 0x02 }, 1),
+                "get all app config missing number of sts segments");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x2A,
+                                             (const uint8_t[]){ 0x04 }, 1),
+                "get all app config missing max rr retry");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x2B,
+                                             (const uint8_t[]){ 0xE8, 0x03, 0x00, 0x00 }, 4),
+                "get all app config missing uwb initiation time");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x26,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing mac address mode");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x2D,
+                                             (const uint8_t[]){ 0x05 }, 1),
+                "get all app config missing block stride length");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x30,
+                                             (const uint8_t[]){ 0x78, 0x56, 0x34, 0x12 }, 4),
+                "get all app config missing sub session id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x3F,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing dl tdoa hop count");

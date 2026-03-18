@@ -928,6 +928,59 @@ static void test_session_multicast_list_updates(void) {
     PASS();
 }
 
+static void test_session_data_transfer_phase_config(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "dtp init failed");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_DATA_TRANSFER_PHASE_CONFIG;
+    request.payload_len = 10;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = 7;
+    request.payload[5] = 0xA5;
+    request.payload[6] = 3;
+    request.payload[7] = 0x11;
+    request.payload[8] = 0x22;
+    request.payload[9] = 0x33;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "dtp config failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "dtp status");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "dtp session lookup");
+    ASSERT_EQ_U8(7, session->dtp_repetition, "dtp repetition");
+    ASSERT_EQ_U8(0xA5, session->dtp_control, "dtp control");
+    ASSERT_EQ_U8(3, session->dtp_size, "dtp size");
+    ASSERT_EQ_U8(3, session->dtp_payload_len, "dtp payload len");
+    ASSERT_EQ_U8(0x11, session->dtp_payload[0], "dtp payload 0");
+    ASSERT_EQ_U8(0x22, session->dtp_payload[1], "dtp payload 1");
+    ASSERT_EQ_U8(0x33, session->dtp_payload[2], "dtp payload 2");
+
+    request.payload_len = 9;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "dtp wrong size should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_MSG_SIZE, result.response.payload[0], "dtp wrong size status");
+    PASS();
+}
+
 int main(void) {
     test_packet_round_trip();
     test_engine_clock_poll_progression();
@@ -951,6 +1004,7 @@ int main(void) {
     test_session_lifecycle();
     test_profile_enforces_session_transition_policy();
     test_session_multicast_list_updates();
+    test_session_data_transfer_phase_config();
 
     printf("Passed: %d\n", g_passed);
     printf("Failed: %d\n", g_failed);

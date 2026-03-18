@@ -29,6 +29,7 @@ Version 1 supports a focused interoperable subset:
 - `SESSION_GET_STATE`
 - `SESSION_GET_COUNT`
 - `SESSION_UPDATE_CONTROLLER_MULTICAST_LIST`
+- `SESSION_DATA_TRANSFER_PHASE_CONFIG`
 - `SESSION_QUERY_DATA_SIZE_IN_RANGING`
 - `SESSION_START`
 - `SESSION_STOP`
@@ -62,7 +63,7 @@ the simulator’s actual handler/profile surface.
 - `make test`
   Runs the regression test suite.
 
-The test suite includes TCP interoperability coverage driven by named wire-packet fixtures for the current `uci_interactive_shell` command flow. It pins `CORE_DEVICE_INFO`, `CORE_DEVICE_RESET`, `CORE_GET_CAPS_INFO`, `CORE_QUERY_UWBS_TIMESTAMP`, `CORE_SET_CONFIG`, `CORE_GET_CONFIG`, `SESSION_INIT`, `SESSION_GET_COUNT`, `SESSION_QUERY_DATA_SIZE_IN_RANGING`, `SESSION_SET_APP_CONFIG`, `SESSION_GET_APP_CONFIG`, `SESSION_UPDATE_CONTROLLER_MULTICAST_LIST`, `SESSION_START`, `SESSION_GET_STATE`, `SESSION_STOP`, and `SESSION_GET_RANGING_COUNT` request/response/notification bytes exactly on the TCP transport, and now also checks the `delayed_notifications` scenario as a deterministic black-box variant. Those fixtures now align the simulator with the shell and Cherry-style semantics for `CORE_DEVICE_INFO` payload length, reset-response/status-notification behavior, timestamp-response shape, session-state values, and multicast list update responses, while widening core config coverage to `device_state`, `low_power_mode`, and `device_pan_id`.
+The test suite includes TCP interoperability coverage driven by named wire-packet fixtures for the current `uci_interactive_shell` command flow. It pins `CORE_DEVICE_INFO`, `CORE_DEVICE_RESET`, `CORE_GET_CAPS_INFO`, `CORE_QUERY_UWBS_TIMESTAMP`, `CORE_SET_CONFIG`, `CORE_GET_CONFIG`, `SESSION_INIT`, `SESSION_GET_COUNT`, `SESSION_QUERY_DATA_SIZE_IN_RANGING`, `SESSION_SET_APP_CONFIG`, `SESSION_GET_APP_CONFIG`, `SESSION_UPDATE_CONTROLLER_MULTICAST_LIST`, `SESSION_DATA_TRANSFER_PHASE_CONFIG`, `SESSION_START`, `SESSION_GET_STATE`, `SESSION_STOP`, and `SESSION_GET_RANGING_COUNT` request/response/notification bytes exactly on the TCP transport, and now also checks the `delayed_notifications` scenario as a deterministic black-box variant. Those fixtures now align the simulator with the shell and Cherry-style semantics for `CORE_DEVICE_INFO` payload length, reset-response/status-notification behavior, timestamp-response shape, session-state values, multicast list update responses, and data-transfer phase config status handling, while widening core config coverage to `device_state`, `low_power_mode`, and `device_pan_id`.
 The sibling `uci_interactive_shell` repo also provides an opt-in `make tcp-simulator-integration-test` target that launches this simulator binary and validates a real `mode_tcp` shell session against it.
 
 ## Run

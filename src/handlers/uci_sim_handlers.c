@@ -123,6 +123,9 @@ static int handle_core_set_get_config(uci_sim_device_t* device,
 static int handle_session_update_multicast_list(uci_sim_device_t* device,
                                                 const uci_sim_packet_t* request,
                                                 uci_sim_result_t* result);
+static int handle_session_data_transfer_phase_config(uci_sim_device_t* device,
+                                                     const uci_sim_packet_t* request,
+                                                     uci_sim_result_t* result);
 
 static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request, uci_sim_result_t* result) {
     if (!uci_sim_profile_supports_command(device->profile, request->gid, request->oid)) {
@@ -419,6 +422,8 @@ static int handle_session_config(uci_sim_device_t* device, const uci_sim_packet_
             return 0;
         case UCI_SESSION_UPDATE_CONTROLLER_MULTICAST_LIST:
             return handle_session_update_multicast_list(device, request, result);
+        case UCI_SESSION_DATA_TRANSFER_PHASE_CONFIG:
+            return handle_session_data_transfer_phase_config(device, request, result);
         default:
             make_status_response(request, result, UCI_STATUS_UNKNOWN_OID);
             return -1;
@@ -524,6 +529,48 @@ static int handle_session_update_multicast_list(uci_sim_device_t* device,
     result->response.payload[1] = processed;
     result->response.payload_len = (uint16_t)response_offset;
     return (overall_status == UCI_STATUS_OK) ? 0 : -1;
+}
+
+static int handle_session_data_transfer_phase_config(uci_sim_device_t* device,
+                                                     const uci_sim_packet_t* request,
+                                                     uci_sim_result_t* result) {
+    uint32_t session_id;
+    uci_sim_session_t* session;
+    uint8_t dtp_size;
+    uint8_t payload_len;
+
+    if (request->payload_len < 7) {
+        make_status_response(request, result, UCI_STATUS_INVALID_PARAM);
+        return -1;
+    }
+
+    session_id = read_u32_le(request->payload);
+    session = find_session(device, session_id);
+    if (session == NULL) {
+        make_status_response(request, result, UCI_STATUS_INVALID_PARAM);
+        return -1;
+    }
+
+    dtp_size = request->payload[6];
+    payload_len = (uint8_t)(request->payload_len - 7);
+    if (dtp_size > sizeof(session->dtp_payload) || payload_len != dtp_size) {
+        make_status_response(request, result, UCI_STATUS_INVALID_MSG_SIZE);
+        return -1;
+    }
+
+    session->dtp_repetition = request->payload[4];
+    session->dtp_control = request->payload[5];
+    session->dtp_size = dtp_size;
+    session->dtp_payload_len = payload_len;
+    if (payload_len > 0) {
+        memcpy(session->dtp_payload, &request->payload[7], payload_len);
+    }
+    if (payload_len < sizeof(session->dtp_payload)) {
+        memset(&session->dtp_payload[payload_len], 0, sizeof(session->dtp_payload) - payload_len);
+    }
+
+    make_status_response(request, result, UCI_STATUS_OK);
+    return 0;
 }
 
 static int handle_session_set_get_config(uci_sim_device_t* device,

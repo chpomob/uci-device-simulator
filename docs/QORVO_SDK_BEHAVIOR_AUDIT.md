@@ -84,6 +84,216 @@ These conclusions are already strong enough to shape the simulator.
    - measurement template defaults
    - timing defaults
 
+## UCI Core Inner Workings
+
+The local Cherry UCI core provides several important constraints for a correct
+simulator architecture.
+
+### Core Responsibilities
+
+From `uci.h`, the UCI core is responsible for:
+
+- packet parsing
+- packet generation
+- error processing
+- segmentation
+- reassembly
+- routing
+
+Conclusion:
+
+- the simulator should keep transport framing separate from protocol/message
+  semantics
+- the simulator engine should reason in terms of complete messages, not only
+  transport packets
+
+Confidence: `proven`
+
+### Dynamic, Chained Message Buffers
+
+The UCI core and message builder use chained blocks (`uci_blk`) and reserve
+header space while building messages.
+
+Implication:
+
+- a simulator that wants long-term fidelity should keep a clean separation
+  between:
+  - logical message construction
+  - wire packet segmentation
+- this validates the current simulator direction of not baking transport logic
+  into protocol handlers
+
+Confidence: `proven`
+
+### Header / Payload Semantics
+
+The core/message layer confirms little-endian scalar encoding and the message
+builder helpers (`put_8bit`, `put_16bit`, `put_32bit`, `put_64bit`, etc.) make
+that explicit.
+
+Implication:
+
+- simulator behavior should be built from typed field logic first, then
+  serialized, rather than hand-assembling packet bytes in handlers
+
+Confidence: `proven`
+
+### Segmentation Model
+
+The core/message layer and earlier transport audit show:
+
+- control payload limit is 255 bytes
+- data payload limit is treated separately
+- message builders expect the core to handle segmentation / reassembly
+
+Implication:
+
+- large control responses such as `GET_APP_CONFIG(all)` should be treated as
+  ordinary message generation followed by packet segmentation
+- this validates the simulator’s recent move to support segmented non-DATA
+  outbound responses
+
+Confidence: `proven`
+
+## Cherry Ranging Result Model
+
+The Cherry client code gives a strong picture of what the simulator must cause
+to happen for a client to experience a realistic UCI device.
+
+### Range Data Notification Header Contract
+
+`cherry_session_client.c` defines:
+
+- `INFO_NTF_HEADER_SIZE = 25`
+- header fields consumed from `SESSION_INFO_NTF` / `RANGE_DATA_NTF`:
+  - sequence number
+  - session handle
+  - RFU byte
+  - ranging interval in ms
+  - measurement type
+  - MAC addressing mode indicator
+  - primary session handle
+  - RFU
+  - measurement count
+
+Conclusion:
+
+- these fields are not optional decoration
+- they are the stable contract for downstream result parsing
+
+Confidence: `proven`
+
+### Measurement Count Means Real Parsing Work
+
+Cherry does not treat `measurement_count` as a label only. It uses it to drive
+measurement parsing loops and result object population.
+
+Implication:
+
+- simulator behavior work should not stop at whether a notification exists
+- it must also eventually ensure the count and payload layout match the
+  configured/result-producing session model
+
+Confidence: `proven`
+
+### TWR Measurement Semantics
+
+`cherry_fira_client.c` parses TWR measurements into a structured result model:
+
+- `short_addr`
+- `status`
+- `nlos`
+- `distance_mm`
+- local AoA azimuth + FoM
+- local AoA elevation + FoM
+- remote AoA azimuth + FoM
+- remote AoA elevation + FoM
+- `slot_index`
+- `rssi`
+
+Important detail:
+
+- Cherry multiplies the UCI distance field by `10`, i.e. the notification field
+  is interpreted as centimeters and the result object stores millimeters
+
+Conclusion:
+
+- the current simulator’s use of a centimeter-scale distance field is aligned
+  with the Cherry consumer path
+- future measurement-policy logic should treat distance internally with an
+  explicit unit, not as an untyped integer
+
+Confidence: `proven`
+
+### AoA Representation
+
+Cherry utilities and client code treat AoA values as fixed-point encoded
+angles, then convert them to floating-point degrees for presentation.
+
+Implication:
+
+- AoA fields in simulator payloads should be thought of as measurement-domain
+  data, not arbitrary bytes
+- if simulator behavior is later gated by AoA bounds, that gating should
+  operate on an internal AoA measurement model that serializes into these fixed
+  point fields
+
+Confidence: `proven`
+
+### RSSI Representation
+
+Cherry utilities convert RSSI values before presentation rather than treating
+  the byte as a plain displayed integer.
+
+Implication:
+
+- `RSSI_REPORTING` should eventually control whether RSSI is present/meaningful
+- simulator code should avoid baking display-form assumptions directly into the
+  emitted payload model
+
+Confidence: `proven`
+
+### Utilities Show What Users Actually Care About
+
+`util_dump.c` strongly suggests the client-visible measurement contract that a
+realistic simulator should satisfy:
+
+- distance
+- local AoA
+- remote AoA
+- RSSI
+- NLOS
+- timing fields in advanced flows
+- location/cfo/tof in advanced TDoA cases
+
+Conclusion:
+
+- the best simulator is not one that only replies to commands
+- it is one that produces internally coherent measurement reports consumable by
+  a real Cherry-style client stack
+
+Confidence: `strong_inference`
+
+## Error / Validation Knowledge Extracted From The SDK
+
+The FiRa spec headers expose specific session reason codes such as:
+
+- invalid ranging interval
+- invalid result report config
+
+Implication:
+
+- these parameters are not passive storage in the real protocol
+- invalid combinations should eventually surface as session-state or command
+  rejection behavior, not just be accepted silently
+
+Confidence: `strong_inference`
+
+Current simulator implication:
+
+- future behavior work should include parameter validation rules, not just
+  payload-shape changes
+
 ## Command Audit
 
 This section focuses on standard command semantics that matter most for a

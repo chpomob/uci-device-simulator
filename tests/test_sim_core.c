@@ -181,12 +181,20 @@ static void test_default_profile_feature_matrix(void) {
                 "profile should support app config 0x08");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x09),
                 "profile should support app config 0x09");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x0B),
+                "profile should support app config 0x0B");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x0C),
                 "profile should support app config 0x0C");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x0D),
                 "profile should support app config 0x0D");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x0E),
                 "profile should support app config 0x0E");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x12),
+                "profile should support app config 0x12");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x1A),
+                "profile should support app config 0x1A");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x1B),
+                "profile should support app config 0x1B");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x2E),
                 "profile should support app config 0x2E");
     ASSERT_TRUE(!uci_sim_profile_supports_session_app_config(profile, 0x99),
@@ -793,6 +801,11 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set ranging duration app config failed");
 
     request.payload_len = 8;
+    request.payload[5] = 0x0B;
+    request.payload[6] = 1;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set mac fcs type app config failed");
+
     request.payload[5] = 0x0C;
     request.payload[6] = 1;
     request.payload[7] = 0x05;
@@ -808,11 +821,27 @@ static void test_session_app_config_storage(void) {
     request.payload[7] = 0x02;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set rng data ntf app config failed");
 
+    request.payload[5] = 0x12;
+    request.payload[6] = 1;
+    request.payload[7] = 0x02;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set rframe config app config failed");
+
+    request.payload[5] = 0x1A;
+    request.payload[6] = 1;
+    request.payload[7] = 0x03;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set ranging time struct app config failed");
+
+    request.payload[5] = 0x1B;
+    request.payload[6] = 1;
+    request.payload[7] = 0x06;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set slots per rr app config failed");
+
     request.payload[5] = 0x2E;
     request.payload[6] = 1;
     request.payload[7] = 0x07;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set result report config app config failed");
 
+    request.payload_len = 8;
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;
     request.pbf = UCI_PBF_COMPLETE;
@@ -849,12 +878,12 @@ static void test_session_app_config_storage(void) {
     ASSERT_EQ_U8(0x03, result.response.payload[5], "get multi app config second id");
     ASSERT_EQ_U8(0x02, result.response.payload[7], "get multi app config second value");
 
-    request.payload_len = 16;
+    request.payload_len = 20;
     request.payload[0] = 0x78;
     request.payload[1] = 0x56;
     request.payload[2] = 0x34;
     request.payload[3] = 0x12;
-    request.payload[4] = 11;
+    request.payload[4] = 15;
     request.payload[5] = 0x01;
     request.payload[6] = 0x02;
     request.payload[7] = 0x04;
@@ -862,13 +891,17 @@ static void test_session_app_config_storage(void) {
     request.payload[9] = 0x06;
     request.payload[10] = 0x08;
     request.payload[11] = 0x09;
-    request.payload[12] = 0x0C;
-    request.payload[13] = 0x0D;
-    request.payload[14] = 0x0E;
-    request.payload[15] = 0x2E;
+    request.payload[12] = 0x0B;
+    request.payload[13] = 0x0C;
+    request.payload[14] = 0x0D;
+    request.payload[15] = 0x0E;
+    request.payload[16] = 0x12;
+    request.payload[17] = 0x1A;
+    request.payload[18] = 0x1B;
+    request.payload[19] = 0x2E;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get extended app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get extended app config status");
-    ASSERT_EQ_U8(11, result.response.payload[1], "get extended app config count");
+    ASSERT_EQ_U8(15, result.response.payload[1], "get extended app config count");
     ASSERT_EQ_U8(0x01, result.response.payload[2], "get extended app config first id");
     ASSERT_EQ_U8(0x01, result.response.payload[4], "get extended app config first value");
     ASSERT_EQ_U8(0x02, result.response.payload[5], "get extended app config second id");
@@ -888,14 +921,22 @@ static void test_session_app_config_storage(void) {
     ASSERT_EQ_U8(0x07, result.response.payload[25], "get extended app config seventh value 1");
     ASSERT_EQ_U8(0x00, result.response.payload[26], "get extended app config seventh value 2");
     ASSERT_EQ_U8(0x00, result.response.payload[27], "get extended app config seventh value 3");
-    ASSERT_EQ_U8(0x0C, result.response.payload[28], "get extended app config eighth id");
-    ASSERT_EQ_U8(0x05, result.response.payload[30], "get extended app config eighth value");
-    ASSERT_EQ_U8(0x0D, result.response.payload[31], "get extended app config ninth id");
-    ASSERT_EQ_U8(0x03, result.response.payload[33], "get extended app config ninth value");
-    ASSERT_EQ_U8(0x0E, result.response.payload[34], "get extended app config tenth id");
-    ASSERT_EQ_U8(0x02, result.response.payload[36], "get extended app config tenth value");
-    ASSERT_EQ_U8(0x2E, result.response.payload[37], "get extended app config eleventh id");
-    ASSERT_EQ_U8(0x07, result.response.payload[39], "get extended app config eleventh value");
+    ASSERT_EQ_U8(0x0B, result.response.payload[28], "get extended app config eighth id");
+    ASSERT_EQ_U8(0x01, result.response.payload[30], "get extended app config eighth value");
+    ASSERT_EQ_U8(0x0C, result.response.payload[31], "get extended app config ninth id");
+    ASSERT_EQ_U8(0x05, result.response.payload[33], "get extended app config ninth value");
+    ASSERT_EQ_U8(0x0D, result.response.payload[34], "get extended app config tenth id");
+    ASSERT_EQ_U8(0x03, result.response.payload[36], "get extended app config tenth value");
+    ASSERT_EQ_U8(0x0E, result.response.payload[37], "get extended app config eleventh id");
+    ASSERT_EQ_U8(0x02, result.response.payload[39], "get extended app config eleventh value");
+    ASSERT_EQ_U8(0x12, result.response.payload[40], "get extended app config twelfth id");
+    ASSERT_EQ_U8(0x02, result.response.payload[42], "get extended app config twelfth value");
+    ASSERT_EQ_U8(0x1A, result.response.payload[43], "get extended app config thirteenth id");
+    ASSERT_EQ_U8(0x03, result.response.payload[45], "get extended app config thirteenth value");
+    ASSERT_EQ_U8(0x1B, result.response.payload[46], "get extended app config fourteenth id");
+    ASSERT_EQ_U8(0x06, result.response.payload[48], "get extended app config fourteenth value");
+    ASSERT_EQ_U8(0x2E, result.response.payload[49], "get extended app config fifteenth id");
+    ASSERT_EQ_U8(0x07, result.response.payload[51], "get extended app config fifteenth value");
 
     request.payload_len = 5;
     request.payload[0] = 0x78;
@@ -905,7 +946,7 @@ static void test_session_app_config_storage(void) {
     request.payload[4] = 0;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get all app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get all app config status");
-    ASSERT_EQ_U8(15, result.response.payload[1], "get all app config count");
+    ASSERT_EQ_U8(19, result.response.payload[1], "get all app config count");
     ASSERT_EQ_U8(0x00, result.response.payload[2], "get all app config first id");
     ASSERT_EQ_U8(0x01, result.response.payload[5], "get all app config second id");
     ASSERT_EQ_U8(0x02, result.response.payload[8], "get all app config third id");
@@ -916,11 +957,15 @@ static void test_session_app_config_storage(void) {
     ASSERT_EQ_U8(0x07, result.response.payload[24], "get all app config eighth id");
     ASSERT_EQ_U8(0x08, result.response.payload[28], "get all app config ninth id");
     ASSERT_EQ_U8(0x09, result.response.payload[32], "get all app config tenth id");
-    ASSERT_EQ_U8(0x0C, result.response.payload[38], "get all app config eleventh id");
-    ASSERT_EQ_U8(0x0D, result.response.payload[41], "get all app config twelfth id");
-    ASSERT_EQ_U8(0x0E, result.response.payload[44], "get all app config thirteenth id");
-    ASSERT_EQ_U8(0x11, result.response.payload[47], "get all app config fourteenth id");
-    ASSERT_EQ_U8(0x2E, result.response.payload[50], "get all app config fifteenth id");
+    ASSERT_EQ_U8(0x0B, result.response.payload[38], "get all app config eleventh id");
+    ASSERT_EQ_U8(0x0C, result.response.payload[41], "get all app config twelfth id");
+    ASSERT_EQ_U8(0x0D, result.response.payload[44], "get all app config thirteenth id");
+    ASSERT_EQ_U8(0x0E, result.response.payload[47], "get all app config fourteenth id");
+    ASSERT_EQ_U8(0x11, result.response.payload[50], "get all app config fifteenth id");
+    ASSERT_EQ_U8(0x12, result.response.payload[53], "get all app config sixteenth id");
+    ASSERT_EQ_U8(0x1A, result.response.payload[56], "get all app config seventeenth id");
+    ASSERT_EQ_U8(0x1B, result.response.payload[59], "get all app config eighteenth id");
+    ASSERT_EQ_U8(0x2E, result.response.payload[62], "get all app config nineteenth id");
     PASS();
 }
 

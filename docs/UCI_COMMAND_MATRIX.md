@@ -25,12 +25,12 @@ Status meanings:
 | GID | OID | Command | Status | Notes |
 |---|---:|---|---|---|
 | `CORE` | `0x00` | `DEVICE_RESET` | `supported` | Restores profile defaults and emits `CORE_DEVICE_STATUS_NTF(READY)` |
-| `CORE` | `0x01` | `DEVICE_STATUS_NTF` | `missing` | No explicit generator/support path in simulator |
+| `CORE` | `0x01` | `DEVICE_STATUS_NTF` | `supported` | Emitted on device reset and profile-listed as a supported notification |
 | `CORE` | `0x02` | `GET_DEVICE_INFO` | `supported` | Profile-backed device info response |
 | `CORE` | `0x03` | `GET_CAPS_INFO` | `supported` | Profile-backed capability payload |
 | `CORE` | `0x04` | `SET_CONFIG` | `supported` | Profile-gated config IDs |
 | `CORE` | `0x05` | `GET_CONFIG` | `supported` | Profile-gated config IDs |
-| `CORE` | `0x07` | `GENERIC_ERROR` | `missing` | No generator or parse surface yet |
+| `CORE` | `0x07` | `GENERIC_ERROR` | `missing` | No explicit simulator generator path yet |
 | `CORE` | `0x08` | `QUERY_UWBS_TIMESTAMP` | `supported` | Profile-backed deterministic timestamp counter |
 
 | GID | OID | Command | Status | Notes |
@@ -39,16 +39,16 @@ Status meanings:
 | `SESSION_CONFIG` | `0x01` | `SESSION_DEINIT` | `supported` | Model-backed deallocation |
 | `SESSION_CONFIG` | `0x02` | `SESSION_STATUS_NTF` | `supported` | Profile-backed reason code |
 | `SESSION_CONFIG` | `0x03` | `SET_APP_CONFIG` | `supported` | Profile-gated app config IDs |
-| `SESSION_CONFIG` | `0x04` | `GET_APP_CONFIG` | `supported` | Profile-gated app config IDs |
+| `SESSION_CONFIG` | `0x04` | `GET_APP_CONFIG` | `supported` | Supports single-item, multi-item, and zero-count "return all stored supported TLVs" retrieval |
 | `SESSION_CONFIG` | `0x05` | `GET_COUNT` | `supported` | Model-backed |
 | `SESSION_CONFIG` | `0x06` | `GET_STATE` | `supported` | Model-backed |
-| `SESSION_CONFIG` | `0x07` | `UPDATE_CONTROLLER_MULTICAST_LIST` | `missing` | Not yet modeled |
+| `SESSION_CONFIG` | `0x07` | `UPDATE_CONTROLLER_MULTICAST_LIST` | `supported` | Model-backed multicast add/remove with per-entry status payloads |
 | `SESSION_CONFIG` | `0x08` | `UPDATE_DT_ANCHOR_RANGING_ROUNDS` | `missing` | Not yet modeled |
 | `SESSION_CONFIG` | `0x09` | `UPDATE_DT_TAG_RANGING_ROUNDS` | `missing` | Not yet modeled |
 | `SESSION_CONFIG` | `0x0B` | `QUERY_DATA_SIZE_IN_RANGING` | `supported` | Model-backed |
 | `SESSION_CONFIG` | `0x0C` | `SET_HUS_CONTROLLER_CONFIG` | `missing` | Not yet modeled |
 | `SESSION_CONFIG` | `0x0D` | `SET_HUS_CONTROLEE_CONFIG` | `missing` | Not yet modeled |
-| `SESSION_CONFIG` | `0x0E` | `DATA_TRANSFER_PHASE_CONFIG` | `missing` | Not yet modeled |
+| `SESSION_CONFIG` | `0x0E` | `DATA_TRANSFER_PHASE_CONFIG` | `supported` | Model-backed repetition/control/payload storage |
 
 | GID | OID | Command | Status | Notes |
 |---|---:|---|---|---|
@@ -116,25 +116,30 @@ These are present in the local Qorvo SDK headers but not yet modeled in the simu
 
 | Message Type | Status | Notes |
 |---|---|---|
-| `DATA` | `missing` | No simulator-side application-data send/receive path yet |
+| `DATA` | `supported` | `DATA_MESSAGE_SND` ingress is modeled and emits transfer-status/credit notifications |
 | `SE_TESTING_COMMAND/RESPONSE` | `missing` | Not modeled in simulator spec or transport |
 
 ## Current Coverage Summary
 
 ### Supported standard commands
-- `CORE`: `GET_DEVICE_INFO`, `GET_CAPS_INFO`, `SET_CONFIG`, `GET_CONFIG`
-- `SESSION_CONFIG`: `SESSION_INIT`, `SESSION_DEINIT`, `SET_APP_CONFIG`, `GET_APP_CONFIG`, `GET_COUNT`, `GET_STATE`, `UPDATE_CONTROLLER_MULTICAST_LIST`, `DATA_TRANSFER_PHASE_CONFIG`, `QUERY_DATA_SIZE_IN_RANGING`
-- `SESSION_CONTROL`: `SESSION_START`, `SESSION_STOP`, `GET_RANGING_COUNT`
-- Notifications: `SESSION_STATUS_NTF`, Cherry-aligned `RANGE_DATA_NTF (SESSION_INFO_NTF)`
+- `CORE`: `DEVICE_RESET`, `DEVICE_STATUS_NTF`, `GET_DEVICE_INFO`, `GET_CAPS_INFO`, `SET_CONFIG`, `GET_CONFIG`, `QUERY_UWBS_TIMESTAMP`
+- `SESSION_CONFIG`: `SESSION_INIT`, `SESSION_DEINIT`, `SESSION_STATUS_NTF`, `SET_APP_CONFIG`, `GET_APP_CONFIG`, `GET_COUNT`, `GET_STATE`, `UPDATE_CONTROLLER_MULTICAST_LIST`, `DATA_TRANSFER_PHASE_CONFIG`, `QUERY_DATA_SIZE_IN_RANGING`
+- `SESSION_CONTROL`: `SESSION_START`, `SESSION_STOP`, `GET_RANGING_COUNT`, `LOGICAL_LINK_CREATE`, `LOGICAL_LINK_CLOSE`, `LOGICAL_LINK_GET_PARAM`
+- Notifications: `SESSION_STATUS_NTF`, Cherry-aligned `RANGE_DATA_NTF (SESSION_INFO_NTF)`, `DATA_CREDIT_NTF`, `DATA_TRANSFER_STATUS_NTF`, `LOGICAL_LINK_UWBS_CREATE`, `LOGICAL_LINK_UWBS_CLOSE`
+- `DATA`: `DATA_MESSAGE_SND` ingress with model-backed transfer-status behavior
 
 ### Highest-priority missing standard commands
-1. logical-link notifications for non-default device profiles
+1. `CORE_GENERIC_ERROR`
+2. `UPDATE_DT_ANCHOR_RANGING_ROUNDS`
+3. `UPDATE_DT_TAG_RANGING_ROUNDS`
+4. `SET_HUS_CONTROLLER_CONFIG`
+5. `SET_HUS_CONTROLEE_CONFIG`
 
 ### Highest-priority missing profile/config coverage
 1. `RANGING_ROUND_USAGE`
 2. `STS_CONFIG`
-3. `MULTI_NODE_MODE`
-4. `CHANNEL_NUMBER`
+3. `CHANNEL_NUMBER`
+4. `NUMBER_OF_CONTROLEES`
 5. `DST_MAC_ADDRESS`
 6. `RANGING_INTERVAL`
 7. `RESULT_REPORT_CONFIG` / notification-related app-configs
@@ -143,4 +148,5 @@ These are present in the local Qorvo SDK headers but not yet modeled in the simu
 
 - The default simulator profile is intentionally stricter than the full Qorvo SDK surface.
 - Some commands appear in the local simulator spec header but are still `profile-rejected` because the handler/model path does not implement them yet.
+- Any protocol-surface change must update this matrix in the same commit as the code and tests.
 - The next implementation work should use this matrix as the backlog, grouped by family instead of adding isolated commands ad hoc.

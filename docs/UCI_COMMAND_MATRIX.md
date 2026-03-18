@@ -149,6 +149,11 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x3D` | `DL_TDOA_RANGING_METHOD` | `supported` | Default-profile stored/retrievable |
 | `0x3E` | `DL_TDOA_TX_TIMESTAMP_CONF` | `supported` | Default-profile stored/retrievable |
 | `0x3F` | `DL_TDOA_HOP_COUNT` | `supported` | Default-profile stored/retrievable |
+| `0x40` | `DL_TDOA_ANCHOR_CFO` | `supported` | Default-profile stored/retrievable |
+| `0x41` | `DL_TDOA_ANCHOR_LOCATION` | `supported` | Default-profile stored/retrievable as the minimal 1-byte location-presence form |
+| `0x42` | `DL_TDOA_TX_ACTIVE_RANGING_ROUNDS` | `supported` | Default-profile stored/retrievable |
+| `0x43` | `DL_TDOA_BLOCK_STRIDING` | `supported` | Default-profile stored/retrievable |
+| `0x44` | `DL_TDOA_TIME_REFERENCE_ANCHOR` | `supported` | Default-profile stored/retrievable |
 | remaining uncovered IDs in the standard FiRa app-config range | Standard FiRa app-config range | `missing` | Not yet modeled |
 | `0xA0`..`0xEC` | CCC / vendor app-config extensions | `missing` | Not yet modeled |
 

@@ -1174,6 +1174,31 @@ static void test_session_app_config_storage(void) {
     request.payload[7] = 0x01;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set ul tdoa tx timestamp app config failed");
 
+    request.payload[5] = 0x40;
+    request.payload[6] = 1;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set dl tdoa anchor cfo app config failed");
+
+    request.payload[5] = 0x41;
+    request.payload[6] = 1;
+    request.payload[7] = 0x00;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set dl tdoa anchor location app config failed");
+
+    request.payload[5] = 0x42;
+    request.payload[6] = 1;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set dl tdoa tx active ranging rounds app config failed");
+
+    request.payload[5] = 0x43;
+    request.payload[6] = 1;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set dl tdoa block striding app config failed");
+
+    request.payload[5] = 0x44;
+    request.payload[6] = 1;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set dl tdoa time reference anchor app config failed");
+
     request.payload[5] = 0x3A;
     request.payload[6] = 1;
     request.payload[7] = 0x02;
@@ -1244,12 +1269,12 @@ static void test_session_app_config_storage(void) {
     ASSERT_EQ_U8(0x03, result.response.payload[5], "get multi app config second id");
     ASSERT_EQ_U8(0x02, result.response.payload[7], "get multi app config second value");
 
-    request.payload_len = 65;
+    request.payload_len = 70;
     request.payload[0] = 0x78;
     request.payload[1] = 0x56;
     request.payload[2] = 0x34;
     request.payload[3] = 0x12;
-    request.payload[4] = 60;
+    request.payload[4] = 65;
     request.payload[5] = 0x01;
     request.payload[6] = 0x02;
     request.payload[7] = 0x04;
@@ -1304,15 +1329,20 @@ static void test_session_app_config_storage(void) {
     request.payload[56] = 0x37;
     request.payload[57] = 0x38;
     request.payload[58] = 0x39;
-    request.payload[59] = 0x3A;
-    request.payload[60] = 0x3B;
-    request.payload[61] = 0x3C;
-    request.payload[62] = 0x3D;
-    request.payload[63] = 0x3E;
-    request.payload[64] = 0x3F;
+    request.payload[59] = 0x40;
+    request.payload[60] = 0x41;
+    request.payload[61] = 0x42;
+    request.payload[62] = 0x43;
+    request.payload[63] = 0x44;
+    request.payload[64] = 0x3A;
+    request.payload[65] = 0x3B;
+    request.payload[66] = 0x3C;
+    request.payload[67] = 0x3D;
+    request.payload[68] = 0x3E;
+    request.payload[69] = 0x3F;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get extended app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get extended app config status");
-    ASSERT_EQ_U8(60, result.response.payload[1], "get extended app config count");
+    ASSERT_EQ_U8(65, result.response.payload[1], "get extended app config count");
     ASSERT_EQ_U8(0x01, result.response.payload[2], "get extended app config first id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x0A,
                                              (const uint8_t[]){ 0x05, 0x00, 0x00, 0x00 }, 4),
@@ -1413,6 +1443,21 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x39,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get extended app config missing ul tdoa tx timestamp");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x40,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get extended app config missing dl tdoa anchor cfo");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x41,
+                                             (const uint8_t[]){ 0x00 }, 1),
+                "get extended app config missing dl tdoa anchor location");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x42,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get extended app config missing dl tdoa tx active ranging rounds");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x43,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get extended app config missing dl tdoa block striding");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x44,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get extended app config missing dl tdoa time reference anchor");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x3F,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get extended app config missing dl tdoa hop count");
@@ -1424,7 +1469,7 @@ static void test_session_app_config_storage(void) {
     request.payload[4] = 0;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get all app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get all app config status");
-    ASSERT_EQ_U8(64, result.response.payload[1], "get all app config count");
+    ASSERT_EQ_U8(69, result.response.payload[1], "get all app config count");
     ASSERT_EQ_U8(0x00, result.response.payload[2], "get all app config first id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x0A,
                                              (const uint8_t[]){ 0x05, 0x00, 0x00, 0x00 }, 4),
@@ -1528,6 +1573,21 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x39,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing ul tdoa tx timestamp");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x40,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get all app config missing dl tdoa anchor cfo");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x41,
+                                             (const uint8_t[]){ 0x00 }, 1),
+                "get all app config missing dl tdoa anchor location");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x42,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get all app config missing dl tdoa tx active ranging rounds");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x43,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get all app config missing dl tdoa block striding");
+    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x44,
+                                             (const uint8_t[]){ 0x01 }, 1),
+                "get all app config missing dl tdoa time reference anchor");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x3F,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing dl tdoa hop count");

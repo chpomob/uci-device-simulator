@@ -76,6 +76,11 @@ static void write_u64_le(uint8_t* payload, uint64_t value) {
     payload[7] = (uint8_t)((value >> 56) & 0xFFU);
 }
 
+static void write_u16_le(uint8_t* payload, uint16_t value) {
+    payload[0] = (uint8_t)(value & 0xFFU);
+    payload[1] = (uint8_t)((value >> 8) & 0xFFU);
+}
+
 static void emit_session_status_ntf(uci_sim_device_t* device,
                                     uint32_t session_id,
                                     uint8_t state,
@@ -126,6 +131,9 @@ static int handle_session_update_multicast_list(uci_sim_device_t* device,
 static int handle_session_data_transfer_phase_config(uci_sim_device_t* device,
                                                      const uci_sim_packet_t* request,
                                                      uci_sim_result_t* result);
+static int handle_data_message_send(uci_sim_device_t* device,
+                                    const uci_sim_packet_t* request,
+                                    uci_sim_result_t* result);
 
 static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request, uci_sim_result_t* result) {
     if (!uci_sim_profile_supports_command(device->profile, request->gid, request->oid)) {
@@ -739,11 +747,16 @@ int uci_sim_device_handle_packet(uci_sim_device_t* device,
     }
 
     init_result(result);
+    pending_count_before = device->pending_notification_count;
+
+    if (request->mt == UCI_MT_DATA) {
+        rc = handle_data_message_send(device, request, result);
+        uci_sim_device_finalize_result(device, result, pending_count_before);
+        return rc;
+    }
     if (request->mt != UCI_MT_COMMAND) {
         return -1;
     }
-
-    pending_count_before = device->pending_notification_count;
 
     switch (request->gid) {
         case UCI_GID_CORE:
@@ -764,4 +777,94 @@ int uci_sim_device_handle_packet(uci_sim_device_t* device,
     (void)uci_sim_scenario_on_command_complete(device, request, result);
     uci_sim_device_finalize_result(device, result, pending_count_before);
     return rc;
+}
+
+static int handle_data_message_send(uci_sim_device_t* device,
+                                    const uci_sim_packet_t* request,
+                                    uci_sim_result_t* result) {
+    uint32_t session_id;
+    uci_sim_session_t* session;
+    uint16_t sequence_number;
+    uint16_t declared_length;
+    uint8_t credit_payload[5];
+    uint8_t status_payload[8];
+
+    if (!device || !request || !result) {
+        return -1;
+    }
+    if (request->gid != UCI_DATA_PACKET_FORMAT_SEND || request->oid != 0x00) {
+        return -1;
+    }
+    if (request->payload_len < 16) {
+        return -1;
+    }
+
+    session_id = read_u32_le(request->payload);
+    sequence_number = read_u16_le(&request->payload[12]);
+    declared_length = read_u16_le(&request->payload[14]);
+    session = find_session(device, session_id);
+
+    if ((size_t)(16 + declared_length) > request->payload_len) {
+        write_u32_le(status_payload, session_id);
+        write_u16_le(&status_payload[4], sequence_number);
+        status_payload[6] = UCI_DATA_TRANSFER_STATUS_INVALID_FORMAT;
+        status_payload[7] = 0;
+        result->notification.mt = UCI_MT_NOTIFICATION;
+        result->notification.pbf = UCI_PBF_COMPLETE;
+        result->notification.gid = UCI_GID_SESSION_CONTROL;
+        result->notification.oid = UCI_SESSION_DATA_TRANSFER_STATUS_NTF;
+        result->notification.payload_len = sizeof(status_payload);
+        memcpy(result->notification.payload, status_payload, sizeof(status_payload));
+        result->has_notification = 1;
+        return -1;
+    }
+
+    if (session == NULL || session->state != UCI_SESSION_STATE_ACTIVE) {
+        write_u32_le(status_payload, session_id);
+        write_u16_le(&status_payload[4], sequence_number);
+        status_payload[6] = UCI_DATA_TRANSFER_STATUS_ERROR_REJECTED;
+        status_payload[7] = 0;
+        result->notification.mt = UCI_MT_NOTIFICATION;
+        result->notification.pbf = UCI_PBF_COMPLETE;
+        result->notification.gid = UCI_GID_SESSION_CONTROL;
+        result->notification.oid = UCI_SESSION_DATA_TRANSFER_STATUS_NTF;
+        result->notification.payload_len = sizeof(status_payload);
+        memcpy(result->notification.payload, status_payload, sizeof(status_payload));
+        result->has_notification = 1;
+        return -1;
+    }
+
+    session->last_data_sequence = sequence_number;
+    session->last_data_length = declared_length;
+
+    write_u32_le(credit_payload, session_id);
+    credit_payload[4] = 1;
+    result->notification.mt = UCI_MT_NOTIFICATION;
+    result->notification.pbf = UCI_PBF_COMPLETE;
+    result->notification.gid = UCI_GID_SESSION_CONTROL;
+    result->notification.oid = UCI_SESSION_DATA_CREDIT_NTF;
+    result->notification.payload_len = sizeof(credit_payload);
+    memcpy(result->notification.payload, credit_payload, sizeof(credit_payload));
+    result->has_notification = 1;
+
+    write_u32_le(status_payload, session_id);
+    write_u16_le(&status_payload[4], sequence_number);
+    status_payload[6] = UCI_DATA_TRANSFER_STATUS_OK;
+    status_payload[7] = 1;
+
+    {
+        uci_sim_packet_t notification;
+        memset(&notification, 0, sizeof(notification));
+        notification.mt = UCI_MT_NOTIFICATION;
+        notification.pbf = UCI_PBF_COMPLETE;
+        notification.gid = UCI_GID_SESSION_CONTROL;
+        notification.oid = UCI_SESSION_DATA_TRANSFER_STATUS_NTF;
+        notification.payload_len = sizeof(status_payload);
+        memcpy(notification.payload, status_payload, sizeof(status_payload));
+        if (uci_sim_device_queue_notification(device, &notification) != 0) {
+            return -1;
+        }
+    }
+
+    return 0;
 }

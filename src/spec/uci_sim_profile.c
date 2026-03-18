@@ -109,9 +109,11 @@ static const uci_sim_profile_t k_default_profile = {
     .supported_notification_oids = {
         UCI_CORE_DEVICE_STATUS_NTF,
         UCI_SESSION_STATUS_NTF,
-        UCI_SESSION_START
+        UCI_SESSION_START,
+        UCI_SESSION_DATA_CREDIT_NTF,
+        UCI_SESSION_DATA_TRANSFER_STATUS_NTF
     },
-    .supported_notification_oid_count = 3
+    .supported_notification_oid_count = 5
 };
 
 const uci_sim_profile_t* uci_sim_default_profile(void) {

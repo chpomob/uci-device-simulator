@@ -981,6 +981,65 @@ static void test_session_data_transfer_phase_config(void) {
     PASS();
 }
 
+static void test_data_message_send_emits_credit_and_status_notifications(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "data send init failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "data send start failed");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_DATA;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_DATA_PACKET_FORMAT_SEND;
+    request.oid = 0x00;
+    request.payload_len = 18;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = 0x44;
+    request.payload[5] = 0x33;
+    request.payload[6] = 0x22;
+    request.payload[7] = 0x11;
+    request.payload[8] = 0x00;
+    request.payload[9] = 0x00;
+    request.payload[10] = 0x00;
+    request.payload[11] = 0x00;
+    request.payload[12] = 0x0F;
+    request.payload[13] = 0x00;
+    request.payload[14] = 0x02;
+    request.payload[15] = 0x00;
+    request.payload[16] = 0xAA;
+    request.payload[17] = 0xBB;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "data send failed");
+    ASSERT_TRUE(result.has_notification, "data send credit notification missing");
+    ASSERT_EQ_U8(UCI_SESSION_DATA_CREDIT_NTF, result.notification.oid, "data send credit oid");
+    ASSERT_EQ_U8(1, result.notification.payload[4], "data send credit available");
+    ASSERT_TRUE(device.pending_notification_count > 0, "data send status notification queued");
+    ASSERT_EQ_U8(UCI_SESSION_DATA_TRANSFER_STATUS_NTF, device.pending_notifications[0].oid, "data send status oid");
+    ASSERT_EQ_U8(UCI_DATA_TRANSFER_STATUS_OK, device.pending_notifications[0].payload[6], "data send status value");
+    PASS();
+}
+
 int main(void) {
     test_packet_round_trip();
     test_engine_clock_poll_progression();
@@ -1005,6 +1064,7 @@ int main(void) {
     test_profile_enforces_session_transition_policy();
     test_session_multicast_list_updates();
     test_session_data_transfer_phase_config();
+    test_data_message_send_emits_credit_and_status_notifications();
 
     printf("Passed: %d\n", g_passed);
     printf("Failed: %d\n", g_failed);

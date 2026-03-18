@@ -65,6 +65,7 @@ int uci_sim_profile_supports_command(const uci_sim_profile_t* profile, uint8_t g
 int uci_sim_profile_supports_core_config(const uci_sim_profile_t* profile, uint8_t config_id);
 int uci_sim_profile_supports_session_app_config(const uci_sim_profile_t* profile, uint8_t config_id);
 int uci_sim_profile_supports_notification(const uci_sim_profile_t* profile, uint8_t oid);
+int uci_sim_profile_supports_multicast_action(const uci_sim_profile_t* profile, uint8_t action);
 const uci_sim_session_transition_t* uci_sim_profile_get_session_transition(const uci_sim_profile_t* profile,
                                                                            uint8_t oid);
 

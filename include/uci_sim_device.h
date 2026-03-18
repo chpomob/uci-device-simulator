@@ -36,6 +36,14 @@ typedef struct uci_sim_device_config {
     int in_use;
 } uci_sim_device_config_t;
 
+typedef struct uci_sim_multicast_entry {
+    uint16_t short_address;
+    uint32_t subsession_id;
+    uint8_t key_len;
+    uint8_t key[32];
+    int in_use;
+} uci_sim_multicast_entry_t;
+
 typedef struct uci_sim_session {
     uint32_t session_id;
     uint8_t session_type;
@@ -45,6 +53,7 @@ typedef struct uci_sim_session {
     uint8_t ranging_stream_remaining;
     int allocated;
     uci_sim_session_config_t configs[UCI_SIM_MAX_SESSION_CONFIGS];
+    uci_sim_multicast_entry_t multicast_entries[UCI_SIM_MAX_MULTICAST_ENTRIES];
 } uci_sim_session_t;
 
 typedef struct uci_sim_device {
@@ -106,6 +115,14 @@ int uci_sim_device_get_config(const uci_sim_device_t* device,
 int uci_sim_device_get_session(uci_sim_device_t* device,
                                uint32_t session_id,
                                uci_sim_session_t** out_session);
+int uci_sim_session_add_multicast_entry(uci_sim_session_t* session,
+                                        uint16_t short_address,
+                                        uint32_t subsession_id,
+                                        const uint8_t* key,
+                                        uint8_t key_len);
+int uci_sim_session_remove_multicast_entry(uci_sim_session_t* session,
+                                           uint16_t short_address,
+                                           uint32_t subsession_id);
 int uci_sim_device_schedule_event(uci_sim_device_t* device,
                                   uci_sim_event_type_t type,
                                   uint32_t session_id,

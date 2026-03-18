@@ -391,6 +391,62 @@ int uci_sim_device_get_session(uci_sim_device_t* device,
     return 0;
 }
 
+int uci_sim_session_add_multicast_entry(uci_sim_session_t* session,
+                                        uint16_t short_address,
+                                        uint32_t subsession_id,
+                                        const uint8_t* key,
+                                        uint8_t key_len) {
+    size_t i;
+
+    if (!session || key_len > 32 || (key_len > 0 && !key)) {
+        return -1;
+    }
+
+    for (i = 0; i < UCI_SIM_MAX_MULTICAST_ENTRIES; ++i) {
+        if (session->multicast_entries[i].in_use &&
+            session->multicast_entries[i].short_address == short_address &&
+            session->multicast_entries[i].subsession_id == subsession_id) {
+            return UCI_STATUS_ADDRESS_ALREADY_PRESENT;
+        }
+    }
+
+    for (i = 0; i < UCI_SIM_MAX_MULTICAST_ENTRIES; ++i) {
+        if (!session->multicast_entries[i].in_use) {
+            session->multicast_entries[i].in_use = 1;
+            session->multicast_entries[i].short_address = short_address;
+            session->multicast_entries[i].subsession_id = subsession_id;
+            session->multicast_entries[i].key_len = key_len;
+            if (key_len > 0) {
+                memcpy(session->multicast_entries[i].key, key, key_len);
+            }
+            return UCI_STATUS_OK;
+        }
+    }
+
+    return UCI_STATUS_MULTICAST_LIST_FULL;
+}
+
+int uci_sim_session_remove_multicast_entry(uci_sim_session_t* session,
+                                           uint16_t short_address,
+                                           uint32_t subsession_id) {
+    size_t i;
+
+    if (!session) {
+        return -1;
+    }
+
+    for (i = 0; i < UCI_SIM_MAX_MULTICAST_ENTRIES; ++i) {
+        if (session->multicast_entries[i].in_use &&
+            session->multicast_entries[i].short_address == short_address &&
+            session->multicast_entries[i].subsession_id == subsession_id) {
+            memset(&session->multicast_entries[i], 0, sizeof(session->multicast_entries[i]));
+            return UCI_STATUS_OK;
+        }
+    }
+
+    return UCI_STATUS_ADDRESS_NOT_FOUND;
+}
+
 int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
                                        uci_sim_session_t* session,
                                        uci_sim_result_t* result) {

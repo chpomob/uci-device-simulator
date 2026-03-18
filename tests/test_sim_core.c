@@ -867,6 +867,67 @@ static void test_profile_enforces_session_transition_policy(void) {
     PASS();
 }
 
+static void test_session_multicast_list_updates(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "multicast init failed");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_UPDATE_CONTROLLER_MULTICAST_LIST;
+    request.payload_len = 12;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = 1;
+    request.payload[5] = UCI_MULTICAST_ACTION_ADD_SHORT_KEY;
+    request.payload[6] = 0x34;
+    request.payload[7] = 0x12;
+    request.payload[8] = 0xDD;
+    request.payload[9] = 0xCC;
+    request.payload[10] = 0xBB;
+    request.payload[11] = 0xAA;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "multicast add failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "multicast add overall");
+    ASSERT_EQ_U8(1, result.response.payload[1], "multicast add processed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[8], "multicast add entry status");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "multicast session lookup");
+    ASSERT_TRUE(session->multicast_entries[0].in_use, "multicast entry should exist");
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "multicast duplicate add should fail");
+    ASSERT_EQ_U8(UCI_STATUS_FAILED, result.response.payload[0], "multicast duplicate overall");
+    ASSERT_EQ_U8(UCI_STATUS_ADDRESS_ALREADY_PRESENT, result.response.payload[8], "multicast duplicate entry");
+
+    request.payload[5] = UCI_MULTICAST_ACTION_REMOVE;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "multicast remove failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "multicast remove overall");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[8], "multicast remove entry");
+    ASSERT_TRUE(!session->multicast_entries[0].in_use, "multicast entry should be removed");
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "multicast missing remove should fail");
+    ASSERT_EQ_U8(UCI_STATUS_FAILED, result.response.payload[0], "multicast missing remove overall");
+    ASSERT_EQ_U8(UCI_STATUS_ADDRESS_NOT_FOUND, result.response.payload[8], "multicast missing remove entry");
+    PASS();
+}
+
 int main(void) {
     test_packet_round_trip();
     test_engine_clock_poll_progression();
@@ -889,6 +950,7 @@ int main(void) {
     test_profile_rejects_unsupported_session_features();
     test_session_lifecycle();
     test_profile_enforces_session_transition_policy();
+    test_session_multicast_list_updates();
 
     printf("Passed: %d\n", g_passed);
     printf("Failed: %d\n", g_failed);

@@ -85,9 +85,10 @@ static const uci_sim_profile_t k_default_profile = {
         UCI_SESSION_GET_APP_CONFIG,
         UCI_SESSION_GET_COUNT,
         UCI_SESSION_GET_STATE,
+        UCI_SESSION_UPDATE_CONTROLLER_MULTICAST_LIST,
         UCI_SESSION_QUERY_DATA_SIZE_IN_RANGING
     },
-    .supported_session_config_oid_count = 7,
+    .supported_session_config_oid_count = 8,
     .supported_session_control_oids = {
         UCI_SESSION_START,
         UCI_SESSION_STOP,
@@ -161,6 +162,20 @@ int uci_sim_profile_supports_notification(const uci_sim_profile_t* profile, uint
     return list_contains(profile->supported_notification_oids,
                          profile->supported_notification_oid_count,
                          oid);
+}
+
+int uci_sim_profile_supports_multicast_action(const uci_sim_profile_t* profile, uint8_t action) {
+    (void)profile;
+
+    switch (action) {
+        case UCI_MULTICAST_ACTION_ADD:
+        case UCI_MULTICAST_ACTION_REMOVE:
+        case UCI_MULTICAST_ACTION_ADD_SHORT_KEY:
+        case UCI_MULTICAST_ACTION_ADD_LONG_KEY:
+            return 1;
+        default:
+            return 0;
+    }
 }
 
 const uci_sim_session_transition_t* uci_sim_profile_get_session_transition(const uci_sim_profile_t* profile,

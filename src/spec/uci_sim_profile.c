@@ -120,9 +120,13 @@ static const uci_sim_profile_t k_default_profile = {
         0x07,
         0x08,
         0x09,
-        0x11
+        0x0C,
+        0x0D,
+        0x0E,
+        0x11,
+        0x2E
     },
-    .supported_session_app_config_id_count = 11,
+    .supported_session_app_config_id_count = 15,
     .default_session_app_config_ids = {
         0x00,
         0x01,
@@ -134,10 +138,14 @@ static const uci_sim_profile_t k_default_profile = {
         0x07,
         0x08,
         0x09,
-        0x11
+        0x0C,
+        0x0D,
+        0x0E,
+        0x11,
+        0x2E
     },
     .default_session_app_config_value_lens = {
-        1, 1, 1, 1, 1, 1, 2, 2, 2, 4, 1
+        1, 1, 1, 1, 1, 1, 2, 2, 2, 4, 1, 1, 1, 1, 1
     },
     .default_session_app_config_values = {
         { 0x01 },
@@ -150,9 +158,13 @@ static const uci_sim_profile_t k_default_profile = {
         { 0x34, 0x12 },
         { 0x60, 0x09 },
         { 0xE8, 0x03, 0x00, 0x00 },
+        { 0x00 },
+        { 0x00 },
+        { 0x00 },
+        { 0x00 },
         { 0x00 }
     },
-    .default_session_app_config_count = 11,
+    .default_session_app_config_count = 15,
     .supported_notification_oids = {
         UCI_CORE_DEVICE_STATUS_NTF,
         UCI_SESSION_STATUS_NTF,

@@ -95,7 +95,11 @@ stored supported TLVs below.
 | `0x07` | `DST_MAC_ADDRESS` | `supported` | Default-profile stored/retrievable |
 | `0x08` | `SLOT_DURATION` | `supported` | Default-profile stored/retrievable |
 | `0x09` | `RANGING_INTERVAL` | `supported` | Default-profile stored/retrievable as `RANGING_DURATION` in the current shell surface |
+| `0x0C` | `RANGING_ROUND_CONTROL` | `supported` | Default-profile stored/retrievable |
+| `0x0D` | `AOA_RESULT_REQ` | `supported` | Default-profile stored/retrievable |
+| `0x0E` | `SESSION_INFO_NTF_CONFIG` | `supported` | Default-profile stored/retrievable through the current shell surface as `rng_data_ntf` |
 | `0x11` | `DEVICE_ROLE` | `supported` | Default-profile stored/retrievable |
+| `0x2E` | `RESULT_REPORT_CONFIG` | `supported` | Default-profile stored/retrievable |
 | `0x0A`..`0x4D` | Standard FiRa app-config range | `missing` | Not yet modeled |
 | `0xA0`..`0xEC` | CCC / vendor app-config extensions | `missing` | Not yet modeled |
 
@@ -136,13 +140,11 @@ These are present in the local Qorvo SDK headers but not yet modeled in the simu
 5. richer profile variants beyond the current default surface
 
 ### Highest-priority missing profile/config coverage
-1. `RESULT_REPORT_CONFIG` / notification-related app-configs
-2. `SESSION_INFO_NTF_CONFIG` / reporting controls
-3. `AOA_RESULT_REQ`
-4. `RANGING_ROUND_CONTROL`
-5. `DEVICE_MAC_ADDRESS`/`DST_MAC_ADDRESS` multi-peer variants
-6. addressing and scheduling profile variants beyond current defaults
-7. profile-specific unsupported-value/error behavior per parameter
+1. `DEVICE_MAC_ADDRESS`/`DST_MAC_ADDRESS` multi-peer variants
+2. addressing and scheduling profile variants beyond current defaults
+3. profile-specific unsupported-value/error behavior per parameter
+4. richer notification/reporting parameter interactions
+5. additional standard FiRa app-config IDs beyond the current ranging-focused slice
 
 ## Notes
 

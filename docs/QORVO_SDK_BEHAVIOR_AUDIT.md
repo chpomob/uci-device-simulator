@@ -684,6 +684,8 @@ Conclusion:
 
 - a high-fidelity simulator can later model boot notifications separately from
   standard `CORE_DEVICE_STATUS_NTF`
+- Cherry boot handling also shows a conservative parsing rule:
+  - if the payload is missing, Cherry treats the reason as fatal-error reset
 
 Confidence: `proven`
 
@@ -698,6 +700,17 @@ Conclusion:
 - diagnostics are a real notification stream in the Qorvo stack
 - they belong to a future observability/diagnostics layer, not to the minimal
   standard simulator core
+- diagnostics are structurally richer than normal FiRa range notifications:
+  - session handle
+  - sequence number
+  - report count
+  - variable nested report data including segment metrics, AoA data, and CIR
+    taps
+
+Architectural consequence:
+
+- diagnostics should later be implemented as a separate report family with its
+  own internal model, not as a small extension of `RANGE_DATA_NTF`
 
 Confidence: `proven`
 

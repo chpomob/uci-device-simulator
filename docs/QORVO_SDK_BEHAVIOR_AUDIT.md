@@ -633,6 +633,143 @@ Architectural consequence:
 
 Confidence: `proven`
 
+## Vendor / Extension Knowledge Extracted So Far
+
+The local Qorvo-specific sources provide real structural knowledge, but
+significantly less runtime meaning than the standard FiRa surface.
+
+### Qorvo Extension GIDs
+
+From `uci_spec_qorvo.h` and `uci_spec_mcps.h`, the local SDK clearly exposes
+several non-standard families:
+
+- `QORVO_EXT1`
+  - secure-element and secure-channel commands
+- `QORVO_EXT2`
+  - diagnostics
+  - session listing
+  - antenna flexibility commands
+  - device statistics
+  - device boot notification
+  - GPIO timestamp helpers
+- `QORVO_CALIB`
+  - calibration reset
+- `QORVO_MAC` / MCPS surface
+  - start/stop/tx/rx/scan
+  - scheduler configuration
+  - calibration operations
+  - test mode
+
+Conclusion:
+
+- the simulator should treat vendor/extension behavior as a distinct phase
+  after the main FiRa simulator core is correct
+- these families should not be mixed casually into the standard session engine
+
+Confidence: `proven`
+
+### Extractable Runtime Meaning
+
+Some vendor pieces do carry enough meaning to record now.
+
+#### Device Boot Notification
+
+`uci_spec_qorvo.h` defines `QORVO_CORE_DEVICE_BOOT_NTF` and the boot-reason
+enum includes at least:
+
+- unknown
+- fatal error reset
+
+Conclusion:
+
+- a high-fidelity simulator can later model boot notifications separately from
+  standard `CORE_DEVICE_STATUS_NTF`
+
+Confidence: `proven`
+
+#### FiRa Range Diagnostics
+
+`cherry_fira_client.c` registers a handler for
+`QORVO_FIRA_RANGE_DIAGNOSTICS` notifications, and Cherry allocates/free
+diagnostic report structures around that path.
+
+Conclusion:
+
+- diagnostics are a real notification stream in the Qorvo stack
+- they belong to a future observability/diagnostics layer, not to the minimal
+  standard simulator core
+
+Confidence: `proven`
+
+#### Calibration / Antenna Coupling
+
+`cherry_calib_client.c` sends `QORVO_MAC_SET_CALIBRATIONS`, and
+`cherry_session_client.h` documents `ANTENNA_SET_ID` as the antenna set used by
+that calibration command.
+
+Conclusion:
+
+- calibration and session/radar antenna selection are coupled concepts in the
+  Qorvo stack
+- future simulator architecture should keep calibration/antenna state in a
+  separate subsystem rather than scattering it across session handlers
+
+Confidence: `strong_inference`
+
+#### Radar / Extended Session Parameters
+
+The local Cherry session client header documents additional non-FiRa parameters
+with meaningful comments, for example:
+
+- radar timing parameters:
+  - burst period in ms
+  - sweep period in RSTU
+  - sweeps per burst
+- radar samples per sweep
+- radar antenna set id
+- radar max burst, which explicitly stops the session and moves it to idle once
+  the configured number of bursts is reached
+- radar sweep offset
+- radar TX profile index
+- selected UWB config id
+- selected pulse shape combo
+- sync code index
+- `STS_INDEX0`
+- `MAC_MODE`
+
+Conclusion:
+
+- the local SDK still contains significant non-FiRa session knowledge
+- but it belongs to a future radar/extended-session audit phase, not to the
+  immediate FiRa ranging simulator plan
+
+Confidence: `proven`
+
+### Vendor Audit Limit
+
+At this point, the local vendor sources mostly provide:
+
+- opcode inventory
+- notification names
+- parameter names
+- some payload-size or comment-level meaning
+
+They do not yet provide enough concrete runtime traces to justify a deep
+behavioral implementation of:
+
+- secure-element flows
+- MCPS scheduler behavior
+- calibration behavior
+- antenna-flex runtime impact
+
+Practical rule:
+
+- vendor families should currently be modeled as a later subsystem with its own
+  audit and plan
+- they should not delay the main FiRa simulator architecture decisions now
+
+Confidence: `strong_inference`
+
 ## Current Simulator Gaps
 
 These are the most important correctness gaps relative to the local Qorvo/Cherry

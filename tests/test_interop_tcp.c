@@ -1857,6 +1857,72 @@ static void test_ranging_stream_aoa_result_req_over_tcp(void) {
     PASS();
 }
 
+static void test_ranging_stream_rssi_reporting_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    uint8_t packet[UCI_SIM_MAX_PACKET];
+    uci_sim_packet_t parsed;
+    size_t packet_len = 0;
+    int fd = -1;
+
+    server.scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
+    ASSERT_TRUE(start_server(&server) == 0, "start rssi-report server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect rssi-report server");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load rssi-report init");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write rssi-report init");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_rsp.hex",
+                          "rssi-report init rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
+                          "rssi-report init ntf");
+
+    memset(request, 0, sizeof(request));
+    request[0] = 0x21;
+    request[1] = 0x03;
+    request[2] = 0x00;
+    request[3] = 0x08;
+    request[4] = 0x78;
+    request[5] = 0x56;
+    request[6] = 0x34;
+    request[7] = 0x12;
+    request[8] = 0x01;
+    request[9] = 0x13;
+    request[10] = 0x01;
+    request[11] = 0x00;
+    ASSERT_TRUE(write_full(fd, request, 12) == 12, "write rssi-report config");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+                          "rssi-report config rsp");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load rssi-report start");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write rssi-report start");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_rsp.hex",
+                          "rssi-report start rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_ntf.hex",
+                          "rssi-report start ntf");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read rssi-report range packet");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse rssi-report range packet");
+    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "rssi-report range oid");
+    ASSERT_EQ_INT(0, parsed.payload[44], "rssi-report should suppress rssi");
+
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 static void test_ranging_stream_flow_over_tcp(void) {
     test_server_t server = {0};
     uint8_t request[UCI_SIM_MAX_PACKET];
@@ -2099,6 +2165,7 @@ int main(void) {
     test_ranging_stream_proximity_inside_mode_over_tcp();
     test_ranging_stream_result_report_config_over_tcp();
     test_ranging_stream_aoa_result_req_over_tcp();
+    test_ranging_stream_rssi_reporting_over_tcp();
     test_ranging_stream_flow_over_tcp();
     test_data_message_edge_cases_over_tcp();
     test_control_edge_cases_over_tcp();

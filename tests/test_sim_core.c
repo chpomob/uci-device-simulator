@@ -308,6 +308,49 @@ static void test_aoa_result_req_masks_range_notification_axes(void) {
     PASS();
 }
 
+static void test_rssi_reporting_masks_range_notification_rssi(void) {
+    const uci_sim_profile_t* profile = uci_sim_default_profile();
+    uci_sim_session_t session;
+    uci_sim_measurement_t measurement;
+    uci_sim_measurement_policy_result_t policy_result;
+    uci_sim_packet_t notification;
+    uint8_t result_report_config = 0x0F;
+    uint8_t aoa_result_req = 0x03;
+    uint8_t rssi_reporting = 0x00;
+
+    memset(&session, 0, sizeof(session));
+    session.session_id = 0x12345678U;
+    ASSERT_TRUE(uci_sim_session_store_config(&session,
+                                             UCI_APP_CONFIG_RESULT_REPORT_CONFIG,
+                                             &result_report_config,
+                                             1) == 0,
+                "rssi-report result-report config store failed");
+    ASSERT_TRUE(uci_sim_session_store_config(&session,
+                                             UCI_APP_CONFIG_AOA_RESULT_REQ,
+                                             &aoa_result_req,
+                                             1) == 0,
+                "rssi-report aoa-result store failed");
+    ASSERT_TRUE(uci_sim_session_store_config(&session,
+                                             UCI_APP_CONFIG_RSSI_REPORTING,
+                                             &rssi_reporting,
+                                             1) == 0,
+                "rssi-report disabled store failed");
+
+    uci_sim_measurement_init_ranging_sample(profile, &session, &measurement);
+    measurement.sequence_number = 6U;
+    uci_sim_measurement_evaluate_range_notification_policy(&session, &measurement, &policy_result);
+    ASSERT_TRUE(uci_sim_measurement_build_range_data_notification(profile,
+                                                                  &measurement,
+                                                                  &policy_result,
+                                                                  profile->range_data_notification_oid,
+                                                                  &notification) == 0,
+                "rssi-report notification build failed");
+    ASSERT_EQ_U8(0,
+                 notification.payload[profile->range_data_measurement_distance_offset + 15],
+                 "rssi-report disabled should suppress rssi");
+    PASS();
+}
+
 static uci_sim_time_ms_t fake_clock_now_ms(void* context) {
     (void)context;
     return g_fake_clock_ms;
@@ -2872,6 +2915,7 @@ int main(void) {
     test_measurement_policy_serializes_default_range_notification();
     test_result_report_config_masks_range_notification_fields();
     test_aoa_result_req_masks_range_notification_axes();
+    test_rssi_reporting_masks_range_notification_rssi();
     test_core_device_info();
     test_default_profile_is_applied();
     test_default_profile_feature_matrix();

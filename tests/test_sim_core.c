@@ -148,6 +148,11 @@ static void test_result_report_config_masks_range_notification_fields(void) {
                                              &result_report_config,
                                              1) == 0,
                 "result report config store for tof+aoa failed");
+    ASSERT_TRUE(uci_sim_session_store_config(&session,
+                                             UCI_APP_CONFIG_AOA_RESULT_REQ,
+                                             (const uint8_t[]){0x03},
+                                             1) == 0,
+                "result report config store for aoa both failed");
     uci_sim_measurement_init_ranging_sample(profile, &session, &measurement);
     measurement.sequence_number = 2U;
     uci_sim_measurement_evaluate_range_notification_policy(&session, &measurement, &policy_result);
@@ -177,6 +182,129 @@ static void test_result_report_config_masks_range_notification_fields(void) {
     ASSERT_EQ_U8(0,
                  notification.payload[profile->range_data_measurement_distance_offset + 13],
                  "tof+aoa should suppress remote elevation fom");
+    PASS();
+}
+
+static void test_aoa_result_req_masks_range_notification_axes(void) {
+    const uci_sim_profile_t* profile = uci_sim_default_profile();
+    uci_sim_session_t session;
+    uci_sim_measurement_t measurement;
+    uci_sim_measurement_policy_result_t policy_result;
+    uci_sim_packet_t notification;
+    uint8_t result_report_config = 0x0F;
+    uint8_t aoa_result_req;
+
+    memset(&session, 0, sizeof(session));
+    session.session_id = 0x12345678U;
+    ASSERT_TRUE(uci_sim_session_store_config(&session,
+                                             UCI_APP_CONFIG_RESULT_REPORT_CONFIG,
+                                             &result_report_config,
+                                             1) == 0,
+                "aoa-result result-report config store failed");
+
+    aoa_result_req = 0x00;
+    ASSERT_TRUE(uci_sim_session_store_config(&session,
+                                             UCI_APP_CONFIG_AOA_RESULT_REQ,
+                                             &aoa_result_req,
+                                             1) == 0,
+                "aoa-result none store failed");
+    uci_sim_measurement_init_ranging_sample(profile, &session, &measurement);
+    measurement.sequence_number = 3U;
+    uci_sim_measurement_evaluate_range_notification_policy(&session, &measurement, &policy_result);
+    ASSERT_TRUE(uci_sim_measurement_build_range_data_notification(profile,
+                                                                  &measurement,
+                                                                  &policy_result,
+                                                                  profile->range_data_notification_oid,
+                                                                  &notification) == 0,
+                "aoa-result none notification build failed");
+    ASSERT_EQ_U16(0,
+                  read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 2]),
+                  "aoa-result none should suppress local azimuth");
+    ASSERT_EQ_U16(0,
+                  read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 5]),
+                  "aoa-result none should suppress local elevation");
+    ASSERT_EQ_U8(0,
+                 notification.payload[profile->range_data_measurement_distance_offset + 4],
+                 "aoa-result none should suppress local azimuth fom");
+    ASSERT_EQ_U8(0,
+                 notification.payload[profile->range_data_measurement_distance_offset + 7],
+                 "aoa-result none should suppress local elevation fom");
+
+    memset(&session, 0, sizeof(session));
+    session.session_id = 0x12345678U;
+    ASSERT_TRUE(uci_sim_session_store_config(&session,
+                                             UCI_APP_CONFIG_RESULT_REPORT_CONFIG,
+                                             &result_report_config,
+                                             1) == 0,
+                "aoa-result elevation result-report config store failed");
+    aoa_result_req = 0x01;
+    ASSERT_TRUE(uci_sim_session_store_config(&session,
+                                             UCI_APP_CONFIG_AOA_RESULT_REQ,
+                                             &aoa_result_req,
+                                             1) == 0,
+                "aoa-result elevation store failed");
+    uci_sim_measurement_init_ranging_sample(profile, &session, &measurement);
+    measurement.sequence_number = 4U;
+    uci_sim_measurement_evaluate_range_notification_policy(&session, &measurement, &policy_result);
+    ASSERT_TRUE(uci_sim_measurement_build_range_data_notification(profile,
+                                                                  &measurement,
+                                                                  &policy_result,
+                                                                  profile->range_data_notification_oid,
+                                                                  &notification) == 0,
+                "aoa-result elevation notification build failed");
+    ASSERT_EQ_U16(0,
+                  read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 2]),
+                  "aoa-result elevation should suppress local azimuth");
+    ASSERT_EQ_U16(0,
+                  read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 8]),
+                  "aoa-result elevation should suppress remote azimuth");
+    ASSERT_TRUE(read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 5]) != 0,
+                "aoa-result elevation should preserve local elevation");
+    ASSERT_TRUE(read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 11]) != 0,
+                "aoa-result elevation should preserve remote elevation");
+    ASSERT_EQ_U8(0,
+                 notification.payload[profile->range_data_measurement_distance_offset + 4],
+                 "aoa-result elevation should suppress azimuth fom");
+    ASSERT_TRUE(notification.payload[profile->range_data_measurement_distance_offset + 7] != 0,
+                "aoa-result elevation should preserve elevation fom");
+
+    memset(&session, 0, sizeof(session));
+    session.session_id = 0x12345678U;
+    ASSERT_TRUE(uci_sim_session_store_config(&session,
+                                             UCI_APP_CONFIG_RESULT_REPORT_CONFIG,
+                                             &result_report_config,
+                                             1) == 0,
+                "aoa-result azimuth result-report config store failed");
+    aoa_result_req = 0x02;
+    ASSERT_TRUE(uci_sim_session_store_config(&session,
+                                             UCI_APP_CONFIG_AOA_RESULT_REQ,
+                                             &aoa_result_req,
+                                             1) == 0,
+                "aoa-result azimuth store failed");
+    uci_sim_measurement_init_ranging_sample(profile, &session, &measurement);
+    measurement.sequence_number = 5U;
+    uci_sim_measurement_evaluate_range_notification_policy(&session, &measurement, &policy_result);
+    ASSERT_TRUE(uci_sim_measurement_build_range_data_notification(profile,
+                                                                  &measurement,
+                                                                  &policy_result,
+                                                                  profile->range_data_notification_oid,
+                                                                  &notification) == 0,
+                "aoa-result azimuth notification build failed");
+    ASSERT_TRUE(read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 2]) != 0,
+                "aoa-result azimuth should preserve local azimuth");
+    ASSERT_TRUE(read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 8]) != 0,
+                "aoa-result azimuth should preserve remote azimuth");
+    ASSERT_EQ_U16(0,
+                  read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 5]),
+                  "aoa-result azimuth should suppress local elevation");
+    ASSERT_EQ_U16(0,
+                  read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 11]),
+                  "aoa-result azimuth should suppress remote elevation");
+    ASSERT_TRUE(notification.payload[profile->range_data_measurement_distance_offset + 4] != 0,
+                "aoa-result azimuth should preserve azimuth fom");
+    ASSERT_EQ_U8(0,
+                 notification.payload[profile->range_data_measurement_distance_offset + 7],
+                 "aoa-result azimuth should suppress elevation fom");
     PASS();
 }
 
@@ -2743,6 +2871,7 @@ int main(void) {
     test_engine_clock_poll_progression();
     test_measurement_policy_serializes_default_range_notification();
     test_result_report_config_masks_range_notification_fields();
+    test_aoa_result_req_masks_range_notification_axes();
     test_core_device_info();
     test_default_profile_is_applied();
     test_default_profile_feature_matrix();

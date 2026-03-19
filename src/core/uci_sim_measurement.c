@@ -32,6 +32,7 @@ void uci_sim_measurement_evaluate_range_notification_policy(
     const uci_sim_measurement_t* sample,
     uci_sim_measurement_policy_result_t* result) {
     uint8_t ntf_config;
+    uint8_t aoa_result_req;
     uint8_t result_report_config;
     uint16_t proximity_near_cm;
     uint16_t proximity_far_cm;
@@ -44,6 +45,7 @@ void uci_sim_measurement_evaluate_range_notification_policy(
     memset(result, 0, sizeof(*result));
 
     ntf_config = uci_sim_session_get_range_data_ntf_config(session);
+    aoa_result_req = uci_sim_session_get_aoa_result_req(session);
     result_report_config = uci_sim_session_get_result_report_config(session);
     proximity_near_cm = uci_sim_session_get_range_data_ntf_proximity_near(session);
     proximity_far_cm = uci_sim_session_get_range_data_ntf_proximity_far(session);
@@ -64,7 +66,33 @@ void uci_sim_measurement_evaluate_range_notification_policy(
         result->emitted_field_mask |= UCI_SIM_MEAS_FIELD_AOA_ELEVATION;
     }
     if ((result_report_config & 0x08U) != 0U) {
-        result->emitted_field_mask |= UCI_SIM_MEAS_FIELD_AOA_FOM;
+        result->emitted_field_mask |= UCI_SIM_MEAS_FIELD_AOA_AZIMUTH_FOM |
+                                      UCI_SIM_MEAS_FIELD_AOA_ELEVATION_FOM;
+    }
+
+    switch (aoa_result_req) {
+        case 0x00:
+            result->emitted_field_mask &= (uint8_t)~(UCI_SIM_MEAS_FIELD_AOA_AZIMUTH |
+                                                     UCI_SIM_MEAS_FIELD_AOA_ELEVATION |
+                                                     UCI_SIM_MEAS_FIELD_AOA_AZIMUTH_FOM |
+                                                     UCI_SIM_MEAS_FIELD_AOA_ELEVATION_FOM);
+            break;
+        case 0x01:
+            result->emitted_field_mask &= (uint8_t)~(UCI_SIM_MEAS_FIELD_AOA_AZIMUTH |
+                                                     UCI_SIM_MEAS_FIELD_AOA_AZIMUTH_FOM);
+            break;
+        case 0x02:
+            result->emitted_field_mask &= (uint8_t)~(UCI_SIM_MEAS_FIELD_AOA_ELEVATION |
+                                                     UCI_SIM_MEAS_FIELD_AOA_ELEVATION_FOM);
+            break;
+        case 0x03:
+            break;
+        default:
+            result->emitted_field_mask &= (uint8_t)~(UCI_SIM_MEAS_FIELD_AOA_AZIMUTH |
+                                                     UCI_SIM_MEAS_FIELD_AOA_ELEVATION |
+                                                     UCI_SIM_MEAS_FIELD_AOA_AZIMUTH_FOM |
+                                                     UCI_SIM_MEAS_FIELD_AOA_ELEVATION_FOM);
+            break;
     }
 
     switch (ntf_config) {
@@ -147,8 +175,6 @@ int uci_sim_measurement_build_range_data_notification(const uci_sim_profile_t* p
         payload[local_azimuth_offset + 1U] = 0x00;
         payload[remote_azimuth_offset] = 0x00;
         payload[remote_azimuth_offset + 1U] = 0x00;
-        payload[local_azimuth_fom_offset] = 0x00;
-        payload[remote_azimuth_fom_offset] = 0x00;
     }
 
     if ((policy_result->emitted_field_mask & UCI_SIM_MEAS_FIELD_AOA_ELEVATION) == 0U) {
@@ -156,14 +182,15 @@ int uci_sim_measurement_build_range_data_notification(const uci_sim_profile_t* p
         payload[local_elevation_offset + 1U] = 0x00;
         payload[remote_elevation_offset] = 0x00;
         payload[remote_elevation_offset + 1U] = 0x00;
-        payload[local_elevation_fom_offset] = 0x00;
-        payload[remote_elevation_fom_offset] = 0x00;
     }
 
-    if ((policy_result->emitted_field_mask & UCI_SIM_MEAS_FIELD_AOA_FOM) == 0U) {
+    if ((policy_result->emitted_field_mask & UCI_SIM_MEAS_FIELD_AOA_AZIMUTH_FOM) == 0U) {
         payload[local_azimuth_fom_offset] = 0x00;
-        payload[local_elevation_fom_offset] = 0x00;
         payload[remote_azimuth_fom_offset] = 0x00;
+    }
+
+    if ((policy_result->emitted_field_mask & UCI_SIM_MEAS_FIELD_AOA_ELEVATION_FOM) == 0U) {
+        payload[local_elevation_fom_offset] = 0x00;
         payload[remote_elevation_fom_offset] = 0x00;
     }
 

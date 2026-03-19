@@ -140,6 +140,7 @@ int uci_sim_session_get_config(const uci_sim_session_t* session,
 uint8_t uci_sim_session_get_range_data_ntf_config(const uci_sim_session_t* session);
 uint16_t uci_sim_session_get_range_data_ntf_proximity_near(const uci_sim_session_t* session);
 uint16_t uci_sim_session_get_range_data_ntf_proximity_far(const uci_sim_session_t* session);
+uint8_t uci_sim_session_get_aoa_result_req(const uci_sim_session_t* session);
 uint8_t uci_sim_session_get_result_report_config(const uci_sim_session_t* session);
 int uci_sim_device_store_config(uci_sim_device_t* device,
                                 uint8_t config_id,

@@ -33,8 +33,9 @@ enum {
     UCI_SIM_MEAS_FIELD_DISTANCE = 0x01,
     UCI_SIM_MEAS_FIELD_AOA_AZIMUTH = 0x02,
     UCI_SIM_MEAS_FIELD_AOA_ELEVATION = 0x04,
-    UCI_SIM_MEAS_FIELD_AOA_FOM = 0x08,
-    UCI_SIM_MEAS_FIELD_RSSI = 0x10
+    UCI_SIM_MEAS_FIELD_AOA_AZIMUTH_FOM = 0x08,
+    UCI_SIM_MEAS_FIELD_AOA_ELEVATION_FOM = 0x10,
+    UCI_SIM_MEAS_FIELD_RSSI = 0x20
 };
 
 void uci_sim_measurement_init_ranging_sample(const uci_sim_profile_t* profile,

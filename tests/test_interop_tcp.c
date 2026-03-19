@@ -1765,6 +1765,98 @@ static void test_ranging_stream_result_report_config_over_tcp(void) {
     PASS();
 }
 
+static void test_ranging_stream_aoa_result_req_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    uint8_t packet[UCI_SIM_MAX_PACKET];
+    uci_sim_packet_t parsed;
+    size_t packet_len = 0;
+    int fd = -1;
+
+    server.scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
+    ASSERT_TRUE(start_server(&server) == 0, "start aoa-result server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect aoa-result server");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load aoa-result init");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write aoa-result init");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_rsp.hex",
+                          "aoa-result init rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
+                          "aoa-result init ntf");
+
+    memset(request, 0, sizeof(request));
+    request[0] = 0x21;
+    request[1] = 0x03;
+    request[2] = 0x00;
+    request[3] = 0x08;
+    request[4] = 0x78;
+    request[5] = 0x56;
+    request[6] = 0x34;
+    request[7] = 0x12;
+    request[8] = 0x01;
+    request[9] = 0x2E;
+    request[10] = 0x01;
+    request[11] = 0x0F;
+    ASSERT_TRUE(write_full(fd, request, 12) == 12, "write aoa-result report config");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+                          "aoa-result report config rsp");
+
+    memset(request, 0, sizeof(request));
+    request[0] = 0x21;
+    request[1] = 0x03;
+    request[2] = 0x00;
+    request[3] = 0x08;
+    request[4] = 0x78;
+    request[5] = 0x56;
+    request[6] = 0x34;
+    request[7] = 0x12;
+    request[8] = 0x01;
+    request[9] = 0x0D;
+    request[10] = 0x01;
+    request[11] = 0x00;
+    ASSERT_TRUE(write_full(fd, request, 12) == 12, "write aoa-result req config");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+                          "aoa-result req config rsp");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load aoa-result start");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write aoa-result start");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_rsp.hex",
+                          "aoa-result start rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_ntf.hex",
+                          "aoa-result start ntf");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read aoa-result range packet");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse aoa-result range packet");
+    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "aoa-result range oid");
+    ASSERT_EQ_INT(100, read_u16_le(&parsed.payload[29]), "aoa-result should preserve distance");
+    ASSERT_EQ_INT(0, read_u16_le(&parsed.payload[31]), "aoa-result should suppress local azimuth");
+    ASSERT_EQ_INT(0, parsed.payload[33], "aoa-result should suppress local azimuth fom");
+    ASSERT_EQ_INT(0, read_u16_le(&parsed.payload[34]), "aoa-result should suppress local elevation");
+    ASSERT_EQ_INT(0, parsed.payload[36], "aoa-result should suppress local elevation fom");
+    ASSERT_EQ_INT(0, read_u16_le(&parsed.payload[37]), "aoa-result should suppress remote azimuth");
+    ASSERT_EQ_INT(0, parsed.payload[39], "aoa-result should suppress remote azimuth fom");
+    ASSERT_EQ_INT(0, read_u16_le(&parsed.payload[40]), "aoa-result should suppress remote elevation");
+    ASSERT_EQ_INT(0, parsed.payload[42], "aoa-result should suppress remote elevation fom");
+
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 static void test_ranging_stream_flow_over_tcp(void) {
     test_server_t server = {0};
     uint8_t request[UCI_SIM_MAX_PACKET];
@@ -2006,6 +2098,7 @@ int main(void) {
     test_ranging_stream_disable_info_ntf_over_tcp();
     test_ranging_stream_proximity_inside_mode_over_tcp();
     test_ranging_stream_result_report_config_over_tcp();
+    test_ranging_stream_aoa_result_req_over_tcp();
     test_ranging_stream_flow_over_tcp();
     test_data_message_edge_cases_over_tcp();
     test_control_edge_cases_over_tcp();

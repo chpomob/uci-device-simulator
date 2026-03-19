@@ -331,6 +331,22 @@ uint16_t uci_sim_session_get_range_data_ntf_proximity_far(const uci_sim_session_
     return read_u16_le(value);
 }
 
+uint8_t uci_sim_session_get_aoa_result_req(const uci_sim_session_t* session) {
+    uint8_t value = 0x00;
+    uint8_t value_len = 0;
+
+    if (!session) {
+        return 0x00;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_AOA_RESULT_REQ, &value, &value_len) != 0 ||
+        value_len != 1) {
+        return 0x00;
+    }
+
+    return value;
+}
+
 uint8_t uci_sim_session_get_result_report_config(const uci_sim_session_t* session) {
     uint8_t value = 0x01;
     uint8_t value_len = 0;

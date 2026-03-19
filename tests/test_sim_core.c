@@ -43,17 +43,25 @@ static void test_measurement_policy_serializes_default_range_notification(void) 
     const uci_sim_profile_t* profile = uci_sim_default_profile();
     uci_sim_session_t session;
     uci_sim_measurement_t measurement;
+    uci_sim_measurement_policy_result_t policy_result;
     uci_sim_packet_t notification;
 
     memset(&session, 0, sizeof(session));
     session.session_id = 0x12345678U;
     session.ranging_count = 2;
+    ASSERT_TRUE(uci_sim_session_store_config(&session,
+                                             UCI_APP_CONFIG_RESULT_REPORT_CONFIG,
+                                             (const uint8_t[]){0x0F},
+                                             1) == 0,
+                "measurement default result report config store failed");
 
     uci_sim_measurement_init_ranging_sample(profile, &session, &measurement);
     measurement.sequence_number = 7U;
+    uci_sim_measurement_evaluate_range_notification_policy(&session, &measurement, &policy_result);
 
     ASSERT_TRUE(uci_sim_measurement_build_range_data_notification(profile,
                                                                   &measurement,
+                                                                  &policy_result,
                                                                   profile->range_data_notification_oid,
                                                                   &notification) == 0,
                 "measurement notification build failed");
@@ -75,6 +83,100 @@ static void test_measurement_policy_serializes_default_range_notification(void) 
                              (session.ranging_count * profile->range_data_distance_step_cm)),
                   read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset]),
                   "measurement notification distance");
+    PASS();
+}
+
+static void test_result_report_config_masks_range_notification_fields(void) {
+    const uci_sim_profile_t* profile = uci_sim_default_profile();
+    uci_sim_session_t session;
+    uci_sim_measurement_t measurement;
+    uci_sim_measurement_policy_result_t policy_result;
+    uci_sim_packet_t notification;
+    uint8_t result_report_config;
+
+    memset(&session, 0, sizeof(session));
+    session.session_id = 0x12345678U;
+
+    result_report_config = 0x01;
+    ASSERT_TRUE(uci_sim_session_store_config(&session,
+                                             UCI_APP_CONFIG_RESULT_REPORT_CONFIG,
+                                             &result_report_config,
+                                             1) == 0,
+                "result report config store for tof-only failed");
+    uci_sim_measurement_init_ranging_sample(profile, &session, &measurement);
+    measurement.sequence_number = 1U;
+    uci_sim_measurement_evaluate_range_notification_policy(&session, &measurement, &policy_result);
+    ASSERT_TRUE(uci_sim_measurement_build_range_data_notification(profile,
+                                                                  &measurement,
+                                                                  &policy_result,
+                                                                  profile->range_data_notification_oid,
+                                                                  &notification) == 0,
+                "tof-only notification build failed");
+    ASSERT_EQ_U16(profile->range_data_distance_base_cm,
+                  read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset]),
+                  "tof-only should preserve distance");
+    ASSERT_EQ_U16(0,
+                  read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 2]),
+                  "tof-only should suppress local azimuth");
+    ASSERT_EQ_U8(0,
+                 notification.payload[profile->range_data_measurement_distance_offset + 4],
+                 "tof-only should suppress local azimuth fom");
+    ASSERT_EQ_U16(0,
+                  read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 5]),
+                  "tof-only should suppress local elevation");
+    ASSERT_EQ_U8(0,
+                 notification.payload[profile->range_data_measurement_distance_offset + 7],
+                 "tof-only should suppress local elevation fom");
+    ASSERT_EQ_U16(0,
+                  read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 8]),
+                  "tof-only should suppress remote azimuth");
+    ASSERT_EQ_U8(0,
+                 notification.payload[profile->range_data_measurement_distance_offset + 10],
+                 "tof-only should suppress remote azimuth fom");
+    ASSERT_EQ_U16(0,
+                  read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 11]),
+                  "tof-only should suppress remote elevation");
+    ASSERT_EQ_U8(0,
+                 notification.payload[profile->range_data_measurement_distance_offset + 13],
+                 "tof-only should suppress remote elevation fom");
+
+    memset(&session, 0, sizeof(session));
+    session.session_id = 0x12345678U;
+    result_report_config = 0x07;
+    ASSERT_TRUE(uci_sim_session_store_config(&session,
+                                             UCI_APP_CONFIG_RESULT_REPORT_CONFIG,
+                                             &result_report_config,
+                                             1) == 0,
+                "result report config store for tof+aoa failed");
+    uci_sim_measurement_init_ranging_sample(profile, &session, &measurement);
+    measurement.sequence_number = 2U;
+    uci_sim_measurement_evaluate_range_notification_policy(&session, &measurement, &policy_result);
+    ASSERT_TRUE(uci_sim_measurement_build_range_data_notification(profile,
+                                                                  &measurement,
+                                                                  &policy_result,
+                                                                  profile->range_data_notification_oid,
+                                                                  &notification) == 0,
+                "tof+aoa notification build failed");
+    ASSERT_TRUE(read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 2]) != 0,
+                "tof+aoa should preserve local azimuth");
+    ASSERT_TRUE(read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 5]) != 0,
+                "tof+aoa should preserve local elevation");
+    ASSERT_TRUE(read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 8]) != 0,
+                "tof+aoa should preserve remote azimuth");
+    ASSERT_TRUE(read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset + 11]) != 0,
+                "tof+aoa should preserve remote elevation");
+    ASSERT_EQ_U8(0,
+                 notification.payload[profile->range_data_measurement_distance_offset + 4],
+                 "tof+aoa should suppress local azimuth fom");
+    ASSERT_EQ_U8(0,
+                 notification.payload[profile->range_data_measurement_distance_offset + 7],
+                 "tof+aoa should suppress local elevation fom");
+    ASSERT_EQ_U8(0,
+                 notification.payload[profile->range_data_measurement_distance_offset + 10],
+                 "tof+aoa should suppress remote azimuth fom");
+    ASSERT_EQ_U8(0,
+                 notification.payload[profile->range_data_measurement_distance_offset + 13],
+                 "tof+aoa should suppress remote elevation fom");
     PASS();
 }
 
@@ -2640,6 +2742,7 @@ int main(void) {
     test_packet_round_trip();
     test_engine_clock_poll_progression();
     test_measurement_policy_serializes_default_range_notification();
+    test_result_report_config_masks_range_notification_fields();
     test_core_device_info();
     test_default_profile_is_applied();
     test_default_profile_feature_matrix();

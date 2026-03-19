@@ -77,3 +77,15 @@ both decides policy and patches packet bytes directly. Future work for
 `RESULT_REPORT_CONFIG`, `AOA_RESULT_REQ`, `RSSI_REPORTING`, and
 `RANGING_INTERVAL` should extend that measurement-policy seam rather than
 adding more branches to the device model or handlers.
+
+`RESULT_REPORT_CONFIG` is now the first behavioral user of that seam. The
+simulator still keeps the Cherry-aligned TWR packet layout stable, but the
+measurement policy now controls which result fields remain meaningful:
+- bit 0 keeps the distance/ToF-derived field meaningful
+- bit 1 keeps azimuth fields meaningful
+- bit 2 keeps elevation fields meaningful
+- bit 3 keeps AoA FoM fields meaningful
+
+Disabled fields are serialized as zero rather than removed from the packet.
+That matches the current audit guidance: change field meaning before changing
+packet shape.

@@ -331,6 +331,22 @@ uint16_t uci_sim_session_get_range_data_ntf_proximity_far(const uci_sim_session_
     return read_u16_le(value);
 }
 
+uint8_t uci_sim_session_get_result_report_config(const uci_sim_session_t* session) {
+    uint8_t value = 0x01;
+    uint8_t value_len = 0;
+
+    if (!session) {
+        return 0x01;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_RESULT_REPORT_CONFIG, &value, &value_len) != 0 ||
+        value_len != 1) {
+        return 0x01;
+    }
+
+    return value;
+}
+
 
 int uci_sim_device_store_config(uci_sim_device_t* device,
                                 uint8_t config_id,
@@ -593,6 +609,7 @@ int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
         measurement.sequence_number = device->next_ranging_sequence++;
         if (uci_sim_measurement_build_range_data_notification(profile,
                                                               &measurement,
+                                                              &policy_result,
                                                               profile->range_data_notification_oid,
                                                               &notification) != 0) {
             return -1;

@@ -26,7 +26,16 @@ typedef struct {
     int should_emit_notification;
     uint8_t has_proximity_state;
     uint8_t in_proximity_range;
+    uint8_t emitted_field_mask;
 } uci_sim_measurement_policy_result_t;
+
+enum {
+    UCI_SIM_MEAS_FIELD_DISTANCE = 0x01,
+    UCI_SIM_MEAS_FIELD_AOA_AZIMUTH = 0x02,
+    UCI_SIM_MEAS_FIELD_AOA_ELEVATION = 0x04,
+    UCI_SIM_MEAS_FIELD_AOA_FOM = 0x08,
+    UCI_SIM_MEAS_FIELD_RSSI = 0x10
+};
 
 void uci_sim_measurement_init_ranging_sample(const uci_sim_profile_t* profile,
                                              const uci_sim_session_t* session,
@@ -37,6 +46,7 @@ void uci_sim_measurement_evaluate_range_notification_policy(
     uci_sim_measurement_policy_result_t* result);
 int uci_sim_measurement_build_range_data_notification(const uci_sim_profile_t* profile,
                                                       const uci_sim_measurement_t* sample,
+                                                      const uci_sim_measurement_policy_result_t* policy_result,
                                                       uint8_t notification_oid,
                                                       uci_sim_packet_t* notification);
 

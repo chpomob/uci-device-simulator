@@ -102,6 +102,14 @@ measurement-policy layer before packet serialization. Phase 1 keeps the wire
 behavior unchanged, but it gives the simulator the right seam for future
 behavioral work on `RESULT_REPORT_CONFIG`, `AOA_RESULT_REQ`,
 `RSSI_REPORTING`, and `RANGING_INTERVAL`.
+`RESULT_REPORT_CONFIG` is now behavioral on the current TWR range-data path
+while keeping the packet layout stable: disabled result components are emitted
+as zeroed fields rather than removed from the notification. At this stage that
+means:
+- bit 0 controls the distance/ToF-derived field
+- bit 1 controls azimuth fields
+- bit 2 controls elevation fields
+- bit 3 controls AoA FoM fields
 
 Current simulator behavior is owned by one explicit default device profile.
 That profile now defines the visible device versions, capability payload,

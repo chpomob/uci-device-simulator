@@ -1691,6 +1691,80 @@ static void test_ranging_stream_proximity_inside_mode_over_tcp(void) {
     PASS();
 }
 
+static void test_ranging_stream_result_report_config_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    uint8_t packet[UCI_SIM_MAX_PACKET];
+    uci_sim_packet_t parsed;
+    size_t packet_len = 0;
+    int fd = -1;
+
+    server.scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
+    ASSERT_TRUE(start_server(&server) == 0, "start result-report server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect result-report server");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load result-report init");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write result-report init");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_rsp.hex",
+                          "result-report init rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
+                          "result-report init ntf");
+
+    memset(request, 0, sizeof(request));
+    request[0] = 0x21;
+    request[1] = 0x03;
+    request[2] = 0x00;
+    request[3] = 0x08;
+    request[4] = 0x78;
+    request[5] = 0x56;
+    request[6] = 0x34;
+    request[7] = 0x12;
+    request[8] = 0x01;
+    request[9] = 0x2E;
+    request[10] = 0x01;
+    request[11] = 0x01;
+    ASSERT_TRUE(write_full(fd, request, 12) == 12, "write result-report config");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+                          "result-report config rsp");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load result-report start");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write result-report start");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_rsp.hex",
+                          "result-report start rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_ntf.hex",
+                          "result-report start ntf");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read result-report range packet");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse result-report range packet");
+    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "result-report range oid");
+    ASSERT_EQ_INT(100, read_u16_le(&parsed.payload[29]), "result-report should preserve distance");
+    ASSERT_EQ_INT(0, read_u16_le(&parsed.payload[31]), "result-report should suppress local azimuth");
+    ASSERT_EQ_INT(0, parsed.payload[33], "result-report should suppress local azimuth fom");
+    ASSERT_EQ_INT(0, read_u16_le(&parsed.payload[34]), "result-report should suppress local elevation");
+    ASSERT_EQ_INT(0, parsed.payload[36], "result-report should suppress local elevation fom");
+    ASSERT_EQ_INT(0, read_u16_le(&parsed.payload[37]), "result-report should suppress remote azimuth");
+    ASSERT_EQ_INT(0, parsed.payload[39], "result-report should suppress remote azimuth fom");
+    ASSERT_EQ_INT(0, read_u16_le(&parsed.payload[40]), "result-report should suppress remote elevation");
+    ASSERT_EQ_INT(0, parsed.payload[42], "result-report should suppress remote elevation fom");
+
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 static void test_ranging_stream_flow_over_tcp(void) {
     test_server_t server = {0};
     uint8_t request[UCI_SIM_MAX_PACKET];
@@ -1931,6 +2005,7 @@ int main(void) {
     test_core_generic_error_flow_over_tcp();
     test_ranging_stream_disable_info_ntf_over_tcp();
     test_ranging_stream_proximity_inside_mode_over_tcp();
+    test_ranging_stream_result_report_config_over_tcp();
     test_ranging_stream_flow_over_tcp();
     test_data_message_edge_cases_over_tcp();
     test_control_edge_cases_over_tcp();

@@ -15,6 +15,8 @@ Standalone UCI device simulator intended to interoperate with:
 - Behavior changes should be grounded in the audit recorded in
   [docs/QORVO_SDK_BEHAVIOR_AUDIT.md](docs/QORVO_SDK_BEHAVIOR_AUDIT.md) before
   they become simulator runtime logic.
+- Major fidelity work should follow the staged implementation document in
+  [docs/QORVO_SDK_IMPLEMENTATION_PLAN.md](docs/QORVO_SDK_IMPLEMENTATION_PLAN.md).
 
 ## Initial Scope
 

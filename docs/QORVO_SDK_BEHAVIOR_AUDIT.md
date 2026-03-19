@@ -294,6 +294,104 @@ Current simulator implication:
 - future behavior work should include parameter validation rules, not just
   payload-shape changes
 
+## Validation / Rejection Model
+
+The local Qorvo/Cherry sources give useful validation knowledge, but not all
+of it has the same architectural value.
+
+### What Cherry Unit Tests Really Prove
+
+Cherry unit tests heavily exercise:
+
+- null context handling
+- null output pointer handling
+- malformed response size handling
+- strict response field parsing
+
+Those tests are valuable, but they primarily prove Cherry client API behavior,
+not full device-runtime behavior.
+
+Examples:
+
+- many `UCI_STATUS_INVALID_PARAM` expectations in
+  `cherry/utest/ucitest/test_session_client.cc`
+- many `UCI_STATUS_INVALID_MESSAGE_SIZE` expectations when the mocked response
+  payload length is wrong
+
+Architectural consequence:
+
+- do not mistake all Cherry unit-test failures for device-side UCI rejection
+- use them mainly to learn:
+  - request/response wire shape expectations
+  - strictness of Cherry parsing
+  - argument-validation behavior of helper APIs
+
+Confidence: `proven`
+
+### Stronger Runtime Validation Evidence
+
+The strongest device-runtime validation evidence comes from
+`uci_spec_fira.h`, which defines session-state reason codes for invalid
+configuration combinations and runtime failures.
+
+These include:
+
+- `ERROR_INVALID_RANGING_INTERVAL`
+- `ERROR_INVALID_STS_CONFIG`
+- `ERROR_INVALID_RFRAME_CONFIG`
+- `ERROR_SESSION_KEY_NOT_FOUND`
+- `ERROR_SUB_SESSION_KEY_NOT_FOUND`
+- `ERROR_INVALID_PREAMBLE_CODE_INDEX`
+- `ERROR_INVALID_SFD_ID`
+- `ERROR_INVALID_PSDU_DATA_RATE`
+- `ERROR_INVALID_PHR_DATA_RATE`
+- `ERROR_INVALID_PREAMBLE_DURATION`
+- `ERROR_INVALID_STS_LENGTH`
+- `ERROR_INVALID_NUM_OF_STS_SEGMENTS`
+- `ERROR_INVALID_NUM_OF_CONTROLEES`
+- `ERROR_INVALID_DST_ADDRESS_LIST`
+- `ERROR_INVALID_OR_NOT_FOUND_SUB_SESSION_ID`
+- `ERROR_INVALID_RESULT_REPORT_CONFIG`
+- `ERROR_INVALID_RANGING_ROUND_CONTROL_CONFIG`
+- `ERROR_INVALID_RANGING_ROUND_USAGE`
+- `ERROR_INVALID_MULTI_NODE_MODE`
+- `ERROR_REF_UWB_SESSION_DOES_NOT_EXIST`
+- `ERROR_REF_UWB_SESSION_RANGING_DURATION_MISMATCH`
+- `ERROR_REF_UWB_SESSION_INVALID_OFFSET_TIME`
+- `ERROR_REF_UWB_SESSION_LOST`
+- `ERROR_DT_ANCHOR_RANGING_ROUNDS_NOT_CONFIGURED`
+- `ERROR_DT_TAG_RANGING_ROUNDS_NOT_CONFIGURED`
+
+Architectural consequence:
+
+- the simulator needs a validation layer that can eventually feed:
+  - direct command rejection
+  - session idle/error transitions
+  - `SESSION_STATUS_NTF` reason codes
+- that validation should be kept separate from:
+  - parameter storage
+  - measurement serialization
+  - transport behavior
+
+Confidence: `proven`
+
+### Current Audit Limit
+
+The local sources prove that these reason codes exist, but they do not yet
+fully prove:
+
+- exactly when a real Qorvo firmware rejects during `SET_APP_CONFIG`
+- exactly when it accepts then later goes idle with a reason code
+- exact notification ordering for every invalid combination
+
+So the current safe rule is:
+
+- reason-code-aware validation architecture is required
+- exact rejection timing still needs cautious implementation and later
+  refinement
+
+Confidence: `strong_inference`
+
 ## Command Audit
 
 This section focuses on standard command semantics that matter most for a
@@ -487,6 +585,53 @@ This includes:
 - `SECURE_RANGING_CSW_LENGTH`
 
 Confidence for this whole block is mostly `weak_inference`.
+
+## Cross-Source Confirmations And Limits
+
+### Python Helper Layer
+
+The local Python Qorvo helper layer is useful as a secondary source for sizes
+and payload conventions.
+
+Useful confirmations:
+
+- `RangeDataNtfProximityNear`: 2 bytes
+- `RangeDataNtfProximityFar`: 2 bytes
+- `SessionInfoNtfBoundAoa`: 8 bytes
+- `SessionKey`: 16 or 32 bytes
+- `SessionTimeBase`: 9 bytes
+
+Useful behavioral note from
+`scripts/fira/run_fira_test_rx/README.md`:
+
+- AoA azimuth field is zero if `AOA_RESULT_REQ = 0`
+- AoA elevation field is zero if `AOA_RESULT_REQ = 0`
+
+Architectural consequence:
+
+- this strengthens the conclusion that `AOA_RESULT_REQ` affects measurement
+  output, not only storage
+
+Confidence: `proven`
+
+### Python Helper Limits
+
+The Python layer also shows where not to over-trust secondary helpers.
+
+Examples:
+
+- `0x1D` is named `SessionInfoNtfBoundAoa`, but the same file comments it as
+  effectively RFU/reserved in that local mapping
+- some lengths are explicitly ambiguous:
+  - `DlTdoaAnchorLocation`: "could also be 11 or 13"
+  - `SubSessionKey`: "could be 32 (!)"
+
+Architectural consequence:
+
+- use Python helpers as a size and tooling cross-check
+- do not let them override stronger Cherry/spec evidence
+
+Confidence: `proven`
 
 ## Current Simulator Gaps
 
@@ -742,6 +887,78 @@ Current gap:
 
 - the simulator stores this parameter but does not affect measurement output
 
+### `SESSION_TIME_BASE` (`0x48`)
+
+Sources:
+
+- `cherry_session_client.h`: explicit setter comment says "Sync sessions"
+- parameters are:
+  - enable
+  - continue session if reference session is not active
+  - resync
+  - reference session handle
+  - offset in microseconds
+- Cherry unit test `set_session_session_time_baseOk` verifies a 9-byte payload
+  carrying those flags plus reference session and offset
+- Python helper layer also describes `SessionTimeBase` as a 9-byte structure
+
+Conclusion:
+
+- this is not a passive metadata parameter
+- it is an explicit inter-session timing relationship
+- the simulator should eventually model it in the engine/scheduler layer, not
+  only store the raw bytes
+
+Confidence: `proven` for wire meaning, `strong_inference` for runtime impact
+
+Simulator implication:
+
+- future simulator architecture should treat this as a dependency between two
+  sessions in the engine clock domain
+- this belongs to scheduler/state-machine work, not to packet-format work
+
+Current gap:
+
+- the simulator stores the value but does not use it to align or constrain
+  session timing
+
+### `SESSION_KEY` (`0x45`) And `SUBSESSION_KEY` (`0x46`)
+
+Sources:
+
+- `cherry_session_client.h` documents:
+  - session key size can be 16 or 32 bytes
+  - sub-session key size can be 128 or 256 bits
+- Cherry unit tests verify that these parameters are serialized with their
+  provided lengths in `SET_APP_CONFIG`
+- `uci_spec_fira.h` exposes reason codes:
+  - `ERROR_SESSION_KEY_NOT_FOUND`
+  - `ERROR_SUB_SESSION_KEY_NOT_FOUND`
+
+Conclusion:
+
+- faithful storage is required
+- these keys are not decorative blobs; they participate in real validation and
+  security mode behavior
+- they should eventually interact with:
+  - `STS_CONFIG`
+  - session start validation
+  - session error reasons
+
+Confidence: `proven` for storage/wire shape, `strong_inference` for runtime use
+
+Simulator implication:
+
+- keep exact length fidelity
+- avoid inventing crypto behavior too early
+- prepare the validation layer so future security-mode rules can require the
+  right key material
+
+Current gap:
+
+- the simulator stores these values faithfully but does not yet let them affect
+  session validity or security-related runtime behavior
+
 ## Parameter Dependency Summary
 
 The next behavior work should follow this dependency order:
@@ -760,3 +977,32 @@ Why this order:
 - `AOA_RESULT_REQ` and `RSSI_REPORTING` naturally compose with it
 - `RANGING_INTERVAL` then extends the same seam into scheduler behavior and the
   visible range-data header
+
+## Audit Status
+
+This audit is not mathematically complete, but the remaining local sources are
+now yielding less new semantic information per pass.
+
+What is now well covered:
+
+- UCI core/message responsibilities
+- Cherry range-data consumer semantics
+- standard command-family semantics relevant to the simulator
+- major app-config behavior domains
+- validation/reason-code architecture implications
+- limits of the current evidence
+
+What still remains useful later, but is no longer blocking the next design
+step:
+
+- deeper vendor-family runtime semantics
+- advanced TDoA behavior details beyond storage/shape
+- exact firmware timing of invalid-combination rejection vs later idle/error
+
+Practical conclusion:
+
+- there is now enough audited knowledge to produce a real simulator
+  implementation plan for:
+  - measurement-policy architecture
+  - validation architecture
+  - scheduler integration for behavioral app-configs

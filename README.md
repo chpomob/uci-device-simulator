@@ -97,6 +97,11 @@ behavior for `0x00` (disable), `0x01` (enable), `0x02` (emit while the
 simulated distance is inside the configured proximity window), and `0x05`
 (emit on proximity enter/leave transitions). The AoA-dependent modes are still
 stored until their bound parameters are made behavioral.
+Range-data generation now passes through an explicit internal
+measurement-policy layer before packet serialization. Phase 1 keeps the wire
+behavior unchanged, but it gives the simulator the right seam for future
+behavioral work on `RESULT_REPORT_CONFIG`, `AOA_RESULT_REQ`,
+`RSSI_REPORTING`, and `RANGING_INTERVAL`.
 
 Current simulator behavior is owned by one explicit default device profile.
 That profile now defines the visible device versions, capability payload,

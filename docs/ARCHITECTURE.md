@@ -67,3 +67,13 @@ decides when scheduled events are ready to emit. That gives the simulator a
 cleaner path toward more realistic asynchronous delivery without leaking
 scenario behavior into handlers or transport. `SESSION_STOP` cancels any
 remaining stream notifications before they reach the transport.
+
+Phase 1 of the Qorvo-SDK-driven fidelity work now has an explicit internal
+measurement-policy seam in `uci_sim_measurement.*`. The current behavior is
+intentionally unchanged: the policy layer still reproduces the same range-data
+notification bytes and proximity-gating rules as before. The architectural
+gain is that range notification generation is no longer a single function that
+both decides policy and patches packet bytes directly. Future work for
+`RESULT_REPORT_CONFIG`, `AOA_RESULT_REQ`, `RSSI_REPORTING`, and
+`RANGING_INTERVAL` should extend that measurement-policy seam rather than
+adding more branches to the device model or handlers.

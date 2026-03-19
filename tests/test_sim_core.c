@@ -1,5 +1,6 @@
 #include "uci_sim_device.h"
 #include "uci_sim_engine.h"
+#include "uci_sim_measurement.h"
 #include "uci_sim_profile.h"
 
 #include <stdio.h>
@@ -36,6 +37,45 @@ static uint64_t read_u64_le(const uint8_t* payload) {
            ((uint64_t)payload[5] << 40) |
            ((uint64_t)payload[6] << 48) |
            ((uint64_t)payload[7] << 56);
+}
+
+static void test_measurement_policy_serializes_default_range_notification(void) {
+    const uci_sim_profile_t* profile = uci_sim_default_profile();
+    uci_sim_session_t session;
+    uci_sim_measurement_t measurement;
+    uci_sim_packet_t notification;
+
+    memset(&session, 0, sizeof(session));
+    session.session_id = 0x12345678U;
+    session.ranging_count = 2;
+
+    uci_sim_measurement_init_ranging_sample(profile, &session, &measurement);
+    measurement.sequence_number = 7U;
+
+    ASSERT_TRUE(uci_sim_measurement_build_range_data_notification(profile,
+                                                                  &measurement,
+                                                                  profile->range_data_notification_oid,
+                                                                  &notification) == 0,
+                "measurement notification build failed");
+    ASSERT_EQ_U8(UCI_MT_NOTIFICATION, notification.mt, "measurement notification mt");
+    ASSERT_EQ_U8(UCI_GID_SESSION_CONTROL, notification.gid, "measurement notification gid");
+    ASSERT_EQ_U8(profile->range_data_notification_oid, notification.oid, "measurement notification oid");
+    ASSERT_EQ_U32(7U, read_u32_le(&notification.payload[profile->range_data_sequence_offset]),
+                  "measurement notification sequence");
+    ASSERT_EQ_U32(session.session_id,
+                  read_u32_le(&notification.payload[profile->range_data_primary_session_id_offset]),
+                  "measurement notification primary session");
+    ASSERT_EQ_U32(session.session_id,
+                  read_u32_le(&notification.payload[profile->range_data_secondary_session_id_offset]),
+                  "measurement notification secondary session");
+    ASSERT_EQ_U32(profile->ranging_interval_ms,
+                  read_u32_le(&notification.payload[profile->range_data_interval_offset]),
+                  "measurement notification interval");
+    ASSERT_EQ_U16((uint16_t)(profile->range_data_distance_base_cm +
+                             (session.ranging_count * profile->range_data_distance_step_cm)),
+                  read_u16_le(&notification.payload[profile->range_data_measurement_distance_offset]),
+                  "measurement notification distance");
+    PASS();
 }
 
 static uci_sim_time_ms_t fake_clock_now_ms(void* context) {
@@ -2599,6 +2639,7 @@ static void test_hus_config_commands(void) {
 int main(void) {
     test_packet_round_trip();
     test_engine_clock_poll_progression();
+    test_measurement_policy_serializes_default_range_notification();
     test_core_device_info();
     test_default_profile_is_applied();
     test_default_profile_feature_matrix();

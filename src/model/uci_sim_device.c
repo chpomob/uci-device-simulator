@@ -37,6 +37,13 @@ static uint16_t read_u16_le(const uint8_t* payload) {
            (uint16_t)((uint16_t)payload[1] << 8);
 }
 
+static uint32_t read_u32_le(const uint8_t* payload) {
+    return (uint32_t)payload[0] |
+           ((uint32_t)payload[1] << 8) |
+           ((uint32_t)payload[2] << 16) |
+           ((uint32_t)payload[3] << 24);
+}
+
 void uci_sim_device_set_scenario(uci_sim_device_t* device, uci_sim_scenario_kind_t scenario) {
     if (!device) {
         return;
@@ -131,6 +138,32 @@ int uci_sim_device_schedule_event(uci_sim_device_t* device,
     event->session_id = session_id;
     event->delay_ms = delay_ms;
     return 0;
+}
+
+int uci_sim_device_reschedule_session_event(uci_sim_device_t* device,
+                                            uci_sim_event_type_t type,
+                                            uint32_t session_id,
+                                            uint32_t delay_ms) {
+    size_t i;
+    size_t out = 0;
+
+    if (!device || type == UCI_SIM_EVENT_NONE) {
+        return -1;
+    }
+
+    for (i = 0; i < device->scheduled_event_count; ++i) {
+        if (device->scheduled_events[i].type == type &&
+            device->scheduled_events[i].session_id == session_id) {
+            continue;
+        }
+        if (out != i) {
+            device->scheduled_events[out] = device->scheduled_events[i];
+        }
+        out++;
+    }
+    device->scheduled_event_count = out;
+
+    return uci_sim_device_schedule_event(device, type, session_id, delay_ms);
 }
 
 void uci_sim_device_cancel_session_events(uci_sim_device_t* device, uint32_t session_id) {
@@ -329,6 +362,23 @@ uint16_t uci_sim_session_get_range_data_ntf_proximity_far(const uci_sim_session_
     }
 
     return read_u16_le(value);
+}
+
+uint32_t uci_sim_session_get_ranging_interval_ms(const uci_sim_session_t* session,
+                                                 const uci_sim_profile_t* profile) {
+    uint8_t value[4] = {0x00, 0x00, 0x00, 0x00};
+    uint8_t value_len = 0;
+
+    if (!session) {
+        return profile ? profile->ranging_interval_ms : 0U;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_RANGING_INTERVAL, value, &value_len) != 0 ||
+        value_len != 4) {
+        return profile ? profile->ranging_interval_ms : 0U;
+    }
+
+    return read_u32_le(value);
 }
 
 uint8_t uci_sim_session_get_aoa_result_req(const uci_sim_session_t* session) {

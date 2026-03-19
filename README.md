@@ -102,10 +102,12 @@ measurement-policy layer before packet serialization. Phase 1 keeps the wire
 behavior unchanged, but it gives the simulator the right seam for future
 behavioral work on `RESULT_REPORT_CONFIG`, `AOA_RESULT_REQ`,
 `RSSI_REPORTING`, and `RANGING_INTERVAL`.
-`RESULT_REPORT_CONFIG`, `AOA_RESULT_REQ`, and `RSSI_REPORTING` are now
-behavioral on the current TWR range-data path while keeping the packet layout
-stable: disabled result components are emitted as zeroed fields rather than
-removed from the notification. At this stage that means:
+`RESULT_REPORT_CONFIG`, `AOA_RESULT_REQ`, `RSSI_REPORTING`, and
+`RANGING_INTERVAL` are now behavioral on the current TWR range-data path while
+keeping the packet layout stable: disabled result components are emitted as
+zeroed fields rather than removed from the notification, and the session
+`RANGING_INTERVAL` now drives both the emitted current-ranging-interval field
+and future ranging-stream event timing. At this stage that means:
 - bit 0 controls the distance/ToF-derived field
 - bit 1 controls azimuth fields
 - bit 2 controls elevation fields

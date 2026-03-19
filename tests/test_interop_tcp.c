@@ -45,6 +45,13 @@ static uint16_t read_u16_le(const uint8_t* payload) {
            (uint16_t)((uint16_t)payload[1] << 8);
 }
 
+static uint32_t read_u32_le(const uint8_t* payload) {
+    return (uint32_t)payload[0] |
+           ((uint32_t)payload[1] << 8) |
+           ((uint32_t)payload[2] << 16) |
+           ((uint32_t)payload[3] << 24);
+}
+
 static ssize_t read_full(int fd, void* buffer, size_t count) {
     size_t total = 0;
     while (total < count) {
@@ -1923,6 +1930,75 @@ static void test_ranging_stream_rssi_reporting_over_tcp(void) {
     PASS();
 }
 
+static void test_ranging_stream_ranging_interval_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    uint8_t packet[UCI_SIM_MAX_PACKET];
+    uci_sim_packet_t parsed;
+    size_t packet_len = 0;
+    int fd = -1;
+
+    server.scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
+    ASSERT_TRUE(start_server(&server) == 0, "start ranging-interval server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect ranging-interval server");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load ranging-interval init");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write ranging-interval init");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_rsp.hex",
+                          "ranging-interval init rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
+                          "ranging-interval init ntf");
+
+    memset(request, 0, sizeof(request));
+    request[0] = 0x21;
+    request[1] = 0x03;
+    request[2] = 0x00;
+    request[3] = 0x0B;
+    request[4] = 0x78;
+    request[5] = 0x56;
+    request[6] = 0x34;
+    request[7] = 0x12;
+    request[8] = 0x01;
+    request[9] = 0x09;
+    request[10] = 0x04;
+    request[11] = 0xB8;
+    request[12] = 0x0B;
+    request[13] = 0x00;
+    request[14] = 0x00;
+    ASSERT_TRUE(write_full(fd, request, 15) == 15, "write ranging-interval config");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+                          "ranging-interval config rsp");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load ranging-interval start");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write ranging-interval start");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_rsp.hex",
+                          "ranging-interval start rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_ntf.hex",
+                          "ranging-interval start ntf");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read ranging-interval range packet");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse ranging-interval range packet");
+    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "ranging-interval range oid");
+    ASSERT_EQ_INT(3000, (int)read_u32_le(&parsed.payload[9]), "ranging-interval should affect emitted packet");
+
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 static void test_ranging_stream_flow_over_tcp(void) {
     test_server_t server = {0};
     uint8_t request[UCI_SIM_MAX_PACKET];
@@ -2166,6 +2242,7 @@ int main(void) {
     test_ranging_stream_result_report_config_over_tcp();
     test_ranging_stream_aoa_result_req_over_tcp();
     test_ranging_stream_rssi_reporting_over_tcp();
+    test_ranging_stream_ranging_interval_over_tcp();
     test_ranging_stream_flow_over_tcp();
     test_data_message_edge_cases_over_tcp();
     test_control_edge_cases_over_tcp();

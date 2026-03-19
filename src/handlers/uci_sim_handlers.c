@@ -815,6 +815,20 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
                 session->has_last_proximity_state = 0;
                 session->last_in_proximity_range = 0;
             }
+            if (config_id == UCI_APP_CONFIG_RANGING_INTERVAL &&
+                session->state == UCI_SESSION_STATE_ACTIVE &&
+                session->ranging_stream_remaining > 0) {
+                const uci_sim_profile_t* profile = device->profile ?
+                    device->profile :
+                    uci_sim_default_profile();
+                if (uci_sim_device_reschedule_session_event(device,
+                                                            UCI_SIM_EVENT_RANGE_DATA,
+                                                            session->session_id,
+                                                            uci_sim_session_get_ranging_interval_ms(session, profile)) != 0) {
+                    result->response.payload[0] = UCI_STATUS_REJECTED;
+                    break;
+                }
+            }
             offset += value_len;
             processed++;
         }

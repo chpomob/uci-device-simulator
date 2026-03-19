@@ -57,9 +57,12 @@ static int process_ready_event(uci_sim_engine_t* engine,
             }
             flush_device_notifications(engine);
             if (session->ranging_stream_remaining > 0 && session->state == UCI_SESSION_STATE_ACTIVE) {
-                uint32_t delay_ms = (session->ranging_count < 2 || !engine->device.profile)
+                const uci_sim_profile_t* profile = engine->device.profile ?
+                    engine->device.profile :
+                    uci_sim_default_profile();
+                uint32_t delay_ms = (session->ranging_count < 2)
                     ? 0U
-                    : engine->device.profile->ranging_event_period_ms;
+                    : uci_sim_session_get_ranging_interval_ms(session, profile);
                 return uci_sim_device_schedule_event(&engine->device,
                                                      UCI_SIM_EVENT_RANGE_DATA,
                                                      session->session_id,

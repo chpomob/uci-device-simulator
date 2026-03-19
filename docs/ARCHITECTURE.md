@@ -78,8 +78,8 @@ both decides policy and patches packet bytes directly. Future work for
 `RANGING_INTERVAL` should extend that measurement-policy seam rather than
 adding more branches to the device model or handlers.
 
-`RESULT_REPORT_CONFIG`, `AOA_RESULT_REQ`, and `RSSI_REPORTING` are now the
-first behavioral users of that seam. The simulator still keeps the
+`RESULT_REPORT_CONFIG`, `AOA_RESULT_REQ`, `RSSI_REPORTING`, and
+`RANGING_INTERVAL` are now the first behavioral users of that seam. The simulator still keeps the
 Cherry-aligned TWR packet layout stable, but the measurement policy now
 controls which result fields remain meaningful:
 - bit 0 keeps the distance/ToF-derived field meaningful
@@ -89,6 +89,8 @@ controls which result fields remain meaningful:
 - `AOA_RESULT_REQ` then intersects with that policy so the simulator can gate
   azimuth and elevation independently without changing packet shape
 - `RSSI_REPORTING` independently gates whether the RSSI byte is meaningful
+- `RANGING_INTERVAL` now feeds both the visible notification interval field
+  and the delay used for future scheduled ranging events
 
 Disabled fields are serialized as zero rather than removed from the packet.
 That matches the current audit guidance: change field meaning before changing

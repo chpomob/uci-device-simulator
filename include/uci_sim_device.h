@@ -140,6 +140,8 @@ int uci_sim_session_get_config(const uci_sim_session_t* session,
 uint8_t uci_sim_session_get_range_data_ntf_config(const uci_sim_session_t* session);
 uint16_t uci_sim_session_get_range_data_ntf_proximity_near(const uci_sim_session_t* session);
 uint16_t uci_sim_session_get_range_data_ntf_proximity_far(const uci_sim_session_t* session);
+uint32_t uci_sim_session_get_ranging_interval_ms(const uci_sim_session_t* session,
+                                                 const uci_sim_profile_t* profile);
 uint8_t uci_sim_session_get_aoa_result_req(const uci_sim_session_t* session);
 uint8_t uci_sim_session_get_rssi_reporting(const uci_sim_session_t* session);
 uint8_t uci_sim_session_get_result_report_config(const uci_sim_session_t* session);
@@ -172,6 +174,10 @@ int uci_sim_device_schedule_event(uci_sim_device_t* device,
                                   uci_sim_event_type_t type,
                                   uint32_t session_id,
                                   uint32_t delay_ms);
+int uci_sim_device_reschedule_session_event(uci_sim_device_t* device,
+                                            uci_sim_event_type_t type,
+                                            uint32_t session_id,
+                                            uint32_t delay_ms);
 void uci_sim_device_cancel_session_events(uci_sim_device_t* device, uint32_t session_id);
 void uci_sim_device_tick_events(uci_sim_device_t* device, uint32_t elapsed_ms);
 int uci_sim_device_dequeue_ready_event(uci_sim_device_t* device, uci_sim_scheduled_event_t* event);

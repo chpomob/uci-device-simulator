@@ -23,7 +23,7 @@ void uci_sim_measurement_init_ranging_sample(const uci_sim_profile_t* profile,
                   (session->ranging_count * profile->range_data_distance_step_cm);
 
     sample->session_id = session->session_id;
-    sample->ranging_interval_ms = profile->ranging_interval_ms;
+    sample->ranging_interval_ms = uci_sim_session_get_ranging_interval_ms(session, profile);
     sample->distance_cm = (uint16_t)distance_cm;
 }
 

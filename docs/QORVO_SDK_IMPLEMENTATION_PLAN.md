@@ -282,6 +282,19 @@ Initial parameter set to validate because the audit supports it:
 - `NUMBER_OF_CONTROLEES`
 - `DST_MAC_ADDRESS`
 
+`RANGING_INTERVAL` specific guidance:
+
+- treat interval validation as device/profile behavior, not CLI behavior
+- use at least these future inputs:
+  - `MIN_RANGING_INTERVAL_MS` capability
+  - slot / tx-delay feasibility
+  - min-frames-per-ranging-round feasibility
+- do not assume the surfacing path yet:
+  - local evidence proves the session reason `ERROR_INVALID_RANGING_INTERVAL`
+  - local evidence does not yet prove whether Qorvo firmware rejects the
+    command immediately, reports the failure later through session status, or
+    does both depending on profile/flow
+
 Acceptance criteria:
 
 - handlers stop carrying ad hoc validation for these domains

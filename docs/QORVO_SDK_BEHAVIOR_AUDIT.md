@@ -886,9 +886,25 @@ Sources:
 - `uci_spec_fira.h`: identified as `RANGING_INTERVAL (aka RANGING_DURATION)`
 - `cherry_session_client.h`: setter comment says "Interval between ranging, in
   milliseconds"
+- `cherry_session_client.h`: builder path uses generic `put_int32()` and does
+  not add interval-specific host validation
 - `cherry_fira_client.h`: measurement/result structures expose
   `ranging_interval_ms`
 - `cherry_fira_client.c`: result population copies `data->ranging_interval_ms`
+- `cherry_fira.h`: TWR, TWR controlee, DL-TDoA anchor, and DL-TDoA tag session
+  creation APIs all take `interval_ms` as an explicit runtime input
+- `cherry_fira.c` / `cherry_ccc.c`: those higher-level flows forward the
+  interval directly into `SESSION_SET_APP_CONFIG`
+- local shell capability inventory exposes `SUPPORTED_MIN_RANGING_INTERVAL_MS`
+  (`0xE4`), with the current shell-side default response advertising `50 ms`
+- `uci_spec_fira.h`: explicit session reason
+  `ERROR_INVALID_RANGING_INTERVAL (0x23)`
+- `uci_spec_fira.h`: neighboring session reasons
+  `ERROR_MIN_RFRAMES_PER_RR_NOT_SUPPORTED` and `ERROR_TX_DELAY_NOT_SUPPORTED`
+  show that interval validity is coupled to other timing parameters, not only
+  to a scalar minimum
+- Cherry example apps parse `interval_ms` as operator input and reject only
+  malformed numbers at CLI parsing time
 
 Conclusion:
 
@@ -896,6 +912,13 @@ Conclusion:
   to echo back.
 - It also appears in emitted result data as part of the visible measurement
   information.
+- Host-side Cherry layers do not appear to enforce semantic interval bounds.
+  They serialize and forward the value to the device.
+- The local Qorvo/Cherry ecosystem clearly expects device-side validation to
+  exist, because:
+  - a minimum-supported capability is exposed
+  - a specific invalid-interval session reason exists
+  - related timing/session reasons show cross-parameter feasibility checks
 
 Confidence: `proven`
 
@@ -905,6 +928,12 @@ Simulator implication:
   profile default, when scheduling future ranging events
 - the emitted `RANGE_DATA_NTF` should serialize the same interval value into
   the current ranging interval field
+- future validation should live in the simulator/device validation layer, not
+  in CLI parsing or packet builders
+- interval validation will eventually need to compose with at least:
+  - `MIN_RANGING_INTERVAL_MS` capability
+  - slot / tx-delay feasibility
+  - min-frames-per-ranging-round feasibility
 
 Architecture implication:
 
@@ -912,6 +941,13 @@ Architecture implication:
 - this is a clean case where one app-config affects both:
   - scheduler timing
   - visible payload content
+- validation for this parameter should be profile/device driven and should not
+  be embedded in shell-side metadata ranges
+- the exact surfacing path remains unresolved:
+  - immediate `SET_APP_CONFIG` rejection is plausible
+  - later `SESSION_STATUS_NTF` with reason `0x23` is also plausible
+  - local SDK evidence is not strong enough yet to choose one path as
+    authoritative
 
 Current gap:
 

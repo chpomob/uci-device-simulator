@@ -535,6 +535,89 @@ static void test_engine_uses_session_ranging_interval_override(void) {
     PASS();
 }
 
+static void test_ranging_interval_validation_rejects_below_profile_min(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "interval validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "interval validation session lookup failed");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 11;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_RANGING_INTERVAL;
+    request.payload[6] = 0x04;
+    request.payload[7] = 49;
+    request.payload[8] = 0x00;
+    request.payload[9] = 0x00;
+    request.payload[10] = 0x00;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "interval below minimum should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_RANGE, result.response.payload[0], "interval below minimum status");
+    ASSERT_EQ_U8(0x00, result.response.payload[1], "interval below minimum config status count");
+    ASSERT_TRUE(result.has_notification, "interval below minimum should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "interval below minimum generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_RANGE, result.notification.payload[0], "interval below minimum generic error status");
+    ASSERT_EQ_U32(device.profile->ranging_interval_ms,
+                  uci_sim_session_get_ranging_interval_ms(session, device.profile),
+                  "invalid interval should not overwrite stored session interval");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_ranging_interval(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_interval[4] = { 49, 0x00, 0x00, 0x00 };
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "interval start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "interval start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_RANGING_INTERVAL,
+                                             invalid_interval,
+                                             sizeof(invalid_interval)) == 0,
+                "interval start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "start with invalid interval should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_RANGE, result.response.payload[0], "start invalid interval status");
+    ASSERT_TRUE(result.has_notification, "start invalid interval should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid interval generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_RANGE, result.notification.payload[0], "start invalid interval generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid interval should preserve session state");
+    PASS();
+}
+
 static void test_packet_round_trip(void) {
     uint8_t bytes[UCI_SIM_MAX_PACKET];
     size_t written = 0;
@@ -3058,6 +3141,8 @@ int main(void) {
     test_packet_round_trip();
     test_engine_clock_poll_progression();
     test_engine_uses_session_ranging_interval_override();
+    test_ranging_interval_validation_rejects_below_profile_min();
+    test_session_start_rejects_invalid_ranging_interval();
     test_measurement_policy_serializes_default_range_notification();
     test_measurement_policy_serializes_session_ranging_interval_override();
     test_result_report_config_masks_range_notification_fields();

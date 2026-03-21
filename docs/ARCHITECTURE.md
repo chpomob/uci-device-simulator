@@ -93,6 +93,18 @@ controls which result fields remain meaningful:
   and the delay used for the full scheduled ranging stream, including the
   first post-start measurement
 
+The simulator now also has a separate validation seam in `uci_sim_validation.*`.
+That layer owns the first profile-driven behavioral rejection rule:
+- `RANGING_INTERVAL` below the profile minimum is rejected with
+  `INVALID_RANGE`
+- invalid values are not stored during `SET_APP_CONFIG`
+- `SESSION_START` re-validates the effective session interval before state
+  transition
+
+That separation matters for long-term maintainability: timing/report policy
+stays in measurement code, while constraint enforcement moves into validation
+instead of accumulating in handlers.
+
 Disabled fields are serialized as zero rather than removed from the packet.
 That matches the current audit guidance: change field meaning before changing
 packet shape.

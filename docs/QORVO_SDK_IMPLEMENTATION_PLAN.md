@@ -301,6 +301,18 @@ Acceptance criteria:
 - unit tests prove structured validation outcomes
 - no transport coupling
 
+Current status:
+
+- validation seam implemented in `uci_sim_validation.*`
+- `RANGING_INTERVAL` is now the first profile-driven validated parameter
+- default profile behavior:
+  - minimum supported interval: `50 ms`
+  - status on invalid value: `INVALID_RANGE`
+  - command-path storage rejection on invalid `SET_APP_CONFIG`
+  - `SESSION_START` re-validates the effective interval before transition
+- delayed/session-status surfacing remains intentionally configurable work for
+  later profiles once stronger firmware evidence exists
+
 ### Phase 5: Introduce Session Reason Mapping
 
 Tasks:

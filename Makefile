@@ -11,6 +11,7 @@ COMMON_SRCS = \
 	src/core/uci_sim_clock.c \
 	src/core/uci_sim_packet.c \
 	src/core/uci_sim_measurement.c \
+	src/core/uci_sim_validation.c \
 	src/core/uci_sim_engine.c \
 	src/model/uci_sim_device.c \
 	src/handlers/uci_sim_handlers.c

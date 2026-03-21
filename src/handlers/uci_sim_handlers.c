@@ -1,6 +1,13 @@
 #include "uci_sim_device.h"
+#include "uci_sim_validation.h"
 
 #include <string.h>
+
+static void emit_session_status_ntf_with_reason(uci_sim_device_t* device,
+                                                uint32_t session_id,
+                                                uint8_t state,
+                                                uint8_t reason,
+                                                uci_sim_result_t* result);
 
 static void init_result(uci_sim_result_t* result) {
     memset(result, 0, sizeof(*result));
@@ -94,8 +101,21 @@ static void emit_session_status_ntf(uci_sim_device_t* device,
                                     uint32_t session_id,
                                     uint8_t state,
                                     uci_sim_result_t* result) {
-    uci_sim_packet_t notification;
     const uci_sim_profile_t* profile = device && device->profile ? device->profile : uci_sim_default_profile();
+
+    emit_session_status_ntf_with_reason(device,
+                                        session_id,
+                                        state,
+                                        profile->session_status_reason_code,
+                                        result);
+}
+
+static void emit_session_status_ntf_with_reason(uci_sim_device_t* device,
+                                                uint32_t session_id,
+                                                uint8_t state,
+                                                uint8_t reason,
+                                                uci_sim_result_t* result) {
+    uci_sim_packet_t notification;
 
     memset(&notification, 0, sizeof(notification));
     notification.mt = UCI_MT_NOTIFICATION;
@@ -105,7 +125,7 @@ static void emit_session_status_ntf(uci_sim_device_t* device,
     notification.payload_len = 6;
     write_u32_le(notification.payload, session_id);
     notification.payload[4] = state;
-    notification.payload[5] = profile->session_status_reason_code;
+    notification.payload[5] = reason;
 
     (void)uci_sim_device_deliver_notification(device, &notification, result);
 }
@@ -767,6 +787,7 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
                                          int is_set) {
     uint32_t session_id;
     uci_sim_session_t* session;
+    const uci_sim_profile_t* profile;
     uint8_t count;
     size_t offset;
     uint8_t processed = 0;
@@ -779,6 +800,7 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
     session_id = read_u32_le(request->payload);
     count = request->payload[4];
     session = find_session(device, session_id);
+    profile = device && device->profile ? device->profile : uci_sim_default_profile();
     if (session == NULL) {
         make_status_response(request, result, UCI_STATUS_INVALID_PARAM);
         return -1;
@@ -805,6 +827,20 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
                 result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
                 break;
             }
+            if (config_id == UCI_APP_CONFIG_RANGING_INTERVAL) {
+                uci_sim_validation_result_t validation;
+
+                if (uci_sim_validate_session_app_config(profile,
+                                                        session,
+                                                        config_id,
+                                                        &request->payload[offset],
+                                                        value_len,
+                                                        &validation) != 0 &&
+                    validation.surface == UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE) {
+                    result->response.payload[0] = validation.status;
+                    break;
+                }
+            }
             if (uci_sim_session_store_config(session, config_id, &request->payload[offset], value_len) != 0) {
                 result->response.payload[0] = UCI_STATUS_REJECTED;
                 break;
@@ -818,9 +854,6 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
             if (config_id == UCI_APP_CONFIG_RANGING_INTERVAL &&
                 session->state == UCI_SESSION_STATE_ACTIVE &&
                 session->ranging_stream_remaining > 0) {
-                const uci_sim_profile_t* profile = device->profile ?
-                    device->profile :
-                    uci_sim_default_profile();
                 if (uci_sim_device_reschedule_session_event(device,
                                                             UCI_SIM_EVENT_RANGE_DATA,
                                                             session->session_id,
@@ -900,6 +933,7 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
 static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet_t* request, uci_sim_result_t* result) {
     uint32_t session_id;
     uci_sim_session_t* session;
+    const uci_sim_profile_t* profile;
     const uci_sim_session_transition_t* transition;
 
     if (!uci_sim_profile_supports_command(device->profile, request->gid, request->oid)) {
@@ -914,6 +948,7 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
 
     session_id = read_u32_le(request->payload);
     session = find_session(device, session_id);
+    profile = device && device->profile ? device->profile : uci_sim_default_profile();
     if (session == NULL) {
         make_status_response(request, result, UCI_STATUS_INVALID_PARAM);
         return -1;
@@ -1053,6 +1088,24 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
     if ((transition->allowed_states_mask & (1U << session->state)) == 0U) {
         make_status_response(request, result, transition->invalid_status);
         return -1;
+    }
+
+    if (request->oid == UCI_SESSION_START) {
+        uci_sim_validation_result_t validation;
+
+        if (uci_sim_validate_session_start(profile, session, &validation) != 0) {
+            if (validation.surface == UCI_SIM_INVALID_CONFIG_SURFACE_SESSION_STATUS) {
+                make_status_response(request, result, UCI_STATUS_OK);
+                emit_session_status_ntf_with_reason(device,
+                                                    session_id,
+                                                    session->state,
+                                                    validation.reason,
+                                                    result);
+                return 0;
+            }
+            make_status_response(request, result, validation.status);
+            return -1;
+        }
     }
 
     if (request->oid == UCI_SESSION_START || request->oid == UCI_SESSION_STOP) {

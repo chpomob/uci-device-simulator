@@ -110,7 +110,11 @@ zeroed fields rather than removed from the notification, and the session
 and the full ranging-stream schedule. The `ranging_stream` scenario no longer
 front-loads early notifications: the first range-data notification now waits
 one configured interval after `SESSION_START`, and each later notification uses
-that same interval again. At this stage that means:
+that same interval again. The default Qorvo-like profile now also enforces a
+minimum valid ranging interval of `50 ms`: lower values are rejected during
+`SESSION_SET_APP_CONFIG` with `INVALID_RANGE`, are not stored, and `SESSION_START`
+also re-validates the effective session interval before entering `ACTIVE`.
+At this stage that means:
 - bit 0 controls the distance/ToF-derived field
 - bit 1 controls azimuth fields
 - bit 2 controls elevation fields

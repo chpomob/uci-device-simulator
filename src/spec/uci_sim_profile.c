@@ -25,6 +25,10 @@ static const uci_sim_profile_t k_default_profile = {
     .default_session_type = UCI_SESSION_TYPE_RANGING,
     .initial_session_state = UCI_SESSION_STATE_INIT,
     .session_status_reason_code = UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+    .supported_min_ranging_interval_ms = 50U,
+    .invalid_ranging_interval_status = UCI_STATUS_INVALID_RANGE,
+    .invalid_ranging_interval_reason_code = UCI_SESSION_REASON_ERROR_INVALID_RANGING_INTERVAL,
+    .invalid_ranging_interval_surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE,
     .session_transitions = {
         {
             .oid = UCI_SESSION_START,

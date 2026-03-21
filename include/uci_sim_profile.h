@@ -15,6 +15,11 @@ typedef struct {
     uint8_t invalid_status;
 } uci_sim_session_transition_t;
 
+typedef enum {
+    UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE = 0,
+    UCI_SIM_INVALID_CONFIG_SURFACE_SESSION_STATUS = 1
+} uci_sim_invalid_config_surface_t;
+
 typedef struct {
     const char* name;
     uint16_t uci_version;
@@ -29,6 +34,10 @@ typedef struct {
     uint8_t default_session_type;
     uint8_t initial_session_state;
     uint8_t session_status_reason_code;
+    uint16_t supported_min_ranging_interval_ms;
+    uint8_t invalid_ranging_interval_status;
+    uint8_t invalid_ranging_interval_reason_code;
+    uint8_t invalid_ranging_interval_surface;
     uci_sim_session_transition_t session_transitions[UCI_SIM_MAX_SESSION_TRANSITIONS];
     size_t session_transition_count;
     uint16_t default_session_max_data_size;

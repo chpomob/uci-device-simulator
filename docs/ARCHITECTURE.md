@@ -100,6 +100,10 @@ That layer owns the first profile-driven behavioral rejection rule:
 - invalid values are not stored during `SET_APP_CONFIG`
 - `SESSION_START` re-validates the effective session interval before state
   transition
+- `RESULT_REPORT_CONFIG` values using bits outside the documented low four
+  report flags are rejected with `INVALID_PARAM`
+- invalid `RESULT_REPORT_CONFIG` values are not stored and `SESSION_START`
+  also re-validates the effective stored value
 
 That separation matters for long-term maintainability: timing/report policy
 stays in measurement code, while constraint enforcement moves into validation

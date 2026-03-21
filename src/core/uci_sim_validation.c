@@ -39,6 +39,24 @@ static int validate_ranging_interval_ms(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_result_report_config(const uci_sim_profile_t* profile,
+                                         uint8_t result_report_config,
+                                         uci_sim_validation_result_t* result) {
+    if (!profile) {
+        return 0;
+    }
+
+    if ((result_report_config & (uint8_t)~profile->supported_result_report_config_mask) != 0U) {
+        set_invalid_result(result,
+                           profile->invalid_result_report_config_status,
+                           profile->invalid_result_report_config_reason_code,
+                           profile->invalid_result_report_config_surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 void uci_sim_validation_result_init(uci_sim_validation_result_t* result) {
     if (!result) {
         return;
@@ -61,7 +79,17 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
     uci_sim_validation_result_init(result);
 
     if (config_id != UCI_APP_CONFIG_RANGING_INTERVAL) {
-        return 0;
+        if (config_id != UCI_APP_CONFIG_RESULT_REPORT_CONFIG) {
+            return 0;
+        }
+        if (!value || value_len != 1) {
+            set_invalid_result(result,
+                               UCI_STATUS_INVALID_PARAM,
+                               UCI_SESSION_REASON_ERROR_INVALID_RESULT_REPORT_CONFIG,
+                               UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+            return -1;
+        }
+        return validate_result_report_config(profile, value[0], result);
     }
 
     if (!value || value_len != 4) {
@@ -79,6 +107,7 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
                                    const uci_sim_session_t* session,
                                    uci_sim_validation_result_t* result) {
     uint32_t interval_ms;
+    uint8_t result_report_config;
 
     uci_sim_validation_result_init(result);
     if (!session) {
@@ -86,5 +115,10 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
     }
 
     interval_ms = uci_sim_session_get_ranging_interval_ms(session, profile);
-    return validate_ranging_interval_ms(profile, interval_ms, result);
+    if (validate_ranging_interval_ms(profile, interval_ms, result) != 0) {
+        return -1;
+    }
+
+    result_report_config = uci_sim_session_get_result_report_config(session);
+    return validate_result_report_config(profile, result_report_config, result);
 }

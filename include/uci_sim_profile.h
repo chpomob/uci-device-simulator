@@ -38,6 +38,10 @@ typedef struct {
     uint8_t invalid_ranging_interval_status;
     uint8_t invalid_ranging_interval_reason_code;
     uint8_t invalid_ranging_interval_surface;
+    uint8_t supported_result_report_config_mask;
+    uint8_t invalid_result_report_config_status;
+    uint8_t invalid_result_report_config_reason_code;
+    uint8_t invalid_result_report_config_surface;
     uci_sim_session_transition_t session_transitions[UCI_SIM_MAX_SESSION_TRANSITIONS];
     size_t session_transition_count;
     uint16_t default_session_max_data_size;

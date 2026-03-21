@@ -618,6 +618,90 @@ static void test_session_start_rejects_invalid_ranging_interval(void) {
     PASS();
 }
 
+static void test_result_report_config_validation_rejects_unsupported_bits(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t original_result_report_config;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "result report validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "result report validation session lookup failed");
+    original_result_report_config = uci_sim_session_get_result_report_config(session);
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_RESULT_REPORT_CONFIG;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x10;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "result report config unsupported bits should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "result report invalid status");
+    ASSERT_EQ_U8(0x00, result.response.payload[1], "result report invalid config status count");
+    ASSERT_TRUE(result.has_notification, "result report invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "result report invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "result report invalid generic error status");
+    ASSERT_EQ_U8(original_result_report_config,
+                 uci_sim_session_get_result_report_config(session),
+                 "invalid result report config should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_result_report_config(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_result_report_config = 0x10;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "result report start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "result report start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_RESULT_REPORT_CONFIG,
+                                             &invalid_result_report_config,
+                                             sizeof(invalid_result_report_config)) == 0,
+                "result report start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid result report config should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid result report status");
+    ASSERT_TRUE(result.has_notification, "start invalid result report should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid result report generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid result report generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid result report should preserve session state");
+    PASS();
+}
+
 static void test_packet_round_trip(void) {
     uint8_t bytes[UCI_SIM_MAX_PACKET];
     size_t written = 0;
@@ -3143,6 +3227,8 @@ int main(void) {
     test_engine_uses_session_ranging_interval_override();
     test_ranging_interval_validation_rejects_below_profile_min();
     test_session_start_rejects_invalid_ranging_interval();
+    test_result_report_config_validation_rejects_unsupported_bits();
+    test_session_start_rejects_invalid_result_report_config();
     test_measurement_policy_serializes_default_range_notification();
     test_measurement_policy_serializes_session_ranging_interval_override();
     test_result_report_config_masks_range_notification_fields();

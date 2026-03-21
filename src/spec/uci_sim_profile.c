@@ -29,6 +29,10 @@ static const uci_sim_profile_t k_default_profile = {
     .invalid_ranging_interval_status = UCI_STATUS_INVALID_RANGE,
     .invalid_ranging_interval_reason_code = UCI_SESSION_REASON_ERROR_INVALID_RANGING_INTERVAL,
     .invalid_ranging_interval_surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE,
+    .supported_result_report_config_mask = 0x0FU,
+    .invalid_result_report_config_status = UCI_STATUS_INVALID_PARAM,
+    .invalid_result_report_config_reason_code = UCI_SESSION_REASON_ERROR_INVALID_RESULT_REPORT_CONFIG,
+    .invalid_result_report_config_surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE,
     .session_transitions = {
         {
             .oid = UCI_SESSION_START,

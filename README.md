@@ -114,6 +114,11 @@ that same interval again. The default Qorvo-like profile now also enforces a
 minimum valid ranging interval of `50 ms`: lower values are rejected during
 `SESSION_SET_APP_CONFIG` with `INVALID_RANGE`, are not stored, and `SESSION_START`
 also re-validates the effective session interval before entering `ACTIVE`.
+`RESULT_REPORT_CONFIG` remains the measurement-field policy for the current
+TWR path, and the default Qorvo-like profile now also validates it: only the
+documented low four report bits (`TOF`, `AoA azimuth`, `AoA elevation`,
+`AoA FoM`) are accepted, while unsupported higher bits are rejected with
+`INVALID_PARAM` and are not stored.
 At this stage that means:
 - bit 0 controls the distance/ToF-derived field
 - bit 1 controls azimuth fields

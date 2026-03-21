@@ -430,20 +430,25 @@ static void test_engine_clock_poll_progression(void) {
     ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "engine clock start failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock start rsp missing");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock start ntf missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock range 1 missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine clock range 2 should wait for next poll");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine clock range 1 should wait for interval");
 
     ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine zero-delta poll failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine zero-delta poll should not emit range data");
+
+    g_fake_clock_ms = 1U + engine.device.profile->ranging_interval_ms;
+    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine first deadline poll failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock range 1 missing");
+    ASSERT_EQ_U32(1, read_u32_le(packet.payload), "engine clock range 1 sequence");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine clock range 2 should wait for next deadline");
+
+    g_fake_clock_ms += engine.device.profile->ranging_interval_ms;
+    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine second deadline poll failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock range 2 missing");
     ASSERT_EQ_U32(2, read_u32_le(packet.payload), "engine clock range 2 sequence");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine clock range 3 should not be immediate");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine clock range 3 should wait for next deadline");
 
-    g_fake_clock_ms = engine.device.profile->ranging_interval_ms;
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine pre-deadline poll failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine clock range 3 should wait for deadline");
-
-    g_fake_clock_ms = engine.device.profile->ranging_interval_ms + 1U;
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine deadline poll failed");
+    g_fake_clock_ms += engine.device.profile->ranging_interval_ms;
+    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine third deadline poll failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock range 3 missing");
     ASSERT_EQ_U32(3, read_u32_le(packet.payload), "engine clock range 3 sequence");
     PASS();
@@ -495,24 +500,33 @@ static void test_engine_uses_session_ranging_interval_override(void) {
     ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "engine interval start failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine interval start rsp missing");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine interval start ntf missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine interval range 1 should wait for session interval");
+
+    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval zero-delta poll failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine interval zero-delta poll should not emit range data");
+
+    g_fake_clock_ms = 3001U;
+    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval first deadline poll failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine interval range 1 missing");
+    ASSERT_EQ_U32(1U, read_u32_le(packet.payload), "engine interval range 1 sequence");
     ASSERT_EQ_U32(3000U,
                   read_u32_le(&packet.payload[profile->range_data_interval_offset]),
                   "engine interval range 1 should use session interval");
 
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval zero-delta poll failed");
+    g_fake_clock_ms = 6000U;
+    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval pre-deadline poll failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine interval range 2 should wait for full override");
+
+    g_fake_clock_ms = 6001U;
+    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval second deadline poll failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine interval range 2 missing");
     ASSERT_EQ_U32(2U, read_u32_le(packet.payload), "engine interval range 2 sequence");
     ASSERT_EQ_U32(3000U,
                   read_u32_le(&packet.payload[profile->range_data_interval_offset]),
                   "engine interval range 2 should use session interval");
 
-    g_fake_clock_ms = 3000U;
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval pre-deadline poll failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine interval range 3 should wait for full override");
-
-    g_fake_clock_ms = 3001U;
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval deadline poll failed");
+    g_fake_clock_ms = 9001U;
+    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval third deadline poll failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine interval range 3 missing");
     ASSERT_EQ_U32(3U, read_u32_le(packet.payload), "engine interval range 3 sequence");
     ASSERT_EQ_U32(3000U,
@@ -1041,37 +1055,44 @@ static void test_ranging_stream_scenario(void) {
     ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging stream status notification missing");
     ASSERT_EQ_U8(UCI_GID_SESSION_CONFIG, notification.gid, "ranging stream status gid");
     ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, notification.oid, "ranging stream status oid");
-    ASSERT_TRUE(dequeue_outbound(&engine, &queued) == 0, "ranging stream pending dequeue failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &queued) != 0, "ranging stream first range should wait for interval");
+    ASSERT_EQ_U8(0, (uint8_t)engine.device.pending_notification_count, "ranging stream pending drained after start");
+    ASSERT_EQ_U8(0, (uint8_t)engine.device.sessions[0].ranging_count, "ranging stream count after start");
+    ASSERT_EQ_U8(profile->ranging_stream_burst_count,
+                 engine.device.sessions[0].ranging_stream_remaining,
+                 "ranging stream remaining after start");
+    ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "ranging stream scheduled after start");
+
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, profile->ranging_interval_ms) == 0,
+                "ranging stream first interval tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &queued) == 0, "ranging stream first range notification missing");
     ASSERT_EQ_U8(UCI_GID_SESSION_CONTROL, queued.gid, "ranging stream data gid");
     ASSERT_EQ_U8(profile->range_data_notification_oid, queued.oid, "ranging stream data oid");
     ASSERT_EQ_U8(profile->range_data_payload_len, (uint8_t)queued.payload_len, "ranging stream payload len");
     ASSERT_EQ_U8(profile->range_data_payload_template[24], queued.payload[24], "ranging stream measurement count");
     sequence = read_u32_le(queued.payload);
     ASSERT_EQ_U32(1, sequence, "ranging stream sequence 1");
-    ASSERT_EQ_U8(0, (uint8_t)engine.device.pending_notification_count, "ranging stream pending drained after start");
-    ASSERT_EQ_U8(1, (uint8_t)engine.device.sessions[0].ranging_count, "ranging stream count after start");
+    ASSERT_EQ_U8(1, (uint8_t)engine.device.sessions[0].ranging_count, "ranging stream count after first interval");
     ASSERT_EQ_U8(profile->ranging_stream_burst_count - 1,
                  engine.device.sessions[0].ranging_stream_remaining,
-                 "ranging stream remaining after start");
-    ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "ranging stream scheduled after start");
+                 "ranging stream remaining after first interval");
+    ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "ranging stream scheduled after first interval");
     ASSERT_EQ_U8(profile->range_data_payload_template[25], queued.payload[25], "ranging stream short addr lo");
     ASSERT_EQ_U8(profile->range_data_payload_template[26], queued.payload[26], "ranging stream short addr hi");
     ASSERT_EQ_U8((uint8_t)(profile->range_data_distance_base_cm & 0xFFU),
                  queued.payload[profile->range_data_measurement_distance_offset],
                  "ranging stream distance lo");
 
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_GET_STATE;
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging stream get state failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging stream get state response missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging stream follow-up notification missing");
-    ASSERT_EQ_U8(UCI_GID_SESSION_CONTROL, notification.gid, "ranging stream follow-up gid");
-    ASSERT_EQ_U8(UCI_SESSION_START, notification.oid, "ranging stream follow-up oid");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, profile->ranging_interval_ms) == 0,
+                "ranging stream second interval tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging stream second range notification missing");
+    ASSERT_EQ_U8(UCI_GID_SESSION_CONTROL, notification.gid, "ranging stream second gid");
+    ASSERT_EQ_U8(UCI_SESSION_START, notification.oid, "ranging stream second oid");
     sequence = read_u32_le(notification.payload);
     ASSERT_EQ_U32(2, sequence, "ranging stream sequence 2");
-    ASSERT_EQ_U8(2, (uint8_t)engine.device.sessions[0].ranging_count, "ranging stream count after follow-up");
-    ASSERT_EQ_U8(1, engine.device.sessions[0].ranging_stream_remaining, "ranging stream remaining after follow-up");
-    ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "ranging stream scheduled after follow-up");
+    ASSERT_EQ_U8(2, (uint8_t)engine.device.sessions[0].ranging_count, "ranging stream count after second interval");
+    ASSERT_EQ_U8(1, engine.device.sessions[0].ranging_stream_remaining, "ranging stream remaining after second interval");
+    ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "ranging stream scheduled after second interval");
 
     request.gid = UCI_GID_SESSION_CONTROL;
     request.oid = UCI_SESSION_STOP;
@@ -1134,23 +1155,26 @@ static void test_ranging_stream_respects_info_ntf_disable(void) {
     ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging disable status notification missing");
     ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, notification.oid, "ranging disable status oid");
     ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging disable should suppress range data after start");
-    ASSERT_EQ_U8(1, (uint8_t)engine.device.sessions[0].ranging_count, "ranging disable count after start");
-    ASSERT_EQ_U8(engine.device.profile->ranging_stream_burst_count - 1,
+    ASSERT_EQ_U8(0, (uint8_t)engine.device.sessions[0].ranging_count, "ranging disable count after start");
+    ASSERT_EQ_U8(engine.device.profile->ranging_stream_burst_count,
                  engine.device.sessions[0].ranging_stream_remaining,
                  "ranging disable remaining after start");
 
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_GET_STATE;
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging disable get state failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging disable get state response missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging disable should suppress follow-up range data");
-    ASSERT_EQ_U8(2, (uint8_t)engine.device.sessions[0].ranging_count, "ranging disable count after follow-up");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
+                "ranging disable first async tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging disable should suppress first interval range data");
+    ASSERT_EQ_U8(1, (uint8_t)engine.device.sessions[0].ranging_count, "ranging disable count after first interval");
 
     ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
-                "ranging disable async tick failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging disable should suppress async range data");
-    ASSERT_EQ_U8(3, (uint8_t)engine.device.sessions[0].ranging_count, "ranging disable count after async tick");
-    ASSERT_EQ_U8(0, engine.device.sessions[0].ranging_stream_remaining, "ranging disable remaining after async tick");
+                "ranging disable second async tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging disable should suppress second interval range data");
+    ASSERT_EQ_U8(2, (uint8_t)engine.device.sessions[0].ranging_count, "ranging disable count after second interval");
+
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
+                "ranging disable third async tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging disable should suppress third interval range data");
+    ASSERT_EQ_U8(3, (uint8_t)engine.device.sessions[0].ranging_count, "ranging disable count after third interval");
+    ASSERT_EQ_U8(0, engine.device.sessions[0].ranging_stream_remaining, "ranging disable remaining after third interval");
     PASS();
 }
 
@@ -1200,23 +1224,25 @@ static void test_ranging_stream_respects_proximity_inside_mode(void) {
     ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "proximity inside start response missing");
     ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity inside status notification missing");
     ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, notification.oid, "proximity inside status oid");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "proximity inside first range should wait for interval");
+
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
+                "proximity inside first interval tick failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity inside first range notification missing");
     ASSERT_EQ_U8(UCI_SESSION_START, notification.oid, "proximity inside first range oid");
     ASSERT_EQ_U16(100, read_u16_le(&notification.payload[engine.device.profile->range_data_measurement_distance_offset]),
                   "proximity inside first range distance");
 
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_GET_STATE;
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "proximity inside get state failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "proximity inside get state response missing");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
+                "proximity inside second interval tick failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity inside second range notification missing");
     ASSERT_EQ_U16(105, read_u16_le(&notification.payload[engine.device.profile->range_data_measurement_distance_offset]),
                   "proximity inside second range distance");
 
     ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
-                "proximity inside async tick failed");
+                "proximity inside third interval tick failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "proximity inside should suppress out-of-range notification");
-    ASSERT_EQ_U8(3, (uint8_t)engine.device.sessions[0].ranging_count, "proximity inside count after async tick");
+    ASSERT_EQ_U8(3, (uint8_t)engine.device.sessions[0].ranging_count, "proximity inside count after third interval");
     PASS();
 }
 
@@ -1266,12 +1292,14 @@ static void test_ranging_stream_respects_proximity_transition_mode(void) {
     ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "proximity transition start failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "proximity transition start response missing");
     ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity transition status notification missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "proximity transition should not notify on baseline");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "proximity transition should not notify on start");
 
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_GET_STATE;
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "proximity transition get state failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "proximity transition get state response missing");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
+                "proximity transition first interval tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "proximity transition should suppress baseline interval");
+
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
+                "proximity transition second interval tick failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity transition entering notification missing");
     sequence = read_u32_le(notification.payload);
     ASSERT_EQ_U32(1, sequence, "proximity transition entering sequence");
@@ -1279,7 +1307,7 @@ static void test_ranging_stream_respects_proximity_transition_mode(void) {
                   "proximity transition entering distance");
 
     ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
-                "proximity transition async tick failed");
+                "proximity transition third interval tick failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "proximity transition leaving notification missing");
     sequence = read_u32_le(notification.payload);
     ASSERT_EQ_U32(2, sequence, "proximity transition leaving sequence");
@@ -1317,23 +1345,26 @@ static void test_ranging_stream_progresses_to_completion(void) {
     ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging progression start failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging progression start response missing");
     ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging progression start notification missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging progression dequeue 1 failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "ranging progression first range should wait for interval");
+    ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "ranging progression scheduled after start");
+
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
+                "ranging progression first interval tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging progression first notification missing");
     sequence = read_u32_le(notification.payload);
     ASSERT_EQ_U32(1, sequence, "ranging progression sequence 1");
     ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "ranging progression scheduled after first");
 
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_GET_STATE;
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "ranging progression get state 1 failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "ranging progression get state 1 response missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging progression get state 1 notification missing");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
+                "ranging progression second interval tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging progression second notification missing");
     sequence = read_u32_le(notification.payload);
     ASSERT_EQ_U32(2, sequence, "ranging progression sequence 2");
     ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "ranging progression scheduled after second");
 
     ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
-                "ranging progression async tick failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging progression get state 2 notification missing");
+                "ranging progression third interval tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "ranging progression third notification missing");
     sequence = read_u32_le(notification.payload);
     ASSERT_EQ_U32(3, sequence, "ranging progression sequence 3");
     ASSERT_EQ_U8(0, engine.device.sessions[0].ranging_stream_remaining, "ranging progression remaining");

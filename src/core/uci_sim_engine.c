@@ -60,13 +60,10 @@ static int process_ready_event(uci_sim_engine_t* engine,
                 const uci_sim_profile_t* profile = engine->device.profile ?
                     engine->device.profile :
                     uci_sim_default_profile();
-                uint32_t delay_ms = (session->ranging_count < 2)
-                    ? 0U
-                    : uci_sim_session_get_ranging_interval_ms(session, profile);
                 return uci_sim_device_schedule_event(&engine->device,
                                                      UCI_SIM_EVENT_RANGE_DATA,
                                                      session->session_id,
-                                                     delay_ms);
+                                                     uci_sim_session_get_ranging_interval_ms(session, profile));
             }
             return 0;
         case UCI_SIM_EVENT_NONE:

@@ -107,7 +107,10 @@ behavioral work on `RESULT_REPORT_CONFIG`, `AOA_RESULT_REQ`,
 keeping the packet layout stable: disabled result components are emitted as
 zeroed fields rather than removed from the notification, and the session
 `RANGING_INTERVAL` now drives both the emitted current-ranging-interval field
-and future ranging-stream event timing. At this stage that means:
+and the full ranging-stream schedule. The `ranging_stream` scenario no longer
+front-loads early notifications: the first range-data notification now waits
+one configured interval after `SESSION_START`, and each later notification uses
+that same interval again. At this stage that means:
 - bit 0 controls the distance/ToF-derived field
 - bit 1 controls azimuth fields
 - bit 2 controls elevation fields

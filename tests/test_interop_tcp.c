@@ -144,6 +144,36 @@ static int set_socket_timeout_ms(int fd, int timeout_ms) {
     return 0;
 }
 
+static void assert_fixture_packet(int fd, const char* fixture_path, const char* step_name);
+
+static void set_ranging_interval_ms(int fd, uint32_t interval_ms, const char* step_name) {
+    uint8_t request[UCI_SIM_MAX_PACKET] = {0};
+    char message[160];
+
+    request[0] = 0x21;
+    request[1] = 0x03;
+    request[2] = 0x00;
+    request[3] = 0x0B;
+    request[4] = 0x78;
+    request[5] = 0x56;
+    request[6] = 0x34;
+    request[7] = 0x12;
+    request[8] = 0x01;
+    request[9] = UCI_APP_CONFIG_RANGING_INTERVAL;
+    request[10] = 0x04;
+    request[11] = (uint8_t)(interval_ms & 0xFFU);
+    request[12] = (uint8_t)((interval_ms >> 8) & 0xFFU);
+    request[13] = (uint8_t)((interval_ms >> 16) & 0xFFU);
+    request[14] = (uint8_t)((interval_ms >> 24) & 0xFFU);
+
+    snprintf(message, sizeof(message), "%s write ranging interval", step_name);
+    ASSERT_TRUE(write_full(fd, request, 15) == 15, message);
+    snprintf(message, sizeof(message), "%s ranging interval rsp", step_name);
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+                          message);
+}
+
 static int start_server(test_server_t* server) {
     uci_sim_engine_t engine;
     pid_t pid;
@@ -1585,11 +1615,8 @@ static void test_ranging_stream_proximity_inside_mode_over_tcp(void) {
     test_server_t server = {0};
     uint8_t request[UCI_SIM_MAX_PACKET];
     uint8_t packet[UCI_SIM_MAX_PACKET];
-    uint8_t packet2[UCI_SIM_MAX_PACKET];
     uci_sim_packet_t parsed;
-    uci_sim_packet_t parsed2;
     size_t packet_len = 0;
-    size_t packet2_len = 0;
     int fd = -1;
 
     server.scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
@@ -1655,6 +1682,8 @@ static void test_ranging_stream_proximity_inside_mode_over_tcp(void) {
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
                           "proximity-inside far rsp");
 
+    set_ranging_interval_ms(fd, 50U, "proximity-inside");
+
     ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
                                  request,
                                  sizeof(request),
@@ -1671,27 +1700,14 @@ static void test_ranging_stream_proximity_inside_mode_over_tcp(void) {
     ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse proximity-inside range 1");
     ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "proximity-inside range 1 oid");
     ASSERT_EQ_INT(100, read_u16_le(&parsed.payload[29]), "proximity-inside range 1 distance");
+    ASSERT_EQ_INT(50, (int)read_u32_le(&parsed.payload[9]), "proximity-inside range 1 interval");
 
-    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_state_cmd.hex",
-                                 request,
-                                 sizeof(request),
-                                 &packet_len) == 0,
-                "load proximity-inside get state");
-    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write proximity-inside get state");
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read proximity-inside get state packet 1");
-    ASSERT_TRUE(read_packet(fd, packet2, sizeof(packet2), &packet2_len) == 0, "read proximity-inside get state packet 2");
-    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse proximity-inside get state packet 1");
-    ASSERT_TRUE(uci_sim_packet_parse(packet2, packet2_len, &parsed2) == 0, "parse proximity-inside get state packet 2");
-    if (parsed.mt == UCI_MT_RESPONSE) {
-        ASSERT_EQ_INT(UCI_SESSION_GET_STATE, parsed.oid, "proximity-inside get state rsp oid");
-        parsed = parsed2;
-    } else {
-        ASSERT_EQ_INT(UCI_SESSION_GET_STATE, parsed2.oid, "proximity-inside get state rsp oid");
-    }
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read proximity-inside range 2");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse proximity-inside range 2");
     ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "proximity-inside range 2 oid");
     ASSERT_EQ_INT(105, read_u16_le(&parsed.payload[29]), "proximity-inside range 2 distance");
 
-    ASSERT_TRUE(set_socket_timeout_ms(fd, 1200) == 0, "set proximity-inside timeout");
+    ASSERT_TRUE(set_socket_timeout_ms(fd, 200) == 0, "set proximity-inside timeout");
     ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) != 0, "proximity-inside should suppress out-of-range notification");
     close(fd);
     stop_server(&server);
@@ -1741,6 +1757,8 @@ static void test_ranging_stream_result_report_config_over_tcp(void) {
     assert_fixture_packet(fd,
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
                           "result-report config rsp");
+
+    set_ranging_interval_ms(fd, 50U, "result-report");
 
     ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
                                  request,
@@ -1834,6 +1852,8 @@ static void test_ranging_stream_aoa_result_req_over_tcp(void) {
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
                           "aoa-result req config rsp");
 
+    set_ranging_interval_ms(fd, 50U, "aoa-result");
+
     ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
                                  request,
                                  sizeof(request),
@@ -1908,6 +1928,8 @@ static void test_ranging_stream_rssi_reporting_over_tcp(void) {
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
                           "rssi-report config rsp");
 
+    set_ranging_interval_ms(fd, 50U, "rssi-report");
+
     ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
                                  request,
                                  sizeof(request),
@@ -1956,26 +1978,7 @@ static void test_ranging_stream_ranging_interval_over_tcp(void) {
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
                           "ranging-interval init ntf");
 
-    memset(request, 0, sizeof(request));
-    request[0] = 0x21;
-    request[1] = 0x03;
-    request[2] = 0x00;
-    request[3] = 0x0B;
-    request[4] = 0x78;
-    request[5] = 0x56;
-    request[6] = 0x34;
-    request[7] = 0x12;
-    request[8] = 0x01;
-    request[9] = 0x09;
-    request[10] = 0x04;
-    request[11] = 0xB8;
-    request[12] = 0x0B;
-    request[13] = 0x00;
-    request[14] = 0x00;
-    ASSERT_TRUE(write_full(fd, request, 15) == 15, "write ranging-interval config");
-    assert_fixture_packet(fd,
-                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
-                          "ranging-interval config rsp");
+    set_ranging_interval_ms(fd, 50U, "ranging-interval");
 
     ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
                                  request,
@@ -1992,7 +1995,7 @@ static void test_ranging_stream_ranging_interval_over_tcp(void) {
     ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read ranging-interval range packet");
     ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse ranging-interval range packet");
     ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "ranging-interval range oid");
-    ASSERT_EQ_INT(3000, (int)read_u32_le(&parsed.payload[9]), "ranging-interval should affect emitted packet");
+    ASSERT_EQ_INT(50, (int)read_u32_le(&parsed.payload[9]), "ranging-interval should affect emitted packet");
 
     close(fd);
     stop_server(&server);
@@ -2003,6 +2006,7 @@ static void test_ranging_stream_flow_over_tcp(void) {
     test_server_t server = {0};
     uint8_t request[UCI_SIM_MAX_PACKET];
     uint8_t packet[UCI_SIM_MAX_PACKET];
+    uci_sim_packet_t parsed;
     size_t request_len = 0;
     size_t packet_len = 0;
     int fd = -1;
@@ -2025,6 +2029,8 @@ static void test_ranging_stream_flow_over_tcp(void) {
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
                           "ranging stream init ntf");
 
+    set_ranging_interval_ms(fd, 50U, "ranging stream flow");
+
     ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
                                  request,
                                  sizeof(request),
@@ -2037,20 +2043,18 @@ static void test_ranging_stream_flow_over_tcp(void) {
     assert_fixture_packet(fd,
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_ntf.hex",
                           "ranging stream start ntf");
-    assert_fixture_packet(fd,
-                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_range_data_ntf_1.hex",
-                          "ranging stream range ntf 1");
 
-    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_state_cmd.hex",
-                                 request,
-                                 sizeof(request),
-                                 &request_len) == 0,
-                "load ranging stream get state");
-    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write ranging stream get state");
-    assert_two_fixture_packets_any_order(fd,
-                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_state_rsp.hex",
-                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_range_data_ntf_2.hex",
-                          "ranging stream get state pair");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read ranging stream range packet 1");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse ranging stream range packet 1");
+    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "ranging stream range 1 oid");
+    ASSERT_EQ_INT(1, (int)read_u32_le(parsed.payload), "ranging stream range 1 sequence");
+    ASSERT_EQ_INT(50, (int)read_u32_le(&parsed.payload[9]), "ranging stream range 1 interval");
+
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read ranging stream range packet 2");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse ranging stream range packet 2");
+    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "ranging stream range 2 oid");
+    ASSERT_EQ_INT(2, (int)read_u32_le(parsed.payload), "ranging stream range 2 sequence");
+    ASSERT_EQ_INT(50, (int)read_u32_le(&parsed.payload[9]), "ranging stream range 2 interval");
 
     ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_stop_cmd.hex",
                                  request,

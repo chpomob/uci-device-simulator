@@ -90,7 +90,8 @@ controls which result fields remain meaningful:
   azimuth and elevation independently without changing packet shape
 - `RSSI_REPORTING` independently gates whether the RSSI byte is meaningful
 - `RANGING_INTERVAL` now feeds both the visible notification interval field
-  and the delay used for future scheduled ranging events
+  and the delay used for the full scheduled ranging stream, including the
+  first post-start measurement
 
 Disabled fields are serialized as zero rather than removed from the packet.
 That matches the current audit guidance: change field meaning before changing

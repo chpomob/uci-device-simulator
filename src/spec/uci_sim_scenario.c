@@ -68,7 +68,10 @@ int uci_sim_scenario_on_session_started(uci_sim_device_t* device,
     if (session->ranging_stream_remaining == 0) {
         return 0;
     }
-    return uci_sim_device_schedule_event(device, UCI_SIM_EVENT_RANGE_DATA, session->session_id, 0);
+    return uci_sim_device_schedule_event(device,
+                                         UCI_SIM_EVENT_RANGE_DATA,
+                                         session->session_id,
+                                         uci_sim_session_get_ranging_interval_ms(session, profile));
 }
 
 void uci_sim_scenario_on_session_stopped(uci_sim_device_t* device, uci_sim_session_t* session) {

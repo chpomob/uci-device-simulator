@@ -307,6 +307,7 @@ Current status:
 - `RANGING_INTERVAL` is now the first profile-driven validated parameter
 - `RESULT_REPORT_CONFIG` is now the second validated parameter
 - `AOA_RESULT_REQ` is now the third validated parameter
+- `RSSI_REPORTING` is now the fourth validated parameter
 - default profile behavior:
   - minimum supported interval: `50 ms`
   - status on invalid value: `INVALID_RANGE`
@@ -316,6 +317,8 @@ Current status:
   - unsupported `RESULT_REPORT_CONFIG` bits are rejected with `INVALID_PARAM`
   - `AOA_RESULT_REQ` accepts only the documented `0..3` enum values
   - unsupported `AOA_RESULT_REQ` values are rejected with `INVALID_PARAM`
+  - `RSSI_REPORTING` accepts only the documented `0..1` on/off values
+  - unsupported `RSSI_REPORTING` values are rejected with `INVALID_PARAM`
 - delayed/session-status surfacing remains intentionally configurable work for
   later profiles once stronger firmware evidence exists
 

@@ -786,6 +786,90 @@ static void test_session_start_rejects_invalid_aoa_result_req(void) {
     PASS();
 }
 
+static void test_rssi_reporting_validation_rejects_unsupported_values(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t original_rssi_reporting;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "rssi reporting validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "rssi reporting validation session lookup failed");
+    original_rssi_reporting = uci_sim_session_get_rssi_reporting(session);
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_RSSI_REPORTING;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x02;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "rssi reporting unsupported value should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "rssi reporting invalid status");
+    ASSERT_EQ_U8(0x00, result.response.payload[1], "rssi reporting invalid config status count");
+    ASSERT_TRUE(result.has_notification, "rssi reporting invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "rssi reporting invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "rssi reporting invalid generic error status");
+    ASSERT_EQ_U8(original_rssi_reporting,
+                 uci_sim_session_get_rssi_reporting(session),
+                 "invalid rssi reporting should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_rssi_reporting(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_rssi_reporting = 0x02;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "rssi reporting start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "rssi reporting start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_RSSI_REPORTING,
+                                             &invalid_rssi_reporting,
+                                             sizeof(invalid_rssi_reporting)) == 0,
+                "rssi reporting start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid rssi reporting should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid rssi reporting status");
+    ASSERT_TRUE(result.has_notification, "start invalid rssi reporting should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid rssi reporting generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid rssi reporting generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid rssi reporting should preserve session state");
+    PASS();
+}
+
 static void test_packet_round_trip(void) {
     uint8_t bytes[UCI_SIM_MAX_PACKET];
     size_t written = 0;
@@ -3315,6 +3399,8 @@ int main(void) {
     test_session_start_rejects_invalid_result_report_config();
     test_aoa_result_req_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_aoa_result_req();
+    test_rssi_reporting_validation_rejects_unsupported_values();
+    test_session_start_rejects_invalid_rssi_reporting();
     test_measurement_policy_serializes_default_range_notification();
     test_measurement_policy_serializes_session_ranging_interval_override();
     test_result_report_config_masks_range_notification_fields();

@@ -122,6 +122,10 @@ documented low four report bits (`TOF`, `AoA azimuth`, `AoA elevation`,
 `AOA_RESULT_REQ` now uses the same validation seam: only the documented enum
 values `0..3` are accepted, while unsupported higher values are rejected with
 `INVALID_PARAM`, are not stored, and are also re-validated on `SESSION_START`.
+`RSSI_REPORTING` now uses that same profile-driven validation seam: only the
+documented `0..1` on/off values are accepted, while unsupported higher values
+are rejected with `INVALID_PARAM`, are not stored, and are also re-validated
+on `SESSION_START`.
 At this stage that means:
 - bit 0 controls the distance/ToF-derived field
 - bit 1 controls azimuth fields

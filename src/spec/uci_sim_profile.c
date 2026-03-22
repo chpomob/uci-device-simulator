@@ -37,6 +37,10 @@ static const uci_sim_profile_t k_default_profile = {
     .invalid_aoa_result_req_status = UCI_STATUS_INVALID_PARAM,
     .invalid_aoa_result_req_reason_code = UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
     .invalid_aoa_result_req_surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE,
+    .supported_rssi_reporting_max = 0x01,
+    .invalid_rssi_reporting_status = UCI_STATUS_INVALID_PARAM,
+    .invalid_rssi_reporting_reason_code = UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+    .invalid_rssi_reporting_surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE,
     .session_transitions = {
         {
             .oid = UCI_SESSION_START,

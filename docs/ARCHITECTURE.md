@@ -108,6 +108,10 @@ That layer owns the first profile-driven behavioral rejection rule:
   `INVALID_PARAM`
 - invalid `AOA_RESULT_REQ` values are not stored and `SESSION_START` also
   re-validates the effective stored value
+- `RSSI_REPORTING` values outside the documented `0..1` on/off range are
+  rejected with `INVALID_PARAM`
+- invalid `RSSI_REPORTING` values are not stored and `SESSION_START` also
+  re-validates the effective stored value
 
 That separation matters for long-term maintainability: timing/report policy
 stays in measurement code, while constraint enforcement moves into validation

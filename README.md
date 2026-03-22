@@ -119,6 +119,9 @@ TWR path, and the default Qorvo-like profile now also validates it: only the
 documented low four report bits (`TOF`, `AoA azimuth`, `AoA elevation`,
 `AoA FoM`) are accepted, while unsupported higher bits are rejected with
 `INVALID_PARAM` and are not stored.
+`AOA_RESULT_REQ` now uses the same validation seam: only the documented enum
+values `0..3` are accepted, while unsupported higher values are rejected with
+`INVALID_PARAM`, are not stored, and are also re-validated on `SESSION_START`.
 At this stage that means:
 - bit 0 controls the distance/ToF-derived field
 - bit 1 controls azimuth fields

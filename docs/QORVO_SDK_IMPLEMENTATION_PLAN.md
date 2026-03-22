@@ -306,6 +306,7 @@ Current status:
 - validation seam implemented in `uci_sim_validation.*`
 - `RANGING_INTERVAL` is now the first profile-driven validated parameter
 - `RESULT_REPORT_CONFIG` is now the second validated parameter
+- `AOA_RESULT_REQ` is now the third validated parameter
 - default profile behavior:
   - minimum supported interval: `50 ms`
   - status on invalid value: `INVALID_RANGE`
@@ -313,6 +314,8 @@ Current status:
   - `SESSION_START` re-validates the effective interval before transition
   - `RESULT_REPORT_CONFIG` accepts only the documented low four report bits
   - unsupported `RESULT_REPORT_CONFIG` bits are rejected with `INVALID_PARAM`
+  - `AOA_RESULT_REQ` accepts only the documented `0..3` enum values
+  - unsupported `AOA_RESULT_REQ` values are rejected with `INVALID_PARAM`
 - delayed/session-status surfacing remains intentionally configurable work for
   later profiles once stronger firmware evidence exists
 

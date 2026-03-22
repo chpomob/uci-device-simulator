@@ -42,6 +42,10 @@ typedef struct {
     uint8_t invalid_result_report_config_status;
     uint8_t invalid_result_report_config_reason_code;
     uint8_t invalid_result_report_config_surface;
+    uint8_t supported_aoa_result_req_max;
+    uint8_t invalid_aoa_result_req_status;
+    uint8_t invalid_aoa_result_req_reason_code;
+    uint8_t invalid_aoa_result_req_surface;
     uci_sim_session_transition_t session_transitions[UCI_SIM_MAX_SESSION_TRANSITIONS];
     size_t session_transition_count;
     uint16_t default_session_max_data_size;

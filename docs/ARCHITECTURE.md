@@ -104,6 +104,10 @@ That layer owns the first profile-driven behavioral rejection rule:
   report flags are rejected with `INVALID_PARAM`
 - invalid `RESULT_REPORT_CONFIG` values are not stored and `SESSION_START`
   also re-validates the effective stored value
+- `AOA_RESULT_REQ` values outside the documented `0..3` enum are rejected with
+  `INVALID_PARAM`
+- invalid `AOA_RESULT_REQ` values are not stored and `SESSION_START` also
+  re-validates the effective stored value
 
 That separation matters for long-term maintainability: timing/report policy
 stays in measurement code, while constraint enforcement moves into validation

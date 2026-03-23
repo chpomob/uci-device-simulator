@@ -838,6 +838,7 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
                 config_id == UCI_APP_CONFIG_RANGING_INTERVAL ||
                 config_id == UCI_APP_CONFIG_RANGING_ROUND_USAGE ||
                 config_id == UCI_APP_CONFIG_AOA_RESULT_REQ ||
+                config_id == UCI_APP_CONFIG_PRF_MODE ||
                 config_id == UCI_APP_CONFIG_RSSI_REPORTING ||
                 config_id == UCI_APP_CONFIG_RESULT_REPORT_CONFIG) {
                 uci_sim_validation_result_t validation;

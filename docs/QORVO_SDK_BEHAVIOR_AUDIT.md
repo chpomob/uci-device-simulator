@@ -538,7 +538,7 @@ codebase does not currently expose them as app-config parameters. That means:
 | `0x18` | `LINK_LAYER_MODE` | Standard vs extended link-layer mode. | `strong_inference` | Likely packet/feature-shape input. |
 | `0x19` | `DATA_REPETITION_COUNT` | Data repetition count. | `strong_inference` | Measurement/data behavior input. |
 | `0x1C` | `TX_ADAPTIVE_PAYLOAD_POWER` | Adaptive TX power policy. | `weak_inference` | Lower priority; likely metadata. |
-| `0x1F` | `PRF_MODE` | PRF mode selection. | `strong_inference` | PHY metadata; may affect valid combinations. |
+| `0x1F` | `PRF_MODE` | Cherry documents valid values `0x00..0x02` for BPRF/HPRF modes. | `proven` | Validation now; deeper PHY/measurement coupling later. |
 | `0x20` | `CAP_SIZE_RANGE` | CAP size bounds. | `weak_inference` | Future scheduler/contention input. |
 | `0x22` | `SCHEDULED_MODE` | Scheduled mode enable/choice. | `strong_inference` | Scheduler mode input later. |
 

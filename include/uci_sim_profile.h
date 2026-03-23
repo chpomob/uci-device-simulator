@@ -50,6 +50,10 @@ typedef struct {
     uint8_t invalid_aoa_result_req_status;
     uint8_t invalid_aoa_result_req_reason_code;
     uint8_t invalid_aoa_result_req_surface;
+    uint8_t supported_prf_mode_max;
+    uint8_t invalid_prf_mode_status;
+    uint8_t invalid_prf_mode_reason_code;
+    uint8_t invalid_prf_mode_surface;
     uint8_t supported_rssi_reporting_max;
     uint8_t invalid_rssi_reporting_status;
     uint8_t invalid_rssi_reporting_reason_code;

@@ -526,7 +526,7 @@ codebase does not currently expose them as app-config parameters. That means:
 | ID | Parameter | Understanding | Confidence | Runtime Impact |
 | --- | --- | --- | --- | --- |
 | `0x01` | `RANGING_ROUND_USAGE` | One-way / two-way / data-related ranging usage. | `proven` | Should change measurement type and payload shape. |
-| `0x04` | `CHANNEL_NUMBER` | PHY channel. | `proven` | Likely profile/measurement metadata input. |
+| `0x04` | `CHANNEL_NUMBER` | PHY channel. Local FiRa/Cherry session surface uses channels `5` and `9`; broader channel support belongs to profile capabilities, not the default simulator behavior. | `proven` | Validation now; richer PHY/measurement impact later. |
 | `0x0A` | `STS_INDEX` | STS index. | `strong_inference` | Security/sequence input later. |
 | `0x0B` | `MAC_FCS_TYPE` | FCS mode. | `strong_inference` | Mostly packet-format/PHY metadata. |
 | `0x0C` | `RANGING_ROUND_CONTROL` | Round control flags. | `weak_inference` | Likely session/control input later. |

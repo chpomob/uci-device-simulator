@@ -62,6 +62,10 @@ typedef struct {
     uint8_t invalid_multi_node_mode_status;
     uint8_t invalid_multi_node_mode_reason_code;
     uint8_t invalid_multi_node_mode_surface;
+    uint16_t supported_channel_number_mask;
+    uint8_t invalid_channel_number_status;
+    uint8_t invalid_channel_number_reason_code;
+    uint8_t invalid_channel_number_surface;
     uint8_t supported_max_controlees;
     uint8_t invalid_num_of_controlees_status;
     uint8_t invalid_num_of_controlees_reason_code;

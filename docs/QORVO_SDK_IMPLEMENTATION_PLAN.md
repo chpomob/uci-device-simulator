@@ -65,6 +65,11 @@ impact.
 The simulator validates the parameter and may reject or raise a session reason,
 but the value does not directly change runtime payload generation yet.
 
+Examples:
+
+- channel number
+- STS config before crypto/runtime modeling
+
 ### `metadata_affects_payload`
 
 The value changes visible notification or response content.

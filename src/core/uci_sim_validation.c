@@ -256,6 +256,25 @@ static int validate_multi_node_mode(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_channel_number(const uci_sim_profile_t* profile,
+                                   uint8_t channel_number,
+                                   uci_sim_validation_result_t* result) {
+    if (!profile) {
+        return 0;
+    }
+
+    if (channel_number >= 16U ||
+        (profile->supported_channel_number_mask & (uint16_t)(1U << channel_number)) == 0U) {
+        set_invalid_result(result,
+                           profile->invalid_channel_number_status,
+                           profile->invalid_channel_number_reason_code,
+                           profile->invalid_channel_number_surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int get_session_u8_config(const uci_sim_session_t* session,
                                  uint8_t config_id,
                                  uint8_t* value,
@@ -529,6 +548,18 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
             }
             return validate_multi_node_mode(profile, value[0], result);
         }
+        if (config_id == UCI_APP_CONFIG_CHANNEL_NUMBER) {
+            if (!value || value_len != 1) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   profile ? profile->invalid_channel_number_reason_code
+                                           : UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+                                   profile ? profile->invalid_channel_number_surface
+                                           : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+            return validate_channel_number(profile, value[0], result);
+        }
         if (config_id == UCI_APP_CONFIG_NUMBER_OF_CONTROLEES) {
             if (!value || value_len != 1) {
                 set_invalid_result(result,
@@ -650,6 +681,8 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
     uint8_t aoa_result_req;
     uint8_t rssi_reporting;
     uint8_t ranging_round_usage;
+    uint8_t channel_number = 0;
+    uint8_t channel_number_len = 0;
 
     uci_sim_validation_result_init(result);
     if (!session) {
@@ -665,6 +698,19 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
         return -1;
     }
     if (validate_multi_node_mode_topology(profile, session, result) != 0) {
+        return -1;
+    }
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_CHANNEL_NUMBER, &channel_number, &channel_number_len) != 0 ||
+        channel_number_len != 1U) {
+        set_invalid_result(result,
+                           profile ? profile->invalid_channel_number_status : UCI_STATUS_INVALID_PARAM,
+                           profile ? profile->invalid_channel_number_reason_code
+                                   : UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+                           profile ? profile->invalid_channel_number_surface
+                                   : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+        return -1;
+    }
+    if (validate_channel_number(profile, channel_number, result) != 0) {
         return -1;
     }
 

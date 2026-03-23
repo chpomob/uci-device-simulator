@@ -50,6 +50,10 @@ typedef struct {
     uint8_t invalid_rssi_reporting_status;
     uint8_t invalid_rssi_reporting_reason_code;
     uint8_t invalid_rssi_reporting_surface;
+    uint16_t supported_ranging_round_usage_mask;
+    uint8_t invalid_ranging_round_usage_status;
+    uint8_t invalid_ranging_round_usage_reason_code;
+    uint8_t invalid_ranging_round_usage_surface;
     uci_sim_session_transition_t session_transitions[UCI_SIM_MAX_SESSION_TRANSITIONS];
     size_t session_transition_count;
     uint16_t default_session_max_data_size;
@@ -65,6 +69,7 @@ typedef struct {
     uint8_t range_data_primary_session_id_offset;
     uint8_t range_data_secondary_session_id_offset;
     uint8_t range_data_interval_offset;
+    uint8_t range_data_measurement_type_offset;
     uint8_t range_data_measurement_distance_offset;
     uint16_t range_data_distance_base_cm;
     uint16_t range_data_distance_step_cm;

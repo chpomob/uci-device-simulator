@@ -9,6 +9,23 @@ static void write_u32_le(uint8_t* payload, uint32_t value) {
     payload[3] = (uint8_t)((value >> 24) & 0xFFU);
 }
 
+static uint8_t map_measurement_type_from_round_usage(uint8_t ranging_round_usage) {
+    switch (ranging_round_usage) {
+        case 0x05:
+            return 0x02; /* DL_TDOA */
+        case 0x06:
+            return 0x03; /* OWR_AOA */
+        case 0x01:
+        case 0x02:
+        case 0x03:
+        case 0x04:
+        case 0x07:
+        case 0x08:
+        default:
+            return 0x01; /* TWO_WAY */
+    }
+}
+
 void uci_sim_measurement_init_ranging_sample(const uci_sim_profile_t* profile,
                                              const uci_sim_session_t* session,
                                              uci_sim_measurement_t* sample) {
@@ -25,6 +42,8 @@ void uci_sim_measurement_init_ranging_sample(const uci_sim_profile_t* profile,
     sample->session_id = session->session_id;
     sample->ranging_interval_ms = uci_sim_session_get_ranging_interval_ms(session, profile);
     sample->distance_cm = (uint16_t)distance_cm;
+    sample->measurement_type = map_measurement_type_from_round_usage(
+        uci_sim_session_get_ranging_round_usage(session));
 }
 
 void uci_sim_measurement_evaluate_range_notification_policy(
@@ -157,6 +176,7 @@ int uci_sim_measurement_build_range_data_notification(const uci_sim_profile_t* p
     write_u32_le(&payload[profile->range_data_primary_session_id_offset], sample->session_id);
     write_u32_le(&payload[profile->range_data_secondary_session_id_offset], sample->session_id);
     write_u32_le(&payload[profile->range_data_interval_offset], sample->ranging_interval_ms);
+    payload[profile->range_data_measurement_type_offset] = sample->measurement_type;
 
     distance_offset = profile->range_data_measurement_distance_offset;
     local_azimuth_offset = (uint8_t)(distance_offset + 2U);

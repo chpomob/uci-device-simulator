@@ -134,6 +134,7 @@ Recommended internal model:
   - emit notification or suppress
   - emitted field mask
   - transition flags
+  - measurement-type selection from session mode / ranging-round usage
 
 This layer should sit between:
 

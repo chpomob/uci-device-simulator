@@ -93,6 +93,25 @@ static int validate_rssi_reporting(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_ranging_round_usage(const uci_sim_profile_t* profile,
+                                        uint8_t ranging_round_usage,
+                                        uci_sim_validation_result_t* result) {
+    if (!profile) {
+        return 0;
+    }
+
+    if (ranging_round_usage >= 16U ||
+        (profile->supported_ranging_round_usage_mask & (uint16_t)(1U << ranging_round_usage)) == 0U) {
+        set_invalid_result(result,
+                           profile->invalid_ranging_round_usage_status,
+                           profile->invalid_ranging_round_usage_reason_code,
+                           profile->invalid_ranging_round_usage_surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 void uci_sim_validation_result_init(uci_sim_validation_result_t* result) {
     if (!result) {
         return;
@@ -149,6 +168,18 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
             }
             return validate_rssi_reporting(profile, value[0], result);
         }
+        if (config_id == UCI_APP_CONFIG_RANGING_ROUND_USAGE) {
+            if (!value || value_len != 1) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   profile ? profile->invalid_ranging_round_usage_reason_code
+                                           : UCI_SESSION_REASON_ERROR_INVALID_RANGING_ROUND_USAGE,
+                                   profile ? profile->invalid_ranging_round_usage_surface
+                                           : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+            return validate_ranging_round_usage(profile, value[0], result);
+        }
         return 0;
     }
 
@@ -170,6 +201,7 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
     uint8_t result_report_config;
     uint8_t aoa_result_req;
     uint8_t rssi_reporting;
+    uint8_t ranging_round_usage;
 
     uci_sim_validation_result_init(result);
     if (!session) {
@@ -192,5 +224,10 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
     }
 
     rssi_reporting = uci_sim_session_get_rssi_reporting(session);
-    return validate_rssi_reporting(profile, rssi_reporting, result);
+    if (validate_rssi_reporting(profile, rssi_reporting, result) != 0) {
+        return -1;
+    }
+
+    ranging_round_usage = uci_sim_session_get_ranging_round_usage(session);
+    return validate_ranging_round_usage(profile, ranging_round_usage, result);
 }

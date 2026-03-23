@@ -86,7 +86,7 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | Config ID | Name | Status | Notes |
 |---|---:|---|---|
 | `0x00` | `DEVICE_TYPE` | `supported` | Default-profile stored/retrievable |
-| `0x01` | `RANGING_ROUND_USAGE` | `supported` | Default-profile stored/retrievable |
+| `0x01` | `RANGING_ROUND_USAGE` | `supported` | Validated runtime behavior. The default profile currently accepts the TWR-family FiRa values (`0x01`, `0x02`, `0x03`, `0x04`, `0x07`, `0x08`) and rejects `OWR_DL_TDOA` / `OWR_AOA` until the simulator has matching payload models. |
 | `0x02` | `STS_CONFIG` | `supported` | Default-profile stored/retrievable |
 | `0x03` | `MULTI_NODE_MODE` | `supported` | Default-profile stored/retrievable |
 | `0x04` | `CHANNEL_NUMBER` | `supported` | Default-profile stored/retrievable |

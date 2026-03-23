@@ -41,6 +41,11 @@ static const uci_sim_profile_t k_default_profile = {
     .invalid_rssi_reporting_status = UCI_STATUS_INVALID_PARAM,
     .invalid_rssi_reporting_reason_code = UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
     .invalid_rssi_reporting_surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE,
+    .supported_ranging_round_usage_mask =
+        (uint16_t)((1U << 1) | (1U << 2) | (1U << 3) | (1U << 4) | (1U << 7) | (1U << 8)),
+    .invalid_ranging_round_usage_status = UCI_STATUS_INVALID_PARAM,
+    .invalid_ranging_round_usage_reason_code = UCI_SESSION_REASON_ERROR_INVALID_RANGING_ROUND_USAGE,
+    .invalid_ranging_round_usage_surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE,
     .session_transitions = {
         {
             .oid = UCI_SESSION_START,
@@ -82,6 +87,7 @@ static const uci_sim_profile_t k_default_profile = {
     .range_data_primary_session_id_offset = 4,
     .range_data_secondary_session_id_offset = 16,
     .range_data_interval_offset = 9,
+    .range_data_measurement_type_offset = 13,
     .range_data_measurement_distance_offset = 29,
     .range_data_distance_base_cm = 100,
     .range_data_distance_step_cm = 5,

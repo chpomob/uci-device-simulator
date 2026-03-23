@@ -93,6 +93,13 @@ controls which result fields remain meaningful:
   and the delay used for the full scheduled ranging stream, including the
   first post-start measurement
 
+`RANGING_ROUND_USAGE` now also participates in that seam, but with an explicit
+profile boundary. The default Qorvo-like profile only accepts the FiRa
+round-usage values that still map cleanly onto the current TWR measurement
+layout (`SS/DS deferred`, `SS/DS non-deferred`, `ESS_TWR`, `ADS_TWR`). The
+DL-TDoA and OWR-AoA values are rejected in that profile until the simulator has
+separate payload builders for those measurement types.
+
 The simulator now also has a separate validation seam in `uci_sim_validation.*`.
 That layer owns the first profile-driven behavioral rejection rule:
 - `RANGING_INTERVAL` below the profile minimum is rejected with

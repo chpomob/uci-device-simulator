@@ -1279,6 +1279,100 @@ static void test_number_of_controlees_validation_rejects_excessive_value(void) {
     PASS();
 }
 
+static void test_mac_address_mode_validation_rejects_unsupported_value(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t original_mac_address_mode = 0xFF;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "mac_address_mode validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "mac_address_mode validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_MAC_ADDRESS_MODE, &original_mac_address_mode, &value_len) == 0,
+                "mac_address_mode validation fetch original value failed");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_MAC_ADDRESS_MODE;
+    request.payload[6] = 0x01;
+    request.payload[7] = UCI_MAC_ADDRESS_MODE_EXTENDED;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "unsupported mac_address_mode should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "mac_address_mode invalid status");
+    ASSERT_TRUE(result.has_notification, "mac_address_mode invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "mac_address_mode invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "mac_address_mode invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_MAC_ADDRESS_MODE, &original_mac_address_mode, &value_len) == 0,
+                "mac_address_mode validation refetch original value failed");
+    ASSERT_EQ_U8(UCI_MAC_ADDRESS_MODE_SHORT, original_mac_address_mode,
+                 "invalid mac_address_mode should not overwrite stored value");
+    PASS();
+}
+
+static void test_device_mac_address_validation_rejects_invalid_length(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t original_device_mac[UCI_SIM_MAX_CONFIG_VALUE] = {0};
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "device_mac_address validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "device_mac_address validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_DEVICE_MAC_ADDRESS, original_device_mac, &value_len) == 0,
+                "device_mac_address validation fetch original value failed");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 11;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_DEVICE_MAC_ADDRESS;
+    request.payload[6] = 0x04;
+    request.payload[7] = 0xAA;
+    request.payload[8] = 0xBB;
+    request.payload[9] = 0xCC;
+    request.payload[10] = 0xDD;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "invalid device_mac_address length should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "device_mac_address invalid status");
+    ASSERT_TRUE(result.has_notification, "device_mac_address invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "device_mac_address invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "device_mac_address invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_DEVICE_MAC_ADDRESS, original_device_mac, &value_len) == 0,
+                "device_mac_address validation refetch original value failed");
+    ASSERT_EQ_U8(2, value_len, "invalid device_mac_address should preserve original length");
+    ASSERT_EQ_U8(0xCD, original_device_mac[0], "invalid device_mac_address should preserve original first byte");
+    ASSERT_EQ_U8(0xAB, original_device_mac[1], "invalid device_mac_address should preserve original second byte");
+    PASS();
+}
+
 static void test_dst_mac_address_validation_rejects_invalid_list_length(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -2578,7 +2672,7 @@ static void test_session_app_config_storage(void) {
 
     request.payload[5] = 0x26;
     request.payload[6] = 1;
-    request.payload[7] = 0x01;
+    request.payload[7] = 0x00;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set mac address mode app config failed");
 
     request.payload_len = 9;
@@ -3176,7 +3270,7 @@ static void test_session_app_config_storage(void) {
                                              (const uint8_t[]){ 0xE8, 0x03, 0x00, 0x00 }, 4),
                 "get all app config missing uwb initiation time");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x26,
-                                             (const uint8_t[]){ 0x01 }, 1),
+                                             (const uint8_t[]){ 0x00 }, 1),
                 "get all app config missing mac address mode");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x2D,
                                              (const uint8_t[]){ 0x05 }, 1),
@@ -3953,6 +4047,8 @@ int main(void) {
     test_device_type_validation_rejects_unsupported_values();
     test_multi_node_mode_validation_rejects_unsupported_values();
     test_number_of_controlees_validation_rejects_excessive_value();
+    test_mac_address_mode_validation_rejects_unsupported_value();
+    test_device_mac_address_validation_rejects_invalid_length();
     test_dst_mac_address_validation_rejects_invalid_list_length();
     test_session_start_rejects_device_type_role_mismatch();
     test_session_start_rejects_unicast_multi_node_topology_mismatch();

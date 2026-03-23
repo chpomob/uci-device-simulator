@@ -830,7 +830,9 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
             if (config_id == UCI_APP_CONFIG_DEVICE_TYPE ||
                 config_id == UCI_APP_CONFIG_MULTI_NODE_MODE ||
                 config_id == UCI_APP_CONFIG_NUMBER_OF_CONTROLEES ||
+                config_id == UCI_APP_CONFIG_DEVICE_MAC_ADDRESS ||
                 config_id == UCI_APP_CONFIG_DST_MAC_ADDRESS ||
+                config_id == UCI_APP_CONFIG_MAC_ADDRESS_MODE ||
                 config_id == UCI_APP_CONFIG_STS_CONFIG ||
                 config_id == UCI_APP_CONFIG_RANGING_INTERVAL ||
                 config_id == UCI_APP_CONFIG_RANGING_ROUND_USAGE ||

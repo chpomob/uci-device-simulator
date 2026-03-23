@@ -66,6 +66,13 @@ typedef struct {
     uint8_t invalid_num_of_controlees_status;
     uint8_t invalid_num_of_controlees_reason_code;
     uint8_t invalid_num_of_controlees_surface;
+    uint8_t supported_mac_address_mode_mask;
+    uint8_t invalid_mac_address_mode_status;
+    uint8_t invalid_mac_address_mode_reason_code;
+    uint8_t invalid_mac_address_mode_surface;
+    uint8_t invalid_device_mac_address_status;
+    uint8_t invalid_device_mac_address_reason_code;
+    uint8_t invalid_device_mac_address_surface;
     uint8_t invalid_dst_mac_address_status;
     uint8_t invalid_dst_mac_address_reason_code;
     uint8_t invalid_dst_mac_address_surface;

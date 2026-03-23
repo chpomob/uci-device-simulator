@@ -42,6 +42,10 @@ typedef struct {
     uint8_t invalid_result_report_config_status;
     uint8_t invalid_result_report_config_reason_code;
     uint8_t invalid_result_report_config_surface;
+    uint8_t supported_sts_config_mask;
+    uint8_t invalid_sts_config_status;
+    uint8_t invalid_sts_config_reason_code;
+    uint8_t invalid_sts_config_surface;
     uint8_t supported_aoa_result_req_max;
     uint8_t invalid_aoa_result_req_status;
     uint8_t invalid_aoa_result_req_reason_code;

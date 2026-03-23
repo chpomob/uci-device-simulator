@@ -106,6 +106,21 @@ That layer owns the first profile-driven behavioral rejection rule:
   `INVALID_RANGE`
 - invalid values are not stored during `SET_APP_CONFIG`
 - `SESSION_START` re-validates the effective session interval before state
+
+`STS_CONFIG` now also uses that validation seam as a security-mode selector.
+The current implementation intentionally keeps the runtime effect narrow and
+source-backed:
+- only the documented FiRa/Cherry enum values (`0x00..0x04`) are accepted
+- invalid enum values are rejected with `ERROR_INVALID_STS_CONFIG`
+- `SESSION_START` re-validates the dependent security material for the modes
+  the local SDK proves:
+  - static STS requires `STATIC_STS_IV`
+  - provisioned STS requires `SESSION_KEY`
+  - provisioned responder-specific sub-session mode requires both
+    `SESSION_KEY` and `SUBSESSION_KEY`
+
+This keeps STS behavior in the validation/policy layer until there is stronger
+source evidence for packet-level crypto/runtime effects.
   transition
 - `RESULT_REPORT_CONFIG` values using bits outside the documented low four
   report flags are rejected with `INVALID_PARAM`

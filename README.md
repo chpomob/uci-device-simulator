@@ -126,6 +126,13 @@ values `0..3` are accepted, while unsupported higher values are rejected with
 documented `0..1` on/off values are accepted, while unsupported higher values
 are rejected with `INVALID_PARAM`, are not stored, and are also re-validated
 on `SESSION_START`.
+`STS_CONFIG` now uses that same seam as a security-mode selector: only the
+documented Cherry/FIra enum values `0x00..0x04` are accepted, while unsupported
+higher values are rejected with `INVALID_PARAM`, are not stored, and are also
+re-validated on `SESSION_START` together with the security material those modes
+depend on (`STATIC_STS_IV` for static STS and `SESSION_KEY` for provisioned
+STS, plus `SUBSESSION_KEY` for provisioned responder-specific sub-session
+mode).
 At this stage that means:
 - bit 0 controls the distance/ToF-derived field
 - bit 1 controls azimuth fields

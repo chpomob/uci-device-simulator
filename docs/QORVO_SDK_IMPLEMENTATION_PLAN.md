@@ -309,6 +309,7 @@ Current status:
 - `RESULT_REPORT_CONFIG` is now the second validated parameter
 - `AOA_RESULT_REQ` is now the third validated parameter
 - `RSSI_REPORTING` is now the fourth validated parameter
+- `STS_CONFIG` is now the fifth validated parameter
 - default profile behavior:
   - minimum supported interval: `50 ms`
   - status on invalid value: `INVALID_RANGE`
@@ -320,6 +321,9 @@ Current status:
   - unsupported `AOA_RESULT_REQ` values are rejected with `INVALID_PARAM`
   - `RSSI_REPORTING` accepts only the documented `0..1` on/off values
   - unsupported `RSSI_REPORTING` values are rejected with `INVALID_PARAM`
+  - `STS_CONFIG` accepts only the documented `0x00..0x04` enum values
+  - `SESSION_START` re-validates the STS-dependent security material that the
+    local Cherry helpers prove for static and provisioned modes
 - delayed/session-status surfacing remains intentionally configurable work for
   later profiles once stronger firmware evidence exists
 

@@ -870,6 +870,144 @@ static void test_session_start_rejects_invalid_rssi_reporting(void) {
     PASS();
 }
 
+static void test_sts_config_validation_rejects_unsupported_values(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t original_sts_config = 0x00;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "sts config validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "sts config validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_STS_CONFIG, &original_sts_config, &value_len) == 0,
+                "sts config validation get original failed");
+    ASSERT_EQ_U8(1, value_len, "sts config validation original length");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_STS_CONFIG;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x05;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "unsupported sts config should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "sts config invalid status");
+    ASSERT_EQ_U8(0x00, result.response.payload[1], "sts config invalid config status count");
+    ASSERT_TRUE(result.has_notification, "sts config invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "sts config invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "sts config invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_STS_CONFIG, &original_sts_config, &value_len) == 0,
+                "sts config validation get current failed");
+    ASSERT_EQ_U8(0x01, original_sts_config, "invalid sts config should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_static_sts_without_iv(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t sts_config_static = 0x00;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "static sts start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "static sts start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_STS_CONFIG,
+                                             &sts_config_static,
+                                             sizeof(sts_config_static)) == 0,
+                "static sts preload failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_STATIC_STS_IV,
+                                             NULL,
+                                             0) == 0,
+                "static sts iv clear failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start without static sts iv should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start missing static sts iv status");
+    ASSERT_TRUE(result.has_notification, "start missing static sts iv should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start missing static sts iv generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start missing static sts iv generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start missing static sts iv should preserve session state");
+    PASS();
+}
+
+static void test_session_start_rejects_provisioned_sts_without_session_key(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t sts_config_provisioned = 0x03;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "provisioned sts start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "provisioned sts start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_STS_CONFIG,
+                                             &sts_config_provisioned,
+                                             sizeof(sts_config_provisioned)) == 0,
+                "provisioned sts preload failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_SESSION_KEY,
+                                             NULL,
+                                             0) == 0,
+                "session key clear failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start without provisioned sts session key should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start missing provisioned sts key status");
+    ASSERT_TRUE(result.has_notification, "start missing provisioned sts key should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start missing provisioned sts key generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start missing provisioned sts key generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start missing provisioned sts key should preserve session state");
+    PASS();
+}
+
 static void test_ranging_round_usage_validation_rejects_unsupported_values(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -3481,6 +3619,9 @@ int main(void) {
     test_session_start_rejects_invalid_ranging_interval();
     test_result_report_config_validation_rejects_unsupported_bits();
     test_session_start_rejects_invalid_result_report_config();
+    test_sts_config_validation_rejects_unsupported_values();
+    test_session_start_rejects_static_sts_without_iv();
+    test_session_start_rejects_provisioned_sts_without_session_key();
     test_aoa_result_req_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_aoa_result_req();
     test_rssi_reporting_validation_rejects_unsupported_values();

@@ -57,6 +57,25 @@ static int validate_result_report_config(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_sts_config(const uci_sim_profile_t* profile,
+                               uint8_t sts_config,
+                               uci_sim_validation_result_t* result) {
+    if (!profile) {
+        return 0;
+    }
+
+    if (sts_config >= 8U ||
+        (profile->supported_sts_config_mask & (uint8_t)(1U << sts_config)) == 0U) {
+        set_invalid_result(result,
+                           profile->invalid_sts_config_status,
+                           profile->invalid_sts_config_reason_code,
+                           profile->invalid_sts_config_surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int validate_aoa_result_req(const uci_sim_profile_t* profile,
                                    uint8_t aoa_result_req,
                                    uci_sim_validation_result_t* result) {
@@ -112,6 +131,76 @@ static int validate_ranging_round_usage(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int require_session_config_len(const uci_sim_profile_t* profile,
+                                      const uci_sim_session_t* session,
+                                      uint8_t config_id,
+                                      uint8_t expected_len,
+                                      uci_sim_validation_result_t* result) {
+    uint8_t value_len = 0;
+
+    if (!session) {
+        return 0;
+    }
+
+    if (uci_sim_session_get_config(session, config_id, NULL, &value_len) != 0 ||
+        value_len != expected_len) {
+        set_invalid_result(result,
+                           profile ? profile->invalid_sts_config_status : UCI_STATUS_INVALID_PARAM,
+                           profile ? profile->invalid_sts_config_reason_code
+                                   : UCI_SESSION_REASON_ERROR_INVALID_STS_CONFIG,
+                           profile ? profile->invalid_sts_config_surface
+                                   : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+        return -1;
+    }
+
+    return 0;
+}
+
+static int require_session_config_len_one_of(const uci_sim_profile_t* profile,
+                                             const uci_sim_session_t* session,
+                                             uint8_t config_id,
+                                             uint8_t expected_len_a,
+                                             uint8_t expected_len_b,
+                                             uci_sim_validation_result_t* result) {
+    uint8_t value_len = 0;
+
+    if (!session) {
+        return 0;
+    }
+
+    if (uci_sim_session_get_config(session, config_id, NULL, &value_len) != 0 ||
+        (value_len != expected_len_a && value_len != expected_len_b)) {
+        set_invalid_result(result,
+                           profile ? profile->invalid_sts_config_status : UCI_STATUS_INVALID_PARAM,
+                           profile ? profile->invalid_sts_config_reason_code
+                                   : UCI_SESSION_REASON_ERROR_INVALID_STS_CONFIG,
+                           profile ? profile->invalid_sts_config_surface
+                                   : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+        return -1;
+    }
+
+    return 0;
+}
+
+static int validate_sts_dependencies(const uci_sim_profile_t* profile,
+                                     const uci_sim_session_t* session,
+                                     uint8_t sts_config,
+                                     uci_sim_validation_result_t* result) {
+    switch (sts_config) {
+        case 0x00:
+            return require_session_config_len(profile, session, UCI_APP_CONFIG_STATIC_STS_IV, 8, result);
+        case 0x03:
+            return require_session_config_len_one_of(profile, session, UCI_APP_CONFIG_SESSION_KEY, 16, 32, result);
+        case 0x04:
+            if (require_session_config_len_one_of(profile, session, UCI_APP_CONFIG_SESSION_KEY, 16, 32, result) != 0) {
+                return -1;
+            }
+            return require_session_config_len_one_of(profile, session, UCI_APP_CONFIG_SUBSESSION_KEY, 16, 32, result);
+        default:
+            return 0;
+    }
+}
+
 void uci_sim_validation_result_init(uci_sim_validation_result_t* result) {
     if (!result) {
         return;
@@ -134,6 +223,18 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
     uci_sim_validation_result_init(result);
 
     if (config_id != UCI_APP_CONFIG_RANGING_INTERVAL) {
+        if (config_id == UCI_APP_CONFIG_STS_CONFIG) {
+            if (!value || value_len != 1) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   profile ? profile->invalid_sts_config_reason_code
+                                           : UCI_SESSION_REASON_ERROR_INVALID_STS_CONFIG,
+                                   profile ? profile->invalid_sts_config_surface
+                                           : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+            return validate_sts_config(profile, value[0], result);
+        }
         if (config_id == UCI_APP_CONFIG_RESULT_REPORT_CONFIG) {
             if (!value || value_len != 1) {
                 set_invalid_result(result,
@@ -198,6 +299,8 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
                                    const uci_sim_session_t* session,
                                    uci_sim_validation_result_t* result) {
     uint32_t interval_ms;
+    uint8_t sts_config = 0x00;
+    uint8_t sts_config_len = 0;
     uint8_t result_report_config;
     uint8_t aoa_result_req;
     uint8_t rssi_reporting;
@@ -210,6 +313,24 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
 
     interval_ms = uci_sim_session_get_ranging_interval_ms(session, profile);
     if (validate_ranging_interval_ms(profile, interval_ms, result) != 0) {
+        return -1;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_STS_CONFIG, &sts_config, &sts_config_len) != 0 ||
+        sts_config_len != 1) {
+        set_invalid_result(result,
+                           profile ? profile->invalid_sts_config_status : UCI_STATUS_INVALID_PARAM,
+                           profile ? profile->invalid_sts_config_reason_code
+                                   : UCI_SESSION_REASON_ERROR_INVALID_STS_CONFIG,
+                           profile ? profile->invalid_sts_config_surface
+                                   : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+        return -1;
+    }
+
+    if (validate_sts_config(profile, sts_config, result) != 0) {
+        return -1;
+    }
+    if (validate_sts_dependencies(profile, session, sts_config, result) != 0) {
         return -1;
     }
 

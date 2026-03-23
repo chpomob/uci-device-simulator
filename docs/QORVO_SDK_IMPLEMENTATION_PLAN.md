@@ -311,6 +311,7 @@ Current status:
 - `RSSI_REPORTING` is now the fourth validated parameter
 - `STS_CONFIG` is now the fifth validated parameter
 - `DEVICE_TYPE` is now the sixth validated parameter
+- `MULTI_NODE_MODE` is now the seventh validated parameter
 - default profile behavior:
   - minimum supported interval: `50 ms`
   - status on invalid value: `INVALID_RANGE`
@@ -329,6 +330,11 @@ Current status:
     `CONTROLLER (0x01)` values in the default profile
   - `SESSION_START` re-validates the classic `DEVICE_TYPE` / `DEVICE_ROLE`
     pairing for `RESPONDER` / `INITIATOR` sessions
+  - `MULTI_NODE_MODE` accepts only the documented FiRa `UNICAST (0x00)`,
+    `ONE_TO_MANY (0x01)`, and `MANY_TO_MANY (0x02)` values in the default
+    profile
+  - `SESSION_START` re-validates the one source-backed runtime topology rule
+    for that parameter: `UNICAST` must still describe a single peer
 - delayed/session-status surfacing remains intentionally configurable work for
   later profiles once stronger firmware evidence exists
 

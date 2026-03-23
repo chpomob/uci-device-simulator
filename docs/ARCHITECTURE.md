@@ -125,6 +125,12 @@ source evidence for packet-level crypto/runtime effects.
   only `CONTROLEE (0x00)` and `CONTROLLER (0x01)` are accepted in the default
   profile, and `SESSION_START` re-validates the classic `DEVICE_TYPE` /
   `DEVICE_ROLE` pair for `RESPONDER` / `INITIATOR` sessions before transition
+- `MULTI_NODE_MODE` now uses that same seam for the FiRa multi-peer topology
+  model: only `UNICAST (0x00)`, `ONE_TO_MANY (0x01)`, and
+  `MANY_TO_MANY (0x02)` are accepted in the default profile
+- `SESSION_START` now also re-validates the one source-backed runtime topology
+  rule for that parameter: `UNICAST` sessions must still describe a single
+  peer (`NUMBER_OF_CONTROLEES == 1` and a single `DST_MAC_ADDRESS`)
 - `RESULT_REPORT_CONFIG` values using bits outside the documented low four
   report flags are rejected with `INVALID_PARAM`
 - invalid `RESULT_REPORT_CONFIG` values are not stored and `SESSION_START`

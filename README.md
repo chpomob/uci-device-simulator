@@ -137,6 +137,12 @@ mode).
 model: only `CONTROLEE (0x00)` and `CONTROLLER (0x01)` are accepted in the
 default profile, and `SESSION_START` re-validates the classic pairing with
 `DEVICE_ROLE` (`CONTROLEE` with `RESPONDER`, `CONTROLLER` with `INITIATOR`).
+`MULTI_NODE_MODE` now uses that same seam for the FiRa topology model: only
+`UNICAST (0x00)`, `ONE_TO_MANY (0x01)`, and `MANY_TO_MANY (0x02)` are accepted
+in the default profile, and `SESSION_START` re-validates the one proven
+runtime topology constraint from the local Cherry setup flows: `UNICAST`
+sessions must still describe a single peer (`NUMBER_OF_CONTROLEES == 1` and a
+single `DST_MAC_ADDRESS`).
 At this stage that means:
 - bit 0 controls the distance/ToF-derived field
 - bit 1 controls azimuth fields

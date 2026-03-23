@@ -150,6 +150,25 @@ static int validate_device_type(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_multi_node_mode(const uci_sim_profile_t* profile,
+                                    uint8_t multi_node_mode,
+                                    uci_sim_validation_result_t* result) {
+    if (!profile) {
+        return 0;
+    }
+
+    if (multi_node_mode >= 8U ||
+        (profile->supported_multi_node_mode_mask & (uint8_t)(1U << multi_node_mode)) == 0U) {
+        set_invalid_result(result,
+                           profile->invalid_multi_node_mode_status,
+                           profile->invalid_multi_node_mode_reason_code,
+                           profile->invalid_multi_node_mode_surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int get_session_u8_config(const uci_sim_session_t* session,
                                  uint8_t config_id,
                                  uint8_t* value,
@@ -211,6 +230,47 @@ static int validate_device_type_role_pair(const uci_sim_profile_t* profile,
             break;
         default:
             break;
+    }
+
+    return 0;
+}
+
+static int validate_multi_node_mode_topology(const uci_sim_profile_t* profile,
+                                             const uci_sim_session_t* session,
+                                             uci_sim_validation_result_t* result) {
+    uint8_t multi_node_mode = 0U;
+    uint8_t number_of_controlees = 0U;
+    uint8_t dst_mac_value_len = 0U;
+    uint8_t status = profile ? profile->invalid_multi_node_mode_status : UCI_STATUS_INVALID_PARAM;
+    uint8_t reason = profile ? profile->invalid_multi_node_mode_reason_code
+                             : UCI_SESSION_REASON_ERROR_INVALID_MULTI_NODE_MODE;
+    uint8_t surface = profile ? profile->invalid_multi_node_mode_surface
+                              : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE;
+
+    if (get_session_u8_config(session, UCI_APP_CONFIG_MULTI_NODE_MODE, &multi_node_mode,
+                              result, status, reason, surface) != 0) {
+        return -1;
+    }
+    if (validate_multi_node_mode(profile, multi_node_mode, result) != 0) {
+        return -1;
+    }
+
+    if (multi_node_mode != 0x00U) {
+        return 0;
+    }
+
+    if (get_session_u8_config(session, UCI_APP_CONFIG_NUMBER_OF_CONTROLEES, &number_of_controlees,
+                              result, status, reason, surface) != 0) {
+        return -1;
+    }
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_DST_MAC_ADDRESS, NULL, &dst_mac_value_len) != 0) {
+        set_invalid_result(result, status, reason, surface);
+        return -1;
+    }
+
+    if (number_of_controlees != 1U || dst_mac_value_len != 2U) {
+        set_invalid_result(result, status, reason, surface);
+        return -1;
     }
 
     return 0;
@@ -320,6 +380,18 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
             }
             return validate_device_type(profile, value[0], result);
         }
+        if (config_id == UCI_APP_CONFIG_MULTI_NODE_MODE) {
+            if (!value || value_len != 1) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   profile ? profile->invalid_multi_node_mode_reason_code
+                                           : UCI_SESSION_REASON_ERROR_INVALID_MULTI_NODE_MODE,
+                                   profile ? profile->invalid_multi_node_mode_surface
+                                           : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+            return validate_multi_node_mode(profile, value[0], result);
+        }
         if (config_id == UCI_APP_CONFIG_STS_CONFIG) {
             if (!value || value_len != 1) {
                 set_invalid_result(result,
@@ -414,6 +486,9 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
     }
 
     if (validate_device_type_role_pair(profile, session, result) != 0) {
+        return -1;
+    }
+    if (validate_multi_node_mode_topology(profile, session, result) != 0) {
         return -1;
     }
 

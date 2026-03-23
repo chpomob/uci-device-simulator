@@ -58,6 +58,10 @@ typedef struct {
     uint8_t invalid_ranging_round_usage_status;
     uint8_t invalid_ranging_round_usage_reason_code;
     uint8_t invalid_ranging_round_usage_surface;
+    uint8_t supported_multi_node_mode_mask;
+    uint8_t invalid_multi_node_mode_status;
+    uint8_t invalid_multi_node_mode_reason_code;
+    uint8_t invalid_multi_node_mode_surface;
     uint8_t supported_device_type_mask;
     uint8_t invalid_device_type_status;
     uint8_t invalid_device_type_reason_code;

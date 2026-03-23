@@ -50,6 +50,11 @@ static const uci_sim_profile_t k_default_profile = {
     .invalid_ranging_round_usage_status = UCI_STATUS_INVALID_PARAM,
     .invalid_ranging_round_usage_reason_code = UCI_SESSION_REASON_ERROR_INVALID_RANGING_ROUND_USAGE,
     .invalid_ranging_round_usage_surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE,
+    .supported_device_type_mask =
+        (uint8_t)((1U << UCI_DEVICE_TYPE_CONTROLEE) | (1U << UCI_DEVICE_TYPE_CONTROLLER)),
+    .invalid_device_type_status = UCI_STATUS_INVALID_PARAM,
+    .invalid_device_type_reason_code = UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+    .invalid_device_type_surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE,
     .session_transitions = {
         {
             .oid = UCI_SESSION_START,

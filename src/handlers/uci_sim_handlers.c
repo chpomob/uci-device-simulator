@@ -827,7 +827,8 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
                 result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
                 break;
             }
-            if (config_id == UCI_APP_CONFIG_STS_CONFIG ||
+            if (config_id == UCI_APP_CONFIG_DEVICE_TYPE ||
+                config_id == UCI_APP_CONFIG_STS_CONFIG ||
                 config_id == UCI_APP_CONFIG_RANGING_INTERVAL ||
                 config_id == UCI_APP_CONFIG_RANGING_ROUND_USAGE ||
                 config_id == UCI_APP_CONFIG_AOA_RESULT_REQ ||

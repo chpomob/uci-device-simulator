@@ -310,6 +310,7 @@ Current status:
 - `AOA_RESULT_REQ` is now the third validated parameter
 - `RSSI_REPORTING` is now the fourth validated parameter
 - `STS_CONFIG` is now the fifth validated parameter
+- `DEVICE_TYPE` is now the sixth validated parameter
 - default profile behavior:
   - minimum supported interval: `50 ms`
   - status on invalid value: `INVALID_RANGE`
@@ -324,6 +325,10 @@ Current status:
   - `STS_CONFIG` accepts only the documented `0x00..0x04` enum values
   - `SESSION_START` re-validates the STS-dependent security material that the
     local Cherry helpers prove for static and provisioned modes
+  - `DEVICE_TYPE` accepts only the documented FiRa `CONTROLEE (0x00)` and
+    `CONTROLLER (0x01)` values in the default profile
+  - `SESSION_START` re-validates the classic `DEVICE_TYPE` / `DEVICE_ROLE`
+    pairing for `RESPONDER` / `INITIATOR` sessions
 - delayed/session-status surfacing remains intentionally configurable work for
   later profiles once stronger firmware evidence exists
 
@@ -408,7 +413,6 @@ Target:
 
 Future phase:
 
-- `DEVICE_TYPE`
 - `DEVICE_ROLE`
 - `MULTI_NODE_MODE`
 - `NUMBER_OF_CONTROLEES`

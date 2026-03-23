@@ -131,6 +131,91 @@ static int validate_ranging_round_usage(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_device_type(const uci_sim_profile_t* profile,
+                                uint8_t device_type,
+                                uci_sim_validation_result_t* result) {
+    if (!profile) {
+        return 0;
+    }
+
+    if (device_type >= 8U ||
+        (profile->supported_device_type_mask & (uint8_t)(1U << device_type)) == 0U) {
+        set_invalid_result(result,
+                           profile->invalid_device_type_status,
+                           profile->invalid_device_type_reason_code,
+                           profile->invalid_device_type_surface);
+        return -1;
+    }
+
+    return 0;
+}
+
+static int get_session_u8_config(const uci_sim_session_t* session,
+                                 uint8_t config_id,
+                                 uint8_t* value,
+                                 uci_sim_validation_result_t* result,
+                                 uint8_t status,
+                                 uint8_t reason,
+                                 uint8_t surface) {
+    uint8_t value_len = 0;
+
+    if (!session || !value) {
+        return -1;
+    }
+
+    if (uci_sim_session_get_config(session, config_id, value, &value_len) != 0 || value_len != 1U) {
+        set_invalid_result(result, status, reason, surface);
+        return -1;
+    }
+
+    return 0;
+}
+
+static int validate_device_type_role_pair(const uci_sim_profile_t* profile,
+                                          const uci_sim_session_t* session,
+                                          uci_sim_validation_result_t* result) {
+    uint8_t device_type = 0U;
+    uint8_t device_role = 0U;
+    uint8_t status = profile ? profile->invalid_device_type_status : UCI_STATUS_INVALID_PARAM;
+    uint8_t reason = profile ? profile->invalid_device_type_reason_code
+                             : UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS;
+    uint8_t surface = profile ? profile->invalid_device_type_surface
+                              : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE;
+
+    if (get_session_u8_config(session, UCI_APP_CONFIG_DEVICE_TYPE, &device_type,
+                              result, status, reason, surface) != 0) {
+        return -1;
+    }
+    if (validate_device_type(profile, device_type, result) != 0) {
+        return -1;
+    }
+    if (get_session_u8_config(session, UCI_APP_CONFIG_DEVICE_ROLE, &device_role,
+                              result, UCI_STATUS_INVALID_PARAM,
+                              UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+                              UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE) != 0) {
+        return -1;
+    }
+
+    switch (device_role) {
+        case UCI_DEVICE_ROLE_RESPONDER:
+            if (device_type != UCI_DEVICE_TYPE_CONTROLEE) {
+                set_invalid_result(result, status, reason, surface);
+                return -1;
+            }
+            break;
+        case UCI_DEVICE_ROLE_INITIATOR:
+            if (device_type != UCI_DEVICE_TYPE_CONTROLLER) {
+                set_invalid_result(result, status, reason, surface);
+                return -1;
+            }
+            break;
+        default:
+            break;
+    }
+
+    return 0;
+}
+
 static int require_session_config_len(const uci_sim_profile_t* profile,
                                       const uci_sim_session_t* session,
                                       uint8_t config_id,
@@ -223,6 +308,18 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
     uci_sim_validation_result_init(result);
 
     if (config_id != UCI_APP_CONFIG_RANGING_INTERVAL) {
+        if (config_id == UCI_APP_CONFIG_DEVICE_TYPE) {
+            if (!value || value_len != 1) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   profile ? profile->invalid_device_type_reason_code
+                                           : UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+                                   profile ? profile->invalid_device_type_surface
+                                           : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+            return validate_device_type(profile, value[0], result);
+        }
         if (config_id == UCI_APP_CONFIG_STS_CONFIG) {
             if (!value || value_len != 1) {
                 set_invalid_result(result,
@@ -313,6 +410,10 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
 
     interval_ms = uci_sim_session_get_ranging_interval_ms(session, profile);
     if (validate_ranging_interval_ms(profile, interval_ms, result) != 0) {
+        return -1;
+    }
+
+    if (validate_device_type_role_pair(profile, session, result) != 0) {
         return -1;
     }
 

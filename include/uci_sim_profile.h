@@ -58,6 +58,10 @@ typedef struct {
     uint8_t invalid_ranging_round_usage_status;
     uint8_t invalid_ranging_round_usage_reason_code;
     uint8_t invalid_ranging_round_usage_surface;
+    uint8_t supported_device_type_mask;
+    uint8_t invalid_device_type_status;
+    uint8_t invalid_device_type_reason_code;
+    uint8_t invalid_device_type_surface;
     uci_sim_session_transition_t session_transitions[UCI_SIM_MAX_SESSION_TRANSITIONS];
     size_t session_transition_count;
     uint16_t default_session_max_data_size;

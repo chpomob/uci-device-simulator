@@ -121,7 +121,10 @@ source-backed:
 
 This keeps STS behavior in the validation/policy layer until there is stronger
 source evidence for packet-level crypto/runtime effects.
-  transition
+- `DEVICE_TYPE` now uses that same seam for the classic FiRa topology model:
+  only `CONTROLEE (0x00)` and `CONTROLLER (0x01)` are accepted in the default
+  profile, and `SESSION_START` re-validates the classic `DEVICE_TYPE` /
+  `DEVICE_ROLE` pair for `RESPONDER` / `INITIATOR` sessions before transition
 - `RESULT_REPORT_CONFIG` values using bits outside the documented low four
   report flags are rejected with `INVALID_PARAM`
 - invalid `RESULT_REPORT_CONFIG` values are not stored and `SESSION_START`

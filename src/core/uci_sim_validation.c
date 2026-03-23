@@ -150,6 +150,43 @@ static int validate_device_type(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_number_of_controlees(const uci_sim_profile_t* profile,
+                                        uint8_t number_of_controlees,
+                                        uci_sim_validation_result_t* result) {
+    if (!profile) {
+        return 0;
+    }
+
+    if (number_of_controlees > profile->supported_max_controlees) {
+        set_invalid_result(result,
+                           profile->invalid_num_of_controlees_status,
+                           profile->invalid_num_of_controlees_reason_code,
+                           profile->invalid_num_of_controlees_surface);
+        return -1;
+    }
+
+    return 0;
+}
+
+static int validate_dst_mac_address(const uci_sim_profile_t* profile,
+                                    const uint8_t* value,
+                                    uint8_t value_len,
+                                    uci_sim_validation_result_t* result) {
+    uint8_t max_controlees = profile ? profile->supported_max_controlees : 8U;
+    uint8_t status = profile ? profile->invalid_dst_mac_address_status : UCI_STATUS_INVALID_PARAM;
+    uint8_t reason = profile ? profile->invalid_dst_mac_address_reason_code
+                             : UCI_SESSION_REASON_ERROR_INVALID_DST_ADDRESS_LIST;
+    uint8_t surface = profile ? profile->invalid_dst_mac_address_surface
+                              : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE;
+
+    if (!value || value_len == 0U || (value_len % 2U) != 0U || (value_len / 2U) > max_controlees) {
+        set_invalid_result(result, status, reason, surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int validate_multi_node_mode(const uci_sim_profile_t* profile,
                                     uint8_t multi_node_mode,
                                     uci_sim_validation_result_t* result) {
@@ -240,6 +277,7 @@ static int validate_multi_node_mode_topology(const uci_sim_profile_t* profile,
                                              uci_sim_validation_result_t* result) {
     uint8_t multi_node_mode = 0U;
     uint8_t number_of_controlees = 0U;
+    uint8_t dst_mac_value[UCI_SIM_MAX_CONFIG_VALUE] = {0};
     uint8_t dst_mac_value_len = 0U;
     uint8_t status = profile ? profile->invalid_multi_node_mode_status : UCI_STATUS_INVALID_PARAM;
     uint8_t reason = profile ? profile->invalid_multi_node_mode_reason_code
@@ -255,20 +293,42 @@ static int validate_multi_node_mode_topology(const uci_sim_profile_t* profile,
         return -1;
     }
 
-    if (multi_node_mode != 0x00U) {
-        return 0;
-    }
-
     if (get_session_u8_config(session, UCI_APP_CONFIG_NUMBER_OF_CONTROLEES, &number_of_controlees,
-                              result, status, reason, surface) != 0) {
+                              result,
+                              profile ? profile->invalid_num_of_controlees_status : UCI_STATUS_INVALID_PARAM,
+                              profile ? profile->invalid_num_of_controlees_reason_code
+                                      : UCI_SESSION_REASON_ERROR_INVALID_NUM_OF_CONTROLEES,
+                              profile ? profile->invalid_num_of_controlees_surface
+                                      : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE) != 0) {
         return -1;
     }
-    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_DST_MAC_ADDRESS, NULL, &dst_mac_value_len) != 0) {
-        set_invalid_result(result, status, reason, surface);
+    if (validate_number_of_controlees(profile, number_of_controlees, result) != 0) {
+        return -1;
+    }
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_DST_MAC_ADDRESS, dst_mac_value, &dst_mac_value_len) != 0) {
+        set_invalid_result(result,
+                           profile ? profile->invalid_dst_mac_address_status : UCI_STATUS_INVALID_PARAM,
+                           profile ? profile->invalid_dst_mac_address_reason_code
+                                   : UCI_SESSION_REASON_ERROR_INVALID_DST_ADDRESS_LIST,
+                           profile ? profile->invalid_dst_mac_address_surface
+                                   : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+        return -1;
+    }
+    if (validate_dst_mac_address(profile, dst_mac_value, dst_mac_value_len, result) != 0) {
         return -1;
     }
 
-    if (number_of_controlees != 1U || dst_mac_value_len != 2U) {
+    if ((dst_mac_value_len / 2U) != number_of_controlees) {
+        set_invalid_result(result,
+                           profile ? profile->invalid_num_of_controlees_status : UCI_STATUS_INVALID_PARAM,
+                           profile ? profile->invalid_num_of_controlees_reason_code
+                                   : UCI_SESSION_REASON_ERROR_INVALID_NUM_OF_CONTROLEES,
+                           profile ? profile->invalid_num_of_controlees_surface
+                                   : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+        return -1;
+    }
+
+    if (multi_node_mode == 0x00U && (number_of_controlees != 1U || dst_mac_value_len != 2U)) {
         set_invalid_result(result, status, reason, surface);
         return -1;
     }
@@ -391,6 +451,21 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
                 return -1;
             }
             return validate_multi_node_mode(profile, value[0], result);
+        }
+        if (config_id == UCI_APP_CONFIG_NUMBER_OF_CONTROLEES) {
+            if (!value || value_len != 1) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   profile ? profile->invalid_num_of_controlees_reason_code
+                                           : UCI_SESSION_REASON_ERROR_INVALID_NUM_OF_CONTROLEES,
+                                   profile ? profile->invalid_num_of_controlees_surface
+                                           : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+            return validate_number_of_controlees(profile, value[0], result);
+        }
+        if (config_id == UCI_APP_CONFIG_DST_MAC_ADDRESS) {
+            return validate_dst_mac_address(profile, value, value_len, result);
         }
         if (config_id == UCI_APP_CONFIG_STS_CONFIG) {
             if (!value || value_len != 1) {

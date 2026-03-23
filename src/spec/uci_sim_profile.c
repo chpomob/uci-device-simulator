@@ -54,6 +54,13 @@ static const uci_sim_profile_t k_default_profile = {
     .invalid_multi_node_mode_status = UCI_STATUS_INVALID_PARAM,
     .invalid_multi_node_mode_reason_code = UCI_SESSION_REASON_ERROR_INVALID_MULTI_NODE_MODE,
     .invalid_multi_node_mode_surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE,
+    .supported_max_controlees = 8,
+    .invalid_num_of_controlees_status = UCI_STATUS_INVALID_PARAM,
+    .invalid_num_of_controlees_reason_code = UCI_SESSION_REASON_ERROR_INVALID_NUM_OF_CONTROLEES,
+    .invalid_num_of_controlees_surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE,
+    .invalid_dst_mac_address_status = UCI_STATUS_INVALID_PARAM,
+    .invalid_dst_mac_address_reason_code = UCI_SESSION_REASON_ERROR_INVALID_DST_ADDRESS_LIST,
+    .invalid_dst_mac_address_surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE,
     .supported_device_type_mask =
         (uint8_t)((1U << UCI_DEVICE_TYPE_CONTROLEE) | (1U << UCI_DEVICE_TYPE_CONTROLLER)),
     .invalid_device_type_status = UCI_STATUS_INVALID_PARAM,
@@ -306,7 +313,7 @@ static const uci_sim_profile_t k_default_profile = {
         0x4D
     },
     .default_session_app_config_value_lens = {
-        1, 1, 1, 1, 1, 1, 2, 2, 2, 4, 4, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 2, 1, 1, 2, 1, 1, 2, 8, 1, 1, 4, 1, 1, 1, 1, 4, 1, 2, 4, 4, 1, 1, 3, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 2, 6, 2, 4, 4, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 2, 1, 1, 2, 1, 1, 2, 8, 1, 1, 4, 1, 1, 1, 1, 4, 1, 2, 4, 4, 1, 1, 3, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1,
         16, 16, 1, 9, 1, 1, 1, 1, 1
     },
     .default_session_app_config_values = {
@@ -317,7 +324,7 @@ static const uci_sim_profile_t k_default_profile = {
         { 0x05 },
         { 0x03 },
         { 0xCD, 0xAB },
-        { 0x78, 0x56 },
+        { 0x78, 0x56, 0x89, 0x67, 0x9A, 0x78 },
         { 0x60, 0x09 },
         { 0xD0, 0x07, 0x00, 0x00 },
         { 0x05, 0x00, 0x00, 0x00 },

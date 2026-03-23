@@ -1234,6 +1234,146 @@ static void test_session_start_rejects_unicast_multi_node_topology_mismatch(void
     PASS();
 }
 
+static void test_number_of_controlees_validation_rejects_excessive_value(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t original_number_of_controlees = 0x00;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "number_of_controlees validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "number_of_controlees validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_NUMBER_OF_CONTROLEES, &original_number_of_controlees, &value_len) == 0,
+                "number_of_controlees validation fetch original value failed");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_NUMBER_OF_CONTROLEES;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x09;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "unsupported number_of_controlees should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "number_of_controlees invalid status");
+    ASSERT_TRUE(result.has_notification, "number_of_controlees invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "number_of_controlees invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "number_of_controlees invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_NUMBER_OF_CONTROLEES, &original_number_of_controlees, &value_len) == 0,
+                "number_of_controlees validation refetch original value failed");
+    ASSERT_EQ_U8(0x03, original_number_of_controlees,
+                 "invalid number_of_controlees should not overwrite stored value");
+    PASS();
+}
+
+static void test_dst_mac_address_validation_rejects_invalid_list_length(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t original_dst_mac[UCI_SIM_MAX_CONFIG_VALUE] = {0};
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "dst_mac_address validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "dst_mac_address validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_DST_MAC_ADDRESS, original_dst_mac, &value_len) == 0,
+                "dst_mac_address validation fetch original value failed");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 10;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_DST_MAC_ADDRESS;
+    request.payload[6] = 0x03;
+    request.payload[7] = 0x78;
+    request.payload[8] = 0x56;
+    request.payload[9] = 0x34;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "invalid dst_mac_address list should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "dst_mac_address invalid status");
+    ASSERT_TRUE(result.has_notification, "dst_mac_address invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "dst_mac_address invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "dst_mac_address invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_DST_MAC_ADDRESS, original_dst_mac, &value_len) == 0,
+                "dst_mac_address validation refetch original value failed");
+    ASSERT_EQ_U8(6, value_len, "invalid dst_mac_address should preserve original length");
+    ASSERT_EQ_U8(0x78, original_dst_mac[0], "invalid dst_mac_address should preserve original first byte");
+    ASSERT_EQ_U8(0x56, original_dst_mac[1], "invalid dst_mac_address should preserve original second byte");
+    PASS();
+}
+
+static void test_session_start_rejects_controlee_count_dst_list_mismatch(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t one_to_many_multi_node_mode = 0x01;
+    const uint8_t invalid_controlee_count = 0x02;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "count/list mismatch init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "count/list mismatch session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_MULTI_NODE_MODE,
+                                             &one_to_many_multi_node_mode,
+                                             sizeof(one_to_many_multi_node_mode)) == 0,
+                "count/list mismatch preload mode failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_NUMBER_OF_CONTROLEES,
+                                             &invalid_controlee_count,
+                                             sizeof(invalid_controlee_count)) == 0,
+                "count/list mismatch preload count failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with count/list mismatch should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid count/list mismatch status");
+    ASSERT_TRUE(result.has_notification, "start invalid count/list mismatch should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid count/list mismatch generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid count/list mismatch generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid count/list mismatch should preserve session state");
+    PASS();
+}
+
 static void test_session_start_rejects_invalid_ranging_round_usage(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -3812,8 +3952,11 @@ int main(void) {
     test_ranging_round_usage_validation_rejects_unsupported_values();
     test_device_type_validation_rejects_unsupported_values();
     test_multi_node_mode_validation_rejects_unsupported_values();
+    test_number_of_controlees_validation_rejects_excessive_value();
+    test_dst_mac_address_validation_rejects_invalid_list_length();
     test_session_start_rejects_device_type_role_mismatch();
     test_session_start_rejects_unicast_multi_node_topology_mismatch();
+    test_session_start_rejects_controlee_count_dst_list_mismatch();
     test_session_start_rejects_invalid_ranging_round_usage();
     test_measurement_policy_serializes_default_range_notification();
     test_measurement_policy_serializes_session_ranging_interval_override();

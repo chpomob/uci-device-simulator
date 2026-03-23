@@ -62,6 +62,13 @@ typedef struct {
     uint8_t invalid_multi_node_mode_status;
     uint8_t invalid_multi_node_mode_reason_code;
     uint8_t invalid_multi_node_mode_surface;
+    uint8_t supported_max_controlees;
+    uint8_t invalid_num_of_controlees_status;
+    uint8_t invalid_num_of_controlees_reason_code;
+    uint8_t invalid_num_of_controlees_surface;
+    uint8_t invalid_dst_mac_address_status;
+    uint8_t invalid_dst_mac_address_reason_code;
+    uint8_t invalid_dst_mac_address_surface;
     uint8_t supported_device_type_mask;
     uint8_t invalid_device_type_status;
     uint8_t invalid_device_type_reason_code;

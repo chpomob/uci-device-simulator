@@ -3432,6 +3432,85 @@ static void test_ranging_stream_progresses_to_completion(void) {
     PASS();
 }
 
+static void test_ranging_stream_stops_at_max_number_of_measurements(void) {
+    uci_sim_engine_t engine;
+    uci_sim_packet_t request;
+    uci_sim_packet_t response;
+    uci_sim_packet_t notification;
+    uci_sim_packet_t status_ntf;
+    const uint8_t max_number_of_measurements[2] = {0x02, 0x00};
+    uint32_t sequence;
+
+    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "max measurements init failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "max measurements init response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "max measurements init notification missing");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 9;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_MAX_NUMBER_OF_MEASUREMENTS;
+    request.payload[6] = 0x02;
+    request.payload[7] = max_number_of_measurements[0];
+    request.payload[8] = max_number_of_measurements[1];
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "max measurements set app config failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "max measurements set response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "max measurements set should not emit notification");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "max measurements start failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "max measurements start response missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "max measurements start notification missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "max measurements first range should wait for interval");
+
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
+                "max measurements first interval tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "max measurements first range missing");
+    sequence = read_u32_le(notification.payload);
+    ASSERT_EQ_U32(1, sequence, "max measurements sequence 1");
+    ASSERT_TRUE(dequeue_outbound(&engine, &status_ntf) != 0, "max measurements should not stop after first range");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_ACTIVE, engine.device.sessions[0].state, "max measurements state after first range");
+    ASSERT_EQ_U8(1, (uint8_t)engine.device.scheduled_event_count, "max measurements scheduled after first range");
+
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
+                "max measurements second interval tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "max measurements second range missing");
+    sequence = read_u32_le(notification.payload);
+    ASSERT_EQ_U32(2, sequence, "max measurements sequence 2");
+    ASSERT_TRUE(dequeue_outbound(&engine, &status_ntf) == 0, "max measurements status notification missing");
+    ASSERT_EQ_U8(UCI_GID_SESSION_CONFIG, status_ntf.gid, "max measurements status gid");
+    ASSERT_EQ_U8(UCI_SESSION_STATUS_NTF, status_ntf.oid, "max measurements status oid");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_IDLE, status_ntf.payload[4], "max measurements status state");
+    ASSERT_EQ_U8(UCI_SESSION_REASON_MAX_NUMBER_OF_MEASUREMENTS_REACHED,
+                 status_ntf.payload[5],
+                 "max measurements status reason");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_IDLE, engine.device.sessions[0].state, "max measurements final session state");
+    ASSERT_EQ_U8(0, engine.device.sessions[0].ranging_stream_remaining, "max measurements remaining after stop");
+    ASSERT_EQ_U8(0, (uint8_t)engine.device.scheduled_event_count, "max measurements scheduled after stop");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_GET_RANGING_COUNT;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "max measurements get count failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "max measurements count response missing");
+    ASSERT_EQ_U32(2, read_u32_le(&response.payload[1]), "max measurements final count");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "max measurements should not emit extra packets");
+    PASS();
+}
+
 static void test_default_scenario_initialization(void) {
     uci_sim_device_t device;
 
@@ -5281,6 +5360,7 @@ int main(void) {
     test_ranging_stream_respects_proximity_inside_mode();
     test_ranging_stream_respects_proximity_transition_mode();
     test_ranging_stream_progresses_to_completion();
+    test_ranging_stream_stops_at_max_number_of_measurements();
     test_session_app_config_storage();
     test_profile_rejects_unsupported_session_features();
     test_session_lifecycle();

@@ -44,6 +44,13 @@ static uint32_t read_u32_le(const uint8_t* payload) {
            ((uint32_t)payload[3] << 24);
 }
 
+static void write_u32_le(uint8_t* payload, uint32_t value) {
+    payload[0] = (uint8_t)(value & 0xFFU);
+    payload[1] = (uint8_t)((value >> 8) & 0xFFU);
+    payload[2] = (uint8_t)((value >> 16) & 0xFFU);
+    payload[3] = (uint8_t)((value >> 24) & 0xFFU);
+}
+
 void uci_sim_device_set_scenario(uci_sim_device_t* device, uci_sim_scenario_kind_t scenario) {
     if (!device) {
         return;
@@ -274,6 +281,28 @@ int uci_sim_device_queue_data_transfer_status_notification(uci_sim_device_t* dev
     return uci_sim_device_queue_notification(device, &notification);
 }
 
+int uci_sim_device_queue_session_status_notification(uci_sim_device_t* device,
+                                                     uint32_t session_id,
+                                                     uint8_t state,
+                                                     uint8_t reason) {
+    uci_sim_packet_t notification;
+
+    if (!device) {
+        return -1;
+    }
+
+    memset(&notification, 0, sizeof(notification));
+    notification.mt = UCI_MT_NOTIFICATION;
+    notification.pbf = UCI_PBF_COMPLETE;
+    notification.gid = UCI_GID_SESSION_CONFIG;
+    notification.oid = UCI_SESSION_STATUS_NTF;
+    notification.payload_len = 6;
+    write_u32_le(notification.payload, session_id);
+    notification.payload[4] = state;
+    notification.payload[5] = reason;
+    return uci_sim_device_queue_notification(device, &notification);
+}
+
 int uci_sim_device_progress_data_transfer(uci_sim_device_t* device,
                                           uci_sim_session_t* session) {
     if (!device || !session || !session->allocated || !session->data_transfer_in_progress) {
@@ -473,6 +502,25 @@ uint8_t uci_sim_session_get_data_repetition_count(const uci_sim_session_t* sessi
     }
 
     return value;
+}
+
+uint16_t uci_sim_session_get_max_number_of_measurements(const uci_sim_session_t* session) {
+    uint8_t value[2] = {0x00, 0x00};
+    uint8_t value_len = 0;
+
+    if (!session) {
+        return 0U;
+    }
+
+    if (uci_sim_session_get_config(session,
+                                   UCI_APP_CONFIG_MAX_NUMBER_OF_MEASUREMENTS,
+                                   value,
+                                   &value_len) != 0 ||
+        value_len != 2) {
+        return 0U;
+    }
+
+    return read_u16_le(value);
 }
 
 uint32_t uci_sim_session_get_ranging_interval_ms(const uci_sim_session_t* session,
@@ -816,6 +864,7 @@ int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
     uci_sim_measurement_t measurement;
     uci_sim_measurement_policy_result_t policy_result;
     const uci_sim_profile_t* profile;
+    uint16_t max_number_of_measurements;
 
     if (!device || !session || !result) {
         return -1;
@@ -827,6 +876,19 @@ int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
     }
 
     profile = device->profile ? device->profile : uci_sim_default_profile();
+    max_number_of_measurements = uci_sim_session_get_max_number_of_measurements(session);
+    if (max_number_of_measurements != 0U &&
+        session->ranging_count >= (uint32_t)max_number_of_measurements) {
+        session->state = UCI_SESSION_STATE_IDLE;
+        session->ranging_stream_remaining = 0U;
+        uci_sim_device_cancel_session_events(device, session->session_id);
+        return uci_sim_device_queue_session_status_notification(
+            device,
+            session->session_id,
+            UCI_SESSION_STATE_IDLE,
+            UCI_SESSION_REASON_MAX_NUMBER_OF_MEASUREMENTS_REACHED);
+    }
+
     uci_sim_measurement_init_ranging_sample(profile, session, &measurement);
     uci_sim_measurement_evaluate_range_notification_policy(session, &measurement, &policy_result);
 
@@ -848,5 +910,18 @@ int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
     session->last_in_proximity_range = policy_result.in_proximity_range;
     session->ranging_count++;
     session->ranging_stream_remaining--;
+    if (max_number_of_measurements != 0U &&
+        session->ranging_count >= (uint32_t)max_number_of_measurements) {
+        session->state = UCI_SESSION_STATE_IDLE;
+        session->ranging_stream_remaining = 0U;
+        uci_sim_device_cancel_session_events(device, session->session_id);
+        if (uci_sim_device_queue_session_status_notification(
+                device,
+                session->session_id,
+                UCI_SESSION_STATE_IDLE,
+                UCI_SESSION_REASON_MAX_NUMBER_OF_MEASUREMENTS_REACHED) != 0) {
+            return -1;
+        }
+    }
     return 0;
 }

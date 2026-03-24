@@ -395,6 +395,17 @@ Acceptance criteria:
 - `0` behaves as unlimited
 - finite values cap measurement production deterministically
 - the matching FiRa reason is observable in tests
+
+Status:
+
+- Implemented in the default profile and `ranging_stream` scenario.
+- The simulator now treats `0` as unlimited and stops finite streams by:
+  - cancelling remaining scheduled ranging events
+  - returning the session to `IDLE`
+  - emitting `SESSION_STATUS_NTF` with
+    `MAX_NUMBER_OF_MEASUREMENTS_REACHED`
+  - preserving the final `SESSION_GET_RANGING_COUNT` value
+
 ### Phase 7: `SESSION_TIME_BASE` Architecture
 
 Tasks:

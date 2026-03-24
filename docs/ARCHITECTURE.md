@@ -92,6 +92,10 @@ controls which result fields remain meaningful:
 - `RANGING_INTERVAL` now feeds both the visible notification interval field
   and the delay used for the full scheduled ranging stream, including the
   first post-start measurement
+- `MAX_NUMBER_OF_MEASUREMENTS` now uses that same scheduler-facing seam to
+  enforce a deterministic measurement budget: `0` means unlimited, while a
+  finite budget stops further range production, returns the session to `IDLE`,
+  and emits the matching FiRa session-status reason
 
 `RANGING_ROUND_USAGE` now also participates in that seam, but with an explicit
 profile boundary. The default Qorvo-like profile only accepts the FiRa

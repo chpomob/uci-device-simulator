@@ -174,6 +174,34 @@ static void set_ranging_interval_ms(int fd, uint32_t interval_ms, const char* st
                           message);
 }
 
+static void set_max_number_of_measurements(int fd,
+                                           uint16_t max_number_of_measurements,
+                                           const char* step_name) {
+    uint8_t request[UCI_SIM_MAX_PACKET] = {0};
+    char message[160];
+
+    request[0] = 0x21;
+    request[1] = 0x03;
+    request[2] = 0x00;
+    request[3] = 0x09;
+    request[4] = 0x78;
+    request[5] = 0x56;
+    request[6] = 0x34;
+    request[7] = 0x12;
+    request[8] = 0x01;
+    request[9] = UCI_APP_CONFIG_MAX_NUMBER_OF_MEASUREMENTS;
+    request[10] = 0x02;
+    request[11] = (uint8_t)(max_number_of_measurements & 0xFFU);
+    request[12] = (uint8_t)((max_number_of_measurements >> 8) & 0xFFU);
+
+    snprintf(message, sizeof(message), "%s write max measurements", step_name);
+    ASSERT_TRUE(write_full(fd, request, 13) == 13, message);
+    snprintf(message, sizeof(message), "%s max measurements rsp", step_name);
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+                          message);
+}
+
 static int start_server(test_server_t* server) {
     uci_sim_engine_t engine;
     pid_t pid;
@@ -2014,6 +2042,88 @@ static void test_ranging_stream_ranging_interval_over_tcp(void) {
     PASS();
 }
 
+static void test_ranging_stream_max_number_of_measurements_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    uint8_t packet[UCI_SIM_MAX_PACKET];
+    uci_sim_packet_t parsed;
+    size_t packet_len = 0;
+    int fd = -1;
+
+    server.scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
+    ASSERT_TRUE(start_server(&server) == 0, "start max-measurements server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect max-measurements server");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load max-measurements init");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write max-measurements init");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_rsp.hex",
+                          "max-measurements init rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
+                          "max-measurements init ntf");
+
+    set_ranging_interval_ms(fd, 50U, "max-measurements");
+    set_max_number_of_measurements(fd, 2U, "max-measurements");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load max-measurements start");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write max-measurements start");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_rsp.hex",
+                          "max-measurements start rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_ntf.hex",
+                          "max-measurements start ntf");
+
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read max-measurements range 1");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse max-measurements range 1");
+    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "max-measurements range 1 oid");
+    ASSERT_EQ_INT(1, (int)read_u32_le(parsed.payload), "max-measurements range 1 sequence");
+
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read max-measurements range 2");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse max-measurements range 2");
+    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "max-measurements range 2 oid");
+    ASSERT_EQ_INT(2, (int)read_u32_le(parsed.payload), "max-measurements range 2 sequence");
+
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read max-measurements status ntf");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse max-measurements status ntf");
+    ASSERT_EQ_INT(UCI_GID_SESSION_CONFIG, parsed.gid, "max-measurements status gid");
+    ASSERT_EQ_INT(UCI_SESSION_STATUS_NTF, parsed.oid, "max-measurements status oid");
+    ASSERT_EQ_INT(UCI_SESSION_STATE_IDLE, parsed.payload[4], "max-measurements idle state");
+    ASSERT_EQ_INT(UCI_SESSION_REASON_MAX_NUMBER_OF_MEASUREMENTS_REACHED,
+                  parsed.payload[5],
+                  "max-measurements reason");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_get_ranging_count_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load max-measurements count");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write max-measurements count");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read max-measurements count rsp");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse max-measurements count rsp");
+    ASSERT_EQ_INT(UCI_SESSION_GET_RANGING_COUNT, parsed.oid, "max-measurements count oid");
+    ASSERT_EQ_INT(0, parsed.payload[0], "max-measurements count status");
+    ASSERT_EQ_INT(2, (int)read_u32_le(&parsed.payload[1]), "max-measurements count value");
+
+    ASSERT_TRUE(set_socket_timeout_ms(fd, 100) == 0, "set max-measurements timeout");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) != 0,
+                "max-measurements should stop after budget exhaustion");
+
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 static void test_ranging_interval_validation_over_tcp(void) {
     test_server_t server = {0};
     uint8_t request[UCI_SIM_MAX_PACKET];
@@ -3421,6 +3531,7 @@ int main(void) {
     test_ranging_stream_aoa_result_req_over_tcp();
     test_ranging_stream_rssi_reporting_over_tcp();
     test_ranging_stream_ranging_interval_over_tcp();
+    test_ranging_stream_max_number_of_measurements_over_tcp();
     test_ranging_interval_validation_over_tcp();
     test_result_report_config_validation_over_tcp();
     test_number_of_controlees_validation_over_tcp();

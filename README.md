@@ -114,6 +114,11 @@ that same interval again. The default Qorvo-like profile now also enforces a
 minimum valid ranging interval of `50 ms`: lower values are rejected during
 `SESSION_SET_APP_CONFIG` with `INVALID_RANGE`, are not stored, and `SESSION_START`
 also re-validates the effective session interval before entering `ACTIVE`.
+`MAX_NUMBER_OF_MEASUREMENTS` is now behavioral on that same scheduler seam:
+`0` keeps the stream unlimited, while a finite configured budget stops further
+range-data production once the measurement count is reached, transitions the
+session back to `IDLE`, and emits `SESSION_STATUS_NTF` with FiRa reason
+`MAX_NUMBER_OF_MEASUREMENTS_REACHED`.
 `RESULT_REPORT_CONFIG` remains the measurement-field policy for the current
 TWR path, and the default Qorvo-like profile now also validates it: only the
 documented low four report bits (`TOF`, `AoA azimuth`, `AoA elevation`,

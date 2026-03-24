@@ -147,6 +147,7 @@ uint16_t uci_sim_session_get_range_data_ntf_proximity_near(const uci_sim_session
 uint16_t uci_sim_session_get_range_data_ntf_proximity_far(const uci_sim_session_t* session);
 uint8_t uci_sim_session_get_ranging_round_usage(const uci_sim_session_t* session);
 uint8_t uci_sim_session_get_data_repetition_count(const uci_sim_session_t* session);
+uint16_t uci_sim_session_get_max_number_of_measurements(const uci_sim_session_t* session);
 uint32_t uci_sim_session_get_ranging_interval_ms(const uci_sim_session_t* session,
                                                  const uci_sim_profile_t* profile);
 uint8_t uci_sim_session_get_slots_per_rr(const uci_sim_session_t* session);
@@ -198,6 +199,10 @@ int uci_sim_device_queue_data_transfer_status_notification(uci_sim_device_t* dev
                                                            uint16_t sequence_number,
                                                            uint8_t status,
                                                            uint8_t tx_count);
+int uci_sim_device_queue_session_status_notification(uci_sim_device_t* device,
+                                                     uint32_t session_id,
+                                                     uint8_t state,
+                                                     uint8_t reason);
 int uci_sim_device_progress_data_transfer(uci_sim_device_t* device,
                                           uci_sim_session_t* session);
 int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,

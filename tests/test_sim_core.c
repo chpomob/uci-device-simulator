@@ -1256,6 +1256,94 @@ static void test_session_start_rejects_invalid_preamble_duration(void) {
     PASS();
 }
 
+static void test_link_layer_mode_validation_rejects_unsupported_values(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t link_layer_mode = 0x00;
+    uint8_t original_link_layer_mode = 0x00;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "link layer mode validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "link layer mode validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_LINK_LAYER_MODE, &link_layer_mode, &value_len) == 0,
+                "link layer mode validation fetch original value failed");
+    original_link_layer_mode = link_layer_mode;
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_LINK_LAYER_MODE;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x02;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "unsupported link layer mode should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "link layer mode invalid status");
+    ASSERT_TRUE(result.has_notification, "link layer mode invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "link layer mode invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "link layer mode invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_LINK_LAYER_MODE, &link_layer_mode, &value_len) == 0,
+                "link layer mode validation refetch original value failed");
+    ASSERT_EQ_U8(original_link_layer_mode, link_layer_mode,
+                 "invalid link layer mode should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_link_layer_mode(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_link_layer_mode = 0x02;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "link layer mode start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "link layer mode start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_LINK_LAYER_MODE,
+                                             &invalid_link_layer_mode,
+                                             sizeof(invalid_link_layer_mode)) == 0,
+                "link layer mode start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid link layer mode should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid link layer mode status");
+    ASSERT_TRUE(result.has_notification, "start invalid link layer mode should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid link layer mode generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid link layer mode generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid link layer mode should preserve session state");
+    PASS();
+}
+
 static void test_rssi_reporting_validation_rejects_unsupported_values(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -4608,6 +4696,8 @@ int main(void) {
     test_session_start_rejects_invalid_psdu_data_rate();
     test_preamble_duration_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_preamble_duration();
+    test_link_layer_mode_validation_rejects_unsupported_values();
+    test_session_start_rejects_invalid_link_layer_mode();
     test_rssi_reporting_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_rssi_reporting();
     test_ranging_round_usage_validation_rejects_unsupported_values();

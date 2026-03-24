@@ -74,6 +74,10 @@ typedef struct {
     uint8_t invalid_preamble_duration_status;
     uint8_t invalid_preamble_duration_reason_code;
     uint8_t invalid_preamble_duration_surface;
+    uint8_t supported_link_layer_mode_max;
+    uint8_t invalid_link_layer_mode_status;
+    uint8_t invalid_link_layer_mode_reason_code;
+    uint8_t invalid_link_layer_mode_surface;
     uint8_t supported_rssi_reporting_max;
     uint8_t invalid_rssi_reporting_status;
     uint8_t invalid_rssi_reporting_reason_code;

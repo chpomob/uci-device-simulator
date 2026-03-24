@@ -211,6 +211,24 @@ static int validate_preamble_duration(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_link_layer_mode(const uci_sim_profile_t* profile,
+                                    uint8_t link_layer_mode,
+                                    uci_sim_validation_result_t* result) {
+    if (!profile) {
+        return 0;
+    }
+
+    if (link_layer_mode > profile->supported_link_layer_mode_max) {
+        set_invalid_result(result,
+                           profile->invalid_link_layer_mode_status,
+                           profile->invalid_link_layer_mode_reason_code,
+                           profile->invalid_link_layer_mode_surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int validate_rssi_reporting(const uci_sim_profile_t* profile,
                                    uint8_t rssi_reporting,
                                    uci_sim_validation_result_t* result) {
@@ -830,6 +848,18 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
             }
             return validate_preamble_duration(profile, value[0], result);
         }
+        if (config_id == UCI_APP_CONFIG_LINK_LAYER_MODE) {
+            if (!value || value_len != 1) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   profile ? profile->invalid_link_layer_mode_reason_code
+                                           : UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+                                   profile ? profile->invalid_link_layer_mode_surface
+                                           : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+            return validate_link_layer_mode(profile, value[0], result);
+        }
         if (config_id == UCI_APP_CONFIG_RSSI_REPORTING) {
             if (!value || value_len != 1) {
                 set_invalid_result(result,
@@ -886,6 +916,8 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
     uint8_t psdu_data_rate_len = 0;
     uint8_t preamble_duration = 0;
     uint8_t preamble_duration_len = 0;
+    uint8_t link_layer_mode = 0;
+    uint8_t link_layer_mode_len = 0;
     uint8_t rssi_reporting;
     uint8_t ranging_round_usage;
     uint8_t channel_number = 0;
@@ -1019,6 +1051,21 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
         return -1;
     }
     if (validate_preamble_duration(profile, preamble_duration, result) != 0) {
+        return -1;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_LINK_LAYER_MODE,
+                                   &link_layer_mode, &link_layer_mode_len) != 0 ||
+        link_layer_mode_len != 1U) {
+        set_invalid_result(result,
+                           profile ? profile->invalid_link_layer_mode_status : UCI_STATUS_INVALID_PARAM,
+                           profile ? profile->invalid_link_layer_mode_reason_code
+                                   : UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+                           profile ? profile->invalid_link_layer_mode_surface
+                                   : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+        return -1;
+    }
+    if (validate_link_layer_mode(profile, link_layer_mode, result) != 0) {
         return -1;
     }
 

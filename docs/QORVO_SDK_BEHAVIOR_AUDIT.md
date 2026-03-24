@@ -551,7 +551,7 @@ codebase does not currently expose them as app-config parameters. That means:
 | --- | --- | --- | --- | --- |
 | `0x02` | `STS_CONFIG` | Security timestamp mode. | `proven` | Must affect whether keys/STS fields matter. |
 | `0x23` | `KEY_ROTATION` | Key rotation enable. | `strong_inference` | Security policy input. |
-| `0x24` | `KEY_ROTATION_RATE` | Key rotation cadence. | `strong_inference` | Scheduler/security input. |
+| `0x24` | `KEY_ROTATION_RATE` | Cherry documents it as `n` where `2^n` is the rotation cadence for dynamic/provisioned STS keys, with `0 <= n <= 15`. | `proven` | Validate against the narrow `0..15` range now; deeper scheduler/security effects later. |
 | `0x28` | `STATIC_STS_IV` | Static STS IV. | `proven` | Security material; should not be payload decoration only. |
 | `0x29` | `NUMBER_OF_STS_SEGMENTS` | Number of STS segments. | `strong_inference` | Security/session-shape input. |
 | `0x35` | `STS_LENGTH` | Cherry documents a narrow FiRa enum: `0x00` = 32 symbols, `0x01` = 64 symbols, `0x02` = 128 symbols, and `0x03..0xFF` are RFU. Local FiRa reason-code surfaces also expose `ERROR_INVALID_STS_LENGTH`. | `proven` | Validate against the narrow enum now; defer deeper security/runtime effects. |

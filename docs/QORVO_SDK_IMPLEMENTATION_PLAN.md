@@ -165,6 +165,8 @@ Current progress on this layer:
   hybrid scheduling are implemented as real engine behavior
 - `STS_LENGTH` now uses the validation side of the security seam through the
   Cherry/FIra `0..2` enum and is re-validated on `SESSION_START`
+- `KEY_ROTATION_RATE` now uses that same security seam through the Cherry
+  `0..15` range and is re-validated on `SESSION_START`
 - `SLOT_DURATION` now uses the same capability-driven validation seam through
   the profile minimum supported slot-duration setting
 

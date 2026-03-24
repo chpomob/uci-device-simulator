@@ -176,6 +176,10 @@ mode).
 documented Cherry/FIra values `0x00..0x02` are accepted, while RFU values are
 rejected with `INVALID_PARAM`, are not stored, and are also re-validated on
 `SESSION_START`.
+`KEY_ROTATION_RATE` now uses that same security validation seam too: only the
+documented Cherry range `0..15` is accepted, while higher values are rejected
+with `INVALID_PARAM`, are not stored, and are also re-validated on
+`SESSION_START`.
 `DEVICE_TYPE` now also uses the validation seam for the classic FiRa role
 model: only `CONTROLEE (0x00)` and `CONTROLLER (0x01)` are accepted in the
 default profile, and `SESSION_START` re-validates the classic pairing with

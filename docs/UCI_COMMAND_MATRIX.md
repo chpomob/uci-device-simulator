@@ -121,7 +121,7 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x21` | `TX_JITTER_WINDOW_SIZE` | `supported` | Default-profile stored/retrievable |
 | `0x22` | `SCHEDULED_MODE` | `supported` | Default-profile stored/retrievable |
 | `0x23` | `KEY_ROTATION` | `supported` | Default-profile stored/retrievable |
-| `0x24` | `KEY_ROTATION_RATE` | `supported` | Default-profile stored/retrievable |
+| `0x24` | `KEY_ROTATION_RATE` | `supported` | Default-profile stored/retrievable and validated against the Cherry `0..15` range |
 | `0x25` | `SESSION_PRIORITY` | `supported` | Default-profile stored/retrievable |
 | `0x26` | `MAC_ADDRESS_MODE` | `supported` | Default-profile stored/retrievable |
 | `0x27` | `VENDOR_ID` | `supported` | Default-profile stored/retrievable |

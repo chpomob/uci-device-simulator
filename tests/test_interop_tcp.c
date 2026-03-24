@@ -3352,6 +3352,61 @@ static void test_sts_length_validation_over_tcp(void) {
     PASS();
 }
 
+static void test_key_rotation_rate_validation_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    uint8_t packet[UCI_SIM_MAX_PACKET];
+    static const uint8_t expected_response[] = { 0x41, 0x03, 0x00, 0x02, 0x04, 0x00 };
+    static const uint8_t expected_notification[] = { 0x60, 0x07, 0x00, 0x01, 0x04 };
+    size_t packet_len = 0;
+    int fd = -1;
+
+    server.scenario = UCI_SIM_SCENARIO_DEFAULT;
+    ASSERT_TRUE(start_server(&server) == 0, "start invalid-key-rotation-rate server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect invalid-key-rotation-rate server");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &packet_len) == 0,
+                "load invalid-key-rotation-rate init");
+    ASSERT_TRUE(write_full(fd, request, packet_len) == (ssize_t)packet_len, "write invalid-key-rotation-rate init");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_rsp.hex",
+                          "invalid-key-rotation-rate init rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
+                          "invalid-key-rotation-rate init ntf");
+
+    request[0] = 0x21;
+    request[1] = 0x03;
+    request[2] = 0x00;
+    request[3] = 0x09;
+    request[4] = 0x78;
+    request[5] = 0x56;
+    request[6] = 0x34;
+    request[7] = 0x12;
+    request[8] = 0x01;
+    request[9] = UCI_APP_CONFIG_KEY_ROTATION_RATE;
+    request[10] = 0x02;
+    request[11] = 0x10;
+    request[12] = 0x00;
+    ASSERT_TRUE(write_full(fd, request, 13) == 13, "write invalid-key-rotation-rate set app config");
+
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read invalid-key-rotation-rate rsp");
+    ASSERT_EQ_INT((int)sizeof(expected_response), (int)packet_len, "invalid-key-rotation-rate rsp size");
+    ASSERT_MEMEQ(expected_response, packet, sizeof(expected_response), "invalid-key-rotation-rate rsp bytes");
+
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read invalid-key-rotation-rate generic error");
+    ASSERT_EQ_INT((int)sizeof(expected_notification), (int)packet_len, "invalid-key-rotation-rate generic error size");
+    ASSERT_MEMEQ(expected_notification, packet, sizeof(expected_notification), "invalid-key-rotation-rate generic error bytes");
+
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 static void test_link_layer_mode_validation_over_tcp(void) {
     test_server_t server = {0};
     uint8_t request[UCI_SIM_MAX_PACKET];
@@ -3957,6 +4012,7 @@ int main(void) {
     test_data_message_repetition_progress_over_tcp();
     test_preamble_duration_validation_over_tcp();
     test_sts_length_validation_over_tcp();
+    test_key_rotation_rate_validation_over_tcp();
     test_link_layer_mode_validation_over_tcp();
     test_ranging_stream_flow_over_tcp();
     test_data_message_edge_cases_over_tcp();

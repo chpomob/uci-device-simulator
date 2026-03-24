@@ -1514,6 +1514,95 @@ static void test_session_start_rejects_invalid_sts_length(void) {
     PASS();
 }
 
+static void test_key_rotation_rate_validation_rejects_unsupported_values(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_key_rotation_rate[2] = { 0x10, 0x00 };
+    uint8_t key_rotation_rate[2] = { 0x00, 0x00 };
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "key rotation rate validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "key rotation rate validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_KEY_ROTATION_RATE, key_rotation_rate, &value_len) == 0,
+                "key rotation rate validation fetch original value failed");
+    ASSERT_EQ_U8(2, value_len, "key rotation rate validation original value len");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 9;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_KEY_ROTATION_RATE;
+    request.payload[6] = 0x02;
+    request.payload[7] = invalid_key_rotation_rate[0];
+    request.payload[8] = invalid_key_rotation_rate[1];
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "unsupported key rotation rate should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "key rotation rate invalid status");
+    ASSERT_TRUE(result.has_notification, "key rotation rate invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "key rotation rate invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "key rotation rate invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_KEY_ROTATION_RATE, key_rotation_rate, &value_len) == 0,
+                "key rotation rate validation refetch original value failed");
+    ASSERT_EQ_U8(0x0F, key_rotation_rate[0], "invalid key rotation rate low byte should not overwrite stored value");
+    ASSERT_EQ_U8(0x00, key_rotation_rate[1], "invalid key rotation rate high byte should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_key_rotation_rate(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_key_rotation_rate[2] = { 0x10, 0x00 };
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "key rotation rate start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "key rotation rate start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_KEY_ROTATION_RATE,
+                                             invalid_key_rotation_rate,
+                                             sizeof(invalid_key_rotation_rate)) == 0,
+                "key rotation rate start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid key rotation rate should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid key rotation rate status");
+    ASSERT_TRUE(result.has_notification, "start invalid key rotation rate should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid key rotation rate generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid key rotation rate generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid key rotation rate should preserve session state");
+    PASS();
+}
+
 static void test_link_layer_mode_validation_rejects_unsupported_values(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -4440,7 +4529,7 @@ static void test_session_app_config_storage(void) {
     request.payload_len = 9;
     request.payload[5] = 0x24;
     request.payload[6] = 2;
-    request.payload[7] = 0x20;
+    request.payload[7] = 0x0F;
     request.payload[8] = 0x00;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set key rotation rate app config failed");
 
@@ -4873,7 +4962,7 @@ static void test_session_app_config_storage(void) {
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get extended app config missing key rotation");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x24,
-                                             (const uint8_t[]){ 0x20, 0x00 }, 2),
+                                             (const uint8_t[]){ 0x0F, 0x00 }, 2),
                 "get extended app config missing key rotation rate");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x25,
                                              (const uint8_t[]){ 0x4B }, 1),
@@ -5029,7 +5118,7 @@ static void test_session_app_config_storage(void) {
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing key rotation");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x24,
-                                             (const uint8_t[]){ 0x20, 0x00 }, 2),
+                                             (const uint8_t[]){ 0x0F, 0x00 }, 2),
                 "get all app config missing key rotation rate");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x25,
                                              (const uint8_t[]){ 0x4B }, 1),
@@ -5937,6 +6026,8 @@ int main(void) {
     test_session_start_rejects_invalid_preamble_duration();
     test_sts_length_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_sts_length();
+    test_key_rotation_rate_validation_rejects_unsupported_values();
+    test_session_start_rejects_invalid_key_rotation_rate();
     test_link_layer_mode_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_link_layer_mode();
     test_ranging_time_struct_validation_rejects_unsupported_values();

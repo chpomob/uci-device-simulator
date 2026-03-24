@@ -82,6 +82,10 @@ typedef struct {
     uint8_t invalid_sts_length_status;
     uint8_t invalid_sts_length_reason_code;
     uint8_t invalid_sts_length_surface;
+    uint8_t supported_key_rotation_rate_max;
+    uint8_t invalid_key_rotation_rate_status;
+    uint8_t invalid_key_rotation_rate_reason_code;
+    uint8_t invalid_key_rotation_rate_surface;
     uint8_t supported_link_layer_mode_max;
     uint8_t invalid_link_layer_mode_status;
     uint8_t invalid_link_layer_mode_reason_code;

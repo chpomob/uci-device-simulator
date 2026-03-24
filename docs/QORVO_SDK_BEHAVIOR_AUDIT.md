@@ -1146,14 +1146,21 @@ Current implementation status:
   - clearing `continue` causes the dependent session to drop back to `IDLE`
     with `ERROR_REF_UWB_SESSION_LOST` if the reference session stops
 - start-time validation currently enforces only the source-backed relationship
-  checks: legal flag bits, existing reference session, no self-reference, and
-  active-reference requirement when `continue` is clear
+  checks plus one conservative inferred timing-window rule:
+  - legal flag bits
+  - existing reference session
+  - no self-reference
+  - active-reference requirement when `continue` is clear
+  - matching effective ranging interval between dependent and reference
+    sessions
+  - offset must fit inside one ranging-interval window
 
 Remaining gap:
 
-- the simulator still does not model the stronger firmware-specific checks
-  implied by FiRa reason codes such as ranging-duration mismatch or invalid
-  offset time
+- the simulator still does not model any stronger firmware-specific checks
+  beyond the conservative rules above; in particular, the exact firmware rule
+  behind `INVALID_OFFSET_TIME` is still only a strong inference from local
+  sources, not a proven device contract
 
 ### `SESSION_KEY` (`0x45`) And `SUBSESSION_KEY` (`0x46`)
 

@@ -430,11 +430,13 @@ Implemented behavior:
      starts later
    - non-continuing dependents return to `IDLE` with
      `ERROR_REF_UWB_SESSION_LOST` when the reference session stops
+   - start-time cross-session timing checks now also reject:
+     - effective ranging-interval mismatch
+     - offsets outside one ranging-interval window
 
 Still deferred:
 
-- stronger firmware-specific checks such as ranging-duration mismatch and
-  invalid offset-time rejection
+- stronger firmware-specific checks beyond the conservative checks above
 - full multi-session realism beyond the deterministic relationship model used
   by the current tests
 

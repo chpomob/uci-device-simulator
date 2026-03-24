@@ -129,11 +129,13 @@ dependent session onto that new schedule, and disabling `continue` causes the
 dependent session to return to `IDLE` with
 `ERROR_REF_UWB_SESSION_LOST` if the reference session stops. The default
 profile keeps `session_time_base` disabled by default and currently validates
-only the proven relationship checks: 9-byte shape, legal flag bits, no
-self-reference, existing reference session, and active-reference requirement
-when `continue` is clear. More advanced firmware-specific checks such as
-ranging-duration mismatch and invalid-offset rejection are still deferred
-until the local Qorvo evidence is stronger.
+the proven relationship checks plus two conservative cross-session timing
+rules: the effective ranging interval must match the reference session, and
+the offset must stay inside one ranging interval window. The mismatch rule is
+directly backed by the FiRa reason code naming; the offset-window rule is a
+documented strong inference from the same source, not a proven firmware
+contract. More advanced firmware-specific checks are still deferred until the
+local Qorvo evidence is stronger.
 `RESULT_REPORT_CONFIG` remains the measurement-field policy for the current
 TWR path, and the default Qorvo-like profile now also validates it: only the
 documented low four report bits (`TOF`, `AoA azimuth`, `AoA elevation`,

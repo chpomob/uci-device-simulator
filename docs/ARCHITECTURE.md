@@ -103,7 +103,10 @@ controls which result fields remain meaningful:
   to the reference session’s next pending range event plus offset, optionally
   resyncs active dependents when the reference session starts, and tears down
   non-continuing dependents with `ERROR_REF_UWB_SESSION_LOST` when the
-  reference session stops
+  reference session stops; `SESSION_START` also re-validates two cross-session
+  timing constraints on that same seam:
+  - effective ranging interval must match the reference session
+  - offset must fit inside one ranging-interval window
 
 `RANGING_ROUND_USAGE` now also participates in that seam, but with an explicit
 profile boundary. The default Qorvo-like profile only accepts the FiRa

@@ -822,8 +822,9 @@ static int validate_session_time_base_context(const uci_sim_profile_t* profile,
                                               uci_sim_validation_result_t* result) {
     uci_sim_session_time_base_t time_base;
     const uci_sim_session_t* reference_session;
-
-    (void)profile;
+    uint32_t interval_ms;
+    uint32_t reference_interval_ms;
+    uint64_t interval_us;
 
     if (!session || uci_sim_session_get_session_time_base(session, &time_base) != 0 || !time_base.present) {
         return 0;
@@ -854,6 +855,25 @@ static int validate_session_time_base_context(const uci_sim_profile_t* profile,
         set_invalid_result(result,
                            UCI_STATUS_INVALID_PARAM,
                            UCI_SESSION_REASON_ERROR_REF_UWB_SESSION_LOST,
+                           UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+        return -1;
+    }
+
+    interval_ms = uci_sim_session_get_ranging_interval_ms(session, profile);
+    reference_interval_ms = uci_sim_session_get_ranging_interval_ms(reference_session, profile);
+    if (interval_ms != reference_interval_ms) {
+        set_invalid_result(result,
+                           UCI_STATUS_INVALID_PARAM,
+                           UCI_SESSION_REASON_ERROR_REF_UWB_SESSION_RANGING_DURATION_MISMATCH,
+                           UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+        return -1;
+    }
+
+    interval_us = (uint64_t)reference_interval_ms * 1000ULL;
+    if (time_base.offset_us >= interval_us) {
+        set_invalid_result(result,
+                           UCI_STATUS_INVALID_PARAM,
+                           UCI_SESSION_REASON_ERROR_REF_UWB_SESSION_INVALID_OFFSET_TIME,
                            UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
         return -1;
     }

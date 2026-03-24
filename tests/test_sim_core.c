@@ -3757,6 +3757,105 @@ static void test_session_time_base_stops_dependent_when_reference_stops(void) {
     PASS();
 }
 
+static void test_session_time_base_rejects_ranging_interval_mismatch(void) {
+    uci_sim_engine_t engine;
+    uci_sim_packet_t request;
+    uci_sim_packet_t response;
+    uci_sim_packet_t notification;
+    const uint32_t reference_session_id = 0x11111111U;
+    const uint32_t dependent_session_id = 0x22222222U;
+    const uint8_t interval_50ms[4] = { 0x32, 0x00, 0x00, 0x00 };
+    const uint8_t interval_60ms[4] = { 0x3C, 0x00, 0x00, 0x00 };
+    const uint8_t time_base_value[9] = { 0x01, 0x11, 0x11, 0x11, 0x11, 0x20, 0x4E, 0x00, 0x00 };
+
+    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
+
+    make_session_init_packet(&request, reference_session_id);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch ref init failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch ref init rsp missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base mismatch ref init ntf missing");
+
+    make_session_init_packet(&request, dependent_session_id);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch dep init failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch dep init rsp missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base mismatch dep init ntf missing");
+
+    make_set_app_config_packet(&request, reference_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_50ms, 4);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch ref interval failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch ref interval rsp missing");
+
+    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_60ms, 4);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch dep interval failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch dep interval rsp missing");
+
+    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_SESSION_TIME_BASE, time_base_value, 9);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch set app config failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch set app config rsp missing");
+
+    make_session_control_packet(&request, UCI_SESSION_START, reference_session_id);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch ref start failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch ref start rsp missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base mismatch ref start ntf missing");
+
+    make_session_control_packet(&request, UCI_SESSION_START, dependent_session_id);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch dep start submit failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch dep start rsp missing");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, response.payload[0], "time base mismatch dep start status");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base mismatch dep generic error missing");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, notification.oid, "time base mismatch dep generic error oid");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, engine.device.sessions[1].state, "time base mismatch dep final state");
+    PASS();
+}
+
+static void test_session_time_base_rejects_offset_outside_interval(void) {
+    uci_sim_engine_t engine;
+    uci_sim_packet_t request;
+    uci_sim_packet_t response;
+    uci_sim_packet_t notification;
+    const uint32_t reference_session_id = 0x11111111U;
+    const uint32_t dependent_session_id = 0x22222222U;
+    const uint8_t interval_50ms[4] = { 0x32, 0x00, 0x00, 0x00 };
+    const uint8_t time_base_value[9] = { 0x01, 0x11, 0x11, 0x11, 0x11, 0x50, 0xC3, 0x00, 0x00 };
+
+    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
+
+    make_session_init_packet(&request, reference_session_id);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset ref init failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset ref init rsp missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base offset ref init ntf missing");
+
+    make_session_init_packet(&request, dependent_session_id);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset dep init failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset dep init rsp missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base offset dep init ntf missing");
+
+    make_set_app_config_packet(&request, reference_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_50ms, 4);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset ref interval failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset ref interval rsp missing");
+
+    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_50ms, 4);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset dep interval failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset dep interval rsp missing");
+
+    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_SESSION_TIME_BASE, time_base_value, 9);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset set app config failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset set app config rsp missing");
+
+    make_session_control_packet(&request, UCI_SESSION_START, reference_session_id);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset ref start failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset ref start rsp missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base offset ref start ntf missing");
+
+    make_session_control_packet(&request, UCI_SESSION_START, dependent_session_id);
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset dep start submit failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset dep start rsp missing");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, response.payload[0], "time base offset dep start status");
+    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base offset dep generic error missing");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, notification.oid, "time base offset dep generic error oid");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, engine.device.sessions[1].state, "time base offset dep final state");
+    PASS();
+}
+
 static void test_default_scenario_initialization(void) {
     uci_sim_device_t device;
 
@@ -5610,6 +5709,8 @@ int main(void) {
     test_session_time_base_aligns_first_measurement_to_reference();
     test_session_time_base_resyncs_when_reference_starts();
     test_session_time_base_stops_dependent_when_reference_stops();
+    test_session_time_base_rejects_ranging_interval_mismatch();
+    test_session_time_base_rejects_offset_outside_interval();
     test_session_app_config_storage();
     test_profile_rejects_unsupported_session_features();
     test_session_lifecycle();

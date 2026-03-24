@@ -165,6 +165,10 @@ Current progress on this layer:
   hybrid scheduling are implemented as real engine behavior
 - `STS_LENGTH` now uses the validation side of the security seam through the
   Cherry/FIra `0..2` enum and is re-validated on `SESSION_START`
+- `NUMBER_OF_STS_SEGMENTS` is the next security-seam candidate, but only on a
+  clearly-labeled `strong_inference` basis: local Qorvo/Cherry material treats
+  it as a 1-byte field and repeatedly points to `0..4` as the practical range,
+  without proving that higher values are universally RFU
 - `KEY_ROTATION_RATE` now uses that same security seam through the Cherry
   `0..15` range and is re-validated on `SESSION_START`
 - `SLOT_DURATION` now uses the same capability-driven validation seam through

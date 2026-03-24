@@ -1195,9 +1195,9 @@ static int handle_data_message_send(uci_sim_device_t* device,
     uci_sim_session_t* session;
     uint16_t sequence_number;
     uint16_t declared_length;
-    uint8_t transfer_status;
-    uint8_t credit_payload[5];
     uint8_t status_payload[8];
+    uint8_t data_repetition_count;
+    const uci_sim_profile_t* profile;
 
     if (!device || !request || !result) {
         return -1;
@@ -1213,6 +1213,7 @@ static int handle_data_message_send(uci_sim_device_t* device,
     sequence_number = read_u16_le(&request->payload[12]);
     declared_length = read_u16_le(&request->payload[14]);
     session = find_session(device, session_id);
+    profile = device->profile ? device->profile : uci_sim_default_profile();
 
     if ((size_t)(16 + declared_length) > request->payload_len) {
         write_u32_le(status_payload, session_id);
@@ -1244,45 +1245,69 @@ static int handle_data_message_send(uci_sim_device_t* device,
         return -1;
     }
 
+    if (session->data_transfer_in_progress) {
+        write_u32_le(status_payload, session_id);
+        write_u16_le(&status_payload[4], sequence_number);
+        status_payload[6] = UCI_DATA_TRANSFER_STATUS_ERROR_DATA_TRANSFER_IS_ONGOING;
+        status_payload[7] = session->data_transfer_tx_count;
+        result->notification.mt = UCI_MT_NOTIFICATION;
+        result->notification.pbf = UCI_PBF_COMPLETE;
+        result->notification.gid = UCI_GID_SESSION_CONTROL;
+        result->notification.oid = UCI_SESSION_DATA_TRANSFER_STATUS_NTF;
+        result->notification.payload_len = sizeof(status_payload);
+        memcpy(result->notification.payload, status_payload, sizeof(status_payload));
+        result->has_notification = 1;
+        return -1;
+    }
+
     if (session->has_last_data_message &&
         session->last_data_sequence == sequence_number &&
         session->last_data_length == declared_length) {
-        transfer_status = UCI_DATA_TRANSFER_STATUS_REPETITION_OK;
-    } else {
-        transfer_status = UCI_DATA_TRANSFER_STATUS_OK;
+        if (uci_sim_device_queue_data_credit_notification(device, session_id, 1U) != 0) {
+            return -1;
+        }
+        if (uci_sim_device_queue_data_transfer_status_notification(device,
+                                                                   session_id,
+                                                                   sequence_number,
+                                                                   UCI_DATA_TRANSFER_STATUS_REPETITION_OK,
+                                                                   1U) != 0) {
+            return -1;
+        }
+        return 0;
     }
+
+    data_repetition_count = uci_sim_session_get_data_repetition_count(session);
 
     session->last_data_sequence = sequence_number;
     session->last_data_length = declared_length;
     session->has_last_data_message = 1;
 
-    write_u32_le(credit_payload, session_id);
-    credit_payload[4] = 1;
-    result->notification.mt = UCI_MT_NOTIFICATION;
-    result->notification.pbf = UCI_PBF_COMPLETE;
-    result->notification.gid = UCI_GID_SESSION_CONTROL;
-    result->notification.oid = UCI_SESSION_DATA_CREDIT_NTF;
-    result->notification.payload_len = sizeof(credit_payload);
-    memcpy(result->notification.payload, credit_payload, sizeof(credit_payload));
-    result->has_notification = 1;
-
-    write_u32_le(status_payload, session_id);
-    write_u16_le(&status_payload[4], sequence_number);
-    status_payload[6] = transfer_status;
-    status_payload[7] = 1;
-
-    {
-        uci_sim_packet_t notification;
-        memset(&notification, 0, sizeof(notification));
-        notification.mt = UCI_MT_NOTIFICATION;
-        notification.pbf = UCI_PBF_COMPLETE;
-        notification.gid = UCI_GID_SESSION_CONTROL;
-        notification.oid = UCI_SESSION_DATA_TRANSFER_STATUS_NTF;
-        notification.payload_len = sizeof(status_payload);
-        memcpy(notification.payload, status_payload, sizeof(status_payload));
-        if (uci_sim_device_queue_notification(device, &notification) != 0) {
+    if (data_repetition_count == 0U) {
+        if (uci_sim_device_queue_data_credit_notification(device, session_id, 1U) != 0) {
             return -1;
         }
+        if (uci_sim_device_queue_data_transfer_status_notification(device,
+                                                                   session_id,
+                                                                   sequence_number,
+                                                                   UCI_DATA_TRANSFER_STATUS_OK,
+                                                                   1U) != 0) {
+            return -1;
+        }
+        return 0;
+    }
+
+    session->data_transfer_in_progress = 1;
+    session->data_transfer_repetitions_remaining = data_repetition_count;
+    session->data_transfer_tx_count = 0;
+    session->data_transfer_sequence = sequence_number;
+    if (uci_sim_device_schedule_event(device,
+                                      UCI_SIM_EVENT_DATA_TRANSFER,
+                                      session_id,
+                                      uci_sim_session_get_ranging_interval_ms(session, profile)) != 0) {
+        session->data_transfer_in_progress = 0;
+        session->data_transfer_repetitions_remaining = 0;
+        session->data_transfer_tx_count = 0;
+        return -1;
     }
 
     return 0;

@@ -381,7 +381,7 @@ static const uci_sim_profile_t k_default_profile = {
         { 0x01 },
         { 0x01 },
         { 0x01 },
-        { 0x04 },
+        { 0x00 },
         { 0x03 },
         { 0x06 },
         { 0x01 },

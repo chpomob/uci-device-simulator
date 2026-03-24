@@ -536,7 +536,7 @@ codebase does not currently expose them as app-config parameters. That means:
 | `0x16` | `PSDU_DATA_RATE` | PSDU rate. Cherry common enums include a broader `850K` value, but the Cherry session app-config setter documents only `0x00..0x03` on this FiRa session surface. | `proven` | Validate against the narrower session-surface enum now; defer deeper PHY effects. |
 | `0x17` | `PREAMBLE_DURATION` | Cherry documents only `0x00` (32 symbols) and `0x01` (64 symbols, default) on the FiRa session app-config surface. | `proven` | Validate against the narrow session enum now; defer deeper PHY effects. |
 | `0x18` | `LINK_LAYER_MODE` | Local Cherry/Qorvo surface exposes it as a basic vs extended enum (`0x00..0x01`), but the current sources do not prove deeper runtime behavior. | `proven` | Validate the narrow enum now; defer packet-shape effects until stronger evidence exists. |
-| `0x19` | `DATA_REPETITION_COUNT` | Data repetition count. | `strong_inference` | Measurement/data behavior input. |
+| `0x19` | `DATA_REPETITION_COUNT` | FiRa ties it directly to repeated application-data transfer completion and ongoing-transfer rejection semantics. | `proven` | Engine-level data-transfer progression input, not storage only. |
 | `0x1C` | `TX_ADAPTIVE_PAYLOAD_POWER` | Adaptive TX power policy. | `weak_inference` | Lower priority; likely metadata. |
 | `0x1F` | `PRF_MODE` | Cherry documents valid values `0x00..0x02` for BPRF/HPRF modes. | `proven` | Validation now; deeper PHY/measurement coupling later. |
 | `0x20` | `CAP_SIZE_RANGE` | CAP size bounds. | `weak_inference` | Future scheduler/contention input. |

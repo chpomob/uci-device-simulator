@@ -14,6 +14,7 @@
 typedef enum {
     UCI_SIM_EVENT_NONE = 0,
     UCI_SIM_EVENT_RANGE_DATA = 1,
+    UCI_SIM_EVENT_DATA_TRANSFER = 2,
 } uci_sim_event_type_t;
 
 typedef struct uci_sim_scheduled_event {
@@ -80,6 +81,10 @@ typedef struct uci_sim_session {
     uint16_t last_data_sequence;
     uint16_t last_data_length;
     uint8_t has_last_data_message;
+    uint8_t data_transfer_in_progress;
+    uint8_t data_transfer_repetitions_remaining;
+    uint8_t data_transfer_tx_count;
+    uint16_t data_transfer_sequence;
     uint8_t has_last_proximity_state;
     uint8_t last_in_proximity_range;
     int allocated;
@@ -141,6 +146,7 @@ uint8_t uci_sim_session_get_range_data_ntf_config(const uci_sim_session_t* sessi
 uint16_t uci_sim_session_get_range_data_ntf_proximity_near(const uci_sim_session_t* session);
 uint16_t uci_sim_session_get_range_data_ntf_proximity_far(const uci_sim_session_t* session);
 uint8_t uci_sim_session_get_ranging_round_usage(const uci_sim_session_t* session);
+uint8_t uci_sim_session_get_data_repetition_count(const uci_sim_session_t* session);
 uint32_t uci_sim_session_get_ranging_interval_ms(const uci_sim_session_t* session,
                                                  const uci_sim_profile_t* profile);
 uint8_t uci_sim_session_get_aoa_result_req(const uci_sim_session_t* session);
@@ -182,6 +188,16 @@ int uci_sim_device_reschedule_session_event(uci_sim_device_t* device,
 void uci_sim_device_cancel_session_events(uci_sim_device_t* device, uint32_t session_id);
 void uci_sim_device_tick_events(uci_sim_device_t* device, uint32_t elapsed_ms);
 int uci_sim_device_dequeue_ready_event(uci_sim_device_t* device, uci_sim_scheduled_event_t* event);
+int uci_sim_device_queue_data_credit_notification(uci_sim_device_t* device,
+                                                  uint32_t session_id,
+                                                  uint8_t availability);
+int uci_sim_device_queue_data_transfer_status_notification(uci_sim_device_t* device,
+                                                           uint32_t session_id,
+                                                           uint16_t sequence_number,
+                                                           uint8_t status,
+                                                           uint8_t tx_count);
+int uci_sim_device_progress_data_transfer(uci_sim_device_t* device,
+                                          uci_sim_session_t* session);
 int uci_sim_device_emit_ranging_stream(uci_sim_device_t* device,
                                        uci_sim_session_t* session,
                                        uci_sim_result_t* result);

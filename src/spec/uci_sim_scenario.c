@@ -80,6 +80,9 @@ void uci_sim_scenario_on_session_stopped(uci_sim_device_t* device, uci_sim_sessi
     }
 
     session->ranging_stream_remaining = 0;
+    session->data_transfer_in_progress = 0;
+    session->data_transfer_repetitions_remaining = 0;
+    session->data_transfer_tx_count = 0;
     uci_sim_device_cancel_session_events(device, session->session_id);
 }
 

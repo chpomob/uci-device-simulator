@@ -66,6 +66,31 @@ static int process_ready_event(uci_sim_engine_t* engine,
                                                      uci_sim_session_get_ranging_interval_ms(session, profile));
             }
             return 0;
+        case UCI_SIM_EVENT_DATA_TRANSFER:
+            for (i = 0; i < UCI_SIM_MAX_SESSIONS; ++i) {
+                if (engine->device.sessions[i].allocated &&
+                    engine->device.sessions[i].session_id == event->session_id) {
+                    session = &engine->device.sessions[i];
+                    break;
+                }
+            }
+            if (!session || session->state != UCI_SESSION_STATE_ACTIVE || !session->data_transfer_in_progress) {
+                return 0;
+            }
+            if (uci_sim_device_progress_data_transfer(&engine->device, session) != 0) {
+                return -1;
+            }
+            flush_device_notifications(engine);
+            if (session->data_transfer_in_progress) {
+                const uci_sim_profile_t* profile = engine->device.profile ?
+                    engine->device.profile :
+                    uci_sim_default_profile();
+                return uci_sim_device_schedule_event(&engine->device,
+                                                     UCI_SIM_EVENT_DATA_TRANSFER,
+                                                     session->session_id,
+                                                     uci_sim_session_get_ranging_interval_ms(session, profile));
+            }
+            return 0;
         case UCI_SIM_EVENT_NONE:
         default:
             return 0;

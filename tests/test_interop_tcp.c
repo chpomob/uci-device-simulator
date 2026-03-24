@@ -1413,12 +1413,6 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
             "session_data_transfer_phase_config"
         },
         {
-            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/data_message_send_cmd.hex",
-            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_data_credit_ntf.hex",
-            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_data_transfer_status_ntf.hex",
-            "data_message_send"
-        },
-        {
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_logical_link_create_cmd.hex",
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_logical_link_create_rsp.hex",
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_logical_link_uwbs_create_ntf.hex",
@@ -3205,6 +3199,106 @@ static void test_data_message_edge_cases_over_tcp(void) {
     PASS();
 }
 
+static void test_data_message_repetition_progress_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t request[UCI_SIM_MAX_PACKET];
+    uint8_t packet[UCI_SIM_MAX_PACKET];
+    size_t request_len = 0;
+    size_t packet_len = 0;
+    int fd = -1;
+
+    server.scenario = UCI_SIM_SCENARIO_DEFAULT;
+    ASSERT_TRUE(start_server(&server) == 0, "start data repetition server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect data repetition server");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load data repetition init");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write data repetition init");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_rsp.hex",
+                          "data repetition init rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_init_ntf.hex",
+                          "data repetition init ntf");
+
+    request[0] = 0x21;
+    request[1] = 0x03;
+    request[2] = 0x00;
+    request[3] = 0x08;
+    request[4] = 0x78;
+    request[5] = 0x56;
+    request[6] = 0x34;
+    request[7] = 0x12;
+    request[8] = 0x01;
+    request[9] = UCI_APP_CONFIG_DATA_REPETITION_COUNT;
+    request[10] = 0x01;
+    request[11] = 0x01;
+    ASSERT_TRUE(write_full(fd, request, 12) == 12, "write data repetition count");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+                          "data repetition count rsp");
+
+    request[3] = 0x0B;
+    request[9] = UCI_APP_CONFIG_RANGING_INTERVAL;
+    request[10] = 0x04;
+    request[11] = 0x32;
+    request[12] = 0x00;
+    request[13] = 0x00;
+    request[14] = 0x00;
+    ASSERT_TRUE(write_full(fd, request, 15) == 15, "write data repetition interval");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
+                          "data repetition interval rsp");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load data repetition start");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write data repetition start");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_rsp.hex",
+                          "data repetition start rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_start_ntf.hex",
+                          "data repetition start ntf");
+
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/data_message_send_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load data repetition send");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write data repetition send");
+    ASSERT_TRUE(set_socket_timeout_ms(fd, 30) == 0, "set data repetition quiet timeout");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) != 0, "data repetition first send should be deferred");
+
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write data repetition overlapping send");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read data repetition overlapping status");
+    ASSERT_EQ_INT(UCI_SESSION_DATA_TRANSFER_STATUS_NTF, packet[1] & 0x3FU, "data repetition overlapping oid");
+    ASSERT_EQ_INT(UCI_DATA_TRANSFER_STATUS_ERROR_DATA_TRANSFER_IS_ONGOING, packet[10], "data repetition overlapping status");
+
+    ASSERT_TRUE(set_socket_timeout_ms(fd, 300) == 0, "set data repetition event timeout");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read data repetition repetition status");
+    ASSERT_EQ_INT(UCI_SESSION_DATA_TRANSFER_STATUS_NTF, packet[1] & 0x3FU, "data repetition first event oid");
+    ASSERT_EQ_INT(UCI_DATA_TRANSFER_STATUS_REPETITION_OK, packet[10], "data repetition first event status");
+    ASSERT_EQ_INT(1, packet[11], "data repetition first tx count");
+
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read data repetition final credit");
+    ASSERT_EQ_INT(UCI_SESSION_DATA_CREDIT_NTF, packet[1] & 0x3FU, "data repetition final credit oid");
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read data repetition final status");
+    ASSERT_EQ_INT(UCI_SESSION_DATA_TRANSFER_STATUS_NTF, packet[1] & 0x3FU, "data repetition final status oid");
+    ASSERT_EQ_INT(UCI_DATA_TRANSFER_STATUS_OK, packet[10], "data repetition final status");
+    ASSERT_EQ_INT(2, packet[11], "data repetition final tx count");
+
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 static void test_control_edge_cases_over_tcp(void) {
     test_server_t server = {0};
     uint8_t request[UCI_SIM_MAX_PACKET];
@@ -3313,6 +3407,7 @@ int main(void) {
     test_preamble_code_index_validation_over_tcp();
     test_sfd_id_validation_over_tcp();
     test_psdu_data_rate_validation_over_tcp();
+    test_data_message_repetition_progress_over_tcp();
     test_preamble_duration_validation_over_tcp();
     test_link_layer_mode_validation_over_tcp();
     test_ranging_stream_flow_over_tcp();

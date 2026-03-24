@@ -4390,6 +4390,108 @@ static void test_data_message_send_edge_cases(void) {
     PASS();
 }
 
+static void test_data_message_send_honors_data_repetition_count(void) {
+    uci_sim_engine_t engine;
+    uci_sim_packet_t request;
+    uci_sim_packet_t packet;
+
+    uci_sim_engine_init(&engine);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "data repetition init failed");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_DATA_REPETITION_COUNT;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "set data repetition count failed");
+
+    request.payload_len = 11;
+    request.payload[5] = UCI_APP_CONFIG_RANGING_INTERVAL;
+    request.payload[6] = 0x04;
+    request.payload[7] = 0x32;
+    request.payload[8] = 0x00;
+    request.payload[9] = 0x00;
+    request.payload[10] = 0x00;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "set repetition interval failed");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "start for data repetition failed");
+    while (uci_sim_engine_dequeue_outbound_packet(&engine, &packet) == 0) {
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_DATA;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_DATA_PACKET_FORMAT_SEND;
+    request.oid = 0x00;
+    request.payload_len = 18;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = 0x44;
+    request.payload[5] = 0x33;
+    request.payload[6] = 0x22;
+    request.payload[7] = 0x11;
+    request.payload[12] = 0x0F;
+    request.payload[14] = 0x02;
+    request.payload[16] = 0xAA;
+    request.payload[17] = 0xBB;
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "submit repeated data send failed");
+    ASSERT_TRUE(engine.outbound_count == 0, "repeated data send should not emit immediate notifications");
+
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0,
+                "overlapping repeated data send should still emit a notification");
+    ASSERT_TRUE(uci_sim_engine_dequeue_outbound_packet(&engine, &packet) == 0, "overlapping send should emit status");
+    ASSERT_EQ_U8(UCI_SESSION_DATA_TRANSFER_STATUS_NTF, packet.oid, "overlapping send status oid");
+    ASSERT_EQ_U8(UCI_DATA_TRANSFER_STATUS_ERROR_DATA_TRANSFER_IS_ONGOING, packet.payload[6], "overlapping send status");
+
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 50) == 0, "first repetition tick failed");
+    ASSERT_TRUE(uci_sim_engine_dequeue_outbound_packet(&engine, &packet) == 0, "first repetition status missing");
+    ASSERT_EQ_U8(UCI_SESSION_DATA_TRANSFER_STATUS_NTF, packet.oid, "first repetition oid");
+    ASSERT_EQ_U8(UCI_DATA_TRANSFER_STATUS_REPETITION_OK, packet.payload[6], "first repetition status");
+    ASSERT_EQ_U8(1, packet.payload[7], "first repetition tx count");
+
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 50) == 0, "final repetition tick failed");
+    ASSERT_TRUE(uci_sim_engine_dequeue_outbound_packet(&engine, &packet) == 0, "final repetition credit missing");
+    ASSERT_EQ_U8(UCI_SESSION_DATA_CREDIT_NTF, packet.oid, "final repetition credit oid");
+    ASSERT_TRUE(uci_sim_engine_dequeue_outbound_packet(&engine, &packet) == 0, "final repetition status missing");
+    ASSERT_EQ_U8(UCI_SESSION_DATA_TRANSFER_STATUS_NTF, packet.oid, "final repetition status oid");
+    ASSERT_EQ_U8(UCI_DATA_TRANSFER_STATUS_OK, packet.payload[6], "final repetition status");
+    ASSERT_EQ_U8(2, packet.payload[7], "final repetition tx count");
+    PASS();
+}
+
 static void test_logical_link_lifecycle(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -4744,6 +4846,7 @@ int main(void) {
     test_session_data_transfer_phase_config();
     test_data_message_send_emits_credit_and_status_notifications();
     test_data_message_send_edge_cases();
+    test_data_message_send_honors_data_repetition_count();
     test_logical_link_lifecycle();
     test_logical_link_edge_cases();
     test_dt_round_update_commands();

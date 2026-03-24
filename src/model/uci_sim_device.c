@@ -223,6 +223,85 @@ int uci_sim_device_dequeue_ready_event(uci_sim_device_t* device, uci_sim_schedul
     return -1;
 }
 
+int uci_sim_device_queue_data_credit_notification(uci_sim_device_t* device,
+                                                  uint32_t session_id,
+                                                  uint8_t availability) {
+    uci_sim_packet_t notification;
+
+    if (!device) {
+        return -1;
+    }
+
+    memset(&notification, 0, sizeof(notification));
+    notification.mt = UCI_MT_NOTIFICATION;
+    notification.pbf = UCI_PBF_COMPLETE;
+    notification.gid = UCI_GID_SESSION_CONTROL;
+    notification.oid = UCI_SESSION_DATA_CREDIT_NTF;
+    notification.payload_len = 5;
+    notification.payload[0] = (uint8_t)(session_id & 0xFFU);
+    notification.payload[1] = (uint8_t)((session_id >> 8) & 0xFFU);
+    notification.payload[2] = (uint8_t)((session_id >> 16) & 0xFFU);
+    notification.payload[3] = (uint8_t)((session_id >> 24) & 0xFFU);
+    notification.payload[4] = availability;
+    return uci_sim_device_queue_notification(device, &notification);
+}
+
+int uci_sim_device_queue_data_transfer_status_notification(uci_sim_device_t* device,
+                                                           uint32_t session_id,
+                                                           uint16_t sequence_number,
+                                                           uint8_t status,
+                                                           uint8_t tx_count) {
+    uci_sim_packet_t notification;
+
+    if (!device) {
+        return -1;
+    }
+
+    memset(&notification, 0, sizeof(notification));
+    notification.mt = UCI_MT_NOTIFICATION;
+    notification.pbf = UCI_PBF_COMPLETE;
+    notification.gid = UCI_GID_SESSION_CONTROL;
+    notification.oid = UCI_SESSION_DATA_TRANSFER_STATUS_NTF;
+    notification.payload_len = 8;
+    notification.payload[0] = (uint8_t)(session_id & 0xFFU);
+    notification.payload[1] = (uint8_t)((session_id >> 8) & 0xFFU);
+    notification.payload[2] = (uint8_t)((session_id >> 16) & 0xFFU);
+    notification.payload[3] = (uint8_t)((session_id >> 24) & 0xFFU);
+    notification.payload[4] = (uint8_t)(sequence_number & 0xFFU);
+    notification.payload[5] = (uint8_t)((sequence_number >> 8) & 0xFFU);
+    notification.payload[6] = status;
+    notification.payload[7] = tx_count;
+    return uci_sim_device_queue_notification(device, &notification);
+}
+
+int uci_sim_device_progress_data_transfer(uci_sim_device_t* device,
+                                          uci_sim_session_t* session) {
+    if (!device || !session || !session->allocated || !session->data_transfer_in_progress) {
+        return -1;
+    }
+
+    session->data_transfer_tx_count++;
+
+    if (session->data_transfer_repetitions_remaining > 0U) {
+        session->data_transfer_repetitions_remaining--;
+        return uci_sim_device_queue_data_transfer_status_notification(device,
+                                                                      session->session_id,
+                                                                      session->data_transfer_sequence,
+                                                                      UCI_DATA_TRANSFER_STATUS_REPETITION_OK,
+                                                                      session->data_transfer_tx_count);
+    }
+
+    session->data_transfer_in_progress = 0;
+    if (uci_sim_device_queue_data_credit_notification(device, session->session_id, 1U) != 0) {
+        return -1;
+    }
+    return uci_sim_device_queue_data_transfer_status_notification(device,
+                                                                  session->session_id,
+                                                                  session->data_transfer_sequence,
+                                                                  UCI_DATA_TRANSFER_STATUS_OK,
+                                                                  session->data_transfer_tx_count);
+}
+
 int uci_sim_device_deliver_notification(uci_sim_device_t* device,
                                         const uci_sim_packet_t* notification,
                                         uci_sim_result_t* result) {
@@ -375,6 +454,22 @@ uint8_t uci_sim_session_get_ranging_round_usage(const uci_sim_session_t* session
     if (uci_sim_session_get_config(session, UCI_APP_CONFIG_RANGING_ROUND_USAGE, &value, &value_len) != 0 ||
         value_len != 1) {
         return 0x01;
+    }
+
+    return value;
+}
+
+uint8_t uci_sim_session_get_data_repetition_count(const uci_sim_session_t* session) {
+    uint8_t value = 0x00;
+    uint8_t value_len = 0;
+
+    if (!session) {
+        return 0x00;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_DATA_REPETITION_COUNT, &value, &value_len) != 0 ||
+        value_len != 1) {
+        return 0x00;
     }
 
     return value;

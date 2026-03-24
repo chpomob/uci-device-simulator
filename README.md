@@ -158,6 +158,9 @@ the default profile rejects `0`, `SESSION_START` rejects sessions whose
 effective responder slot index would fall outside the configured slot count,
 and emitted `RANGE_DATA_NTF` packets now source their slot index from the
 session configuration instead of leaving it as a fixed template byte.
+`RESPONDER_SLOT_INDEX` now uses that same slot-topology seam too: immediate
+`SET_APP_CONFIG` rejects values that fall outside the configured
+`SLOTS_PER_RR`, and `SESSION_START` re-validates the effective pair.
 `BLOCK_STRIDE_LENGTH` now uses the same validation-first scheduler seam: it is
 kept as a 1-byte FiRa/Qorvo parameter, defaults to `0` in the profile, and
 non-zero values are only accepted when the effective session is both

@@ -642,30 +642,53 @@ static int validate_multi_node_mode_topology(const uci_sim_profile_t* profile,
     return 0;
 }
 
-static int validate_slots_per_rr_topology(const uci_sim_profile_t* profile,
+static int validate_slot_topology_context(const uci_sim_profile_t* profile,
                                           const uci_sim_session_t* session,
+                                          uint8_t override_config_id,
+                                          const uint8_t* override_value,
+                                          uint8_t override_value_len,
                                           uci_sim_validation_result_t* result) {
     uint8_t slots_per_rr = 0U;
     uint8_t responder_slot_index = 0U;
-    uint8_t responder_slot_index_len = 0U;
+    uint8_t value_len = 0U;
     uint8_t status = profile ? profile->invalid_slots_per_rr_status : UCI_STATUS_INVALID_PARAM;
     uint8_t reason = profile ? profile->invalid_slots_per_rr_reason_code
                              : UCI_SESSION_REASON_ERROR_INSUFFICIENT_SLOTS_PER_RR;
     uint8_t surface = profile ? profile->invalid_slots_per_rr_surface
                               : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE;
 
-    if (get_session_u8_config(session, UCI_APP_CONFIG_SLOTS_PER_RR, &slots_per_rr,
-                              result, status, reason, surface) != 0) {
-        return -1;
+    if (override_config_id == UCI_APP_CONFIG_SLOTS_PER_RR) {
+        if (!override_value || override_value_len != 1U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+        slots_per_rr = override_value[0];
+    } else {
+        if (get_session_u8_config(session, UCI_APP_CONFIG_SLOTS_PER_RR, &slots_per_rr,
+                                  result, status, reason, surface) != 0) {
+            return -1;
+        }
     }
     if (validate_slots_per_rr(profile, slots_per_rr, result) != 0) {
         return -1;
     }
 
-    if (uci_sim_session_get_config(session, 0x1E, &responder_slot_index, &responder_slot_index_len) != 0 ||
-        responder_slot_index_len != 1U) {
-        set_invalid_result(result, status, reason, surface);
-        return -1;
+    if (override_config_id == UCI_APP_CONFIG_RESPONDER_SLOT_INDEX) {
+        if (!override_value || override_value_len != 1U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+        responder_slot_index = override_value[0];
+    } else {
+        if (!session ||
+            uci_sim_session_get_config(session,
+                                       UCI_APP_CONFIG_RESPONDER_SLOT_INDEX,
+                                       &responder_slot_index,
+                                       &value_len) != 0 ||
+            value_len != 1U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
     }
 
     if (responder_slot_index >= slots_per_rr) {
@@ -1105,7 +1128,22 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
                                            : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
                 return -1;
             }
-            return validate_slots_per_rr(profile, value[0], result);
+            if (validate_slots_per_rr(profile, value[0], result) != 0) {
+                return -1;
+            }
+            return validate_slot_topology_context(profile, session, config_id, value, value_len, result);
+        }
+        if (config_id == UCI_APP_CONFIG_RESPONDER_SLOT_INDEX) {
+            if (!value || value_len != 1) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   profile ? profile->invalid_slots_per_rr_reason_code
+                                           : UCI_SESSION_REASON_ERROR_INSUFFICIENT_SLOTS_PER_RR,
+                                   profile ? profile->invalid_slots_per_rr_surface
+                                           : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+            return validate_slot_topology_context(profile, session, config_id, value, value_len, result);
         }
         if (config_id == UCI_APP_CONFIG_RSSI_REPORTING) {
             if (!value || value_len != 1) {
@@ -1386,7 +1424,7 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
     if (validate_slots_per_rr(profile, slots_per_rr, result) != 0) {
         return -1;
     }
-    if (validate_slots_per_rr_topology(profile, session, result) != 0) {
+    if (validate_slot_topology_context(profile, session, 0xFFU, NULL, 0U, result) != 0) {
         return -1;
     }
 

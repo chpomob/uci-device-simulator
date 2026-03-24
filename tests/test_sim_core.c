@@ -1507,6 +1507,59 @@ static void test_slots_per_rr_validation_rejects_zero(void) {
     PASS();
 }
 
+static void test_responder_slot_index_validation_rejects_out_of_range_for_slots_per_rr(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t responder_slot_index = 0x00;
+    uint8_t original_responder_slot_index = 0x00;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0,
+                "responder slot validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0,
+                "responder slot validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session, UCI_APP_CONFIG_SLOTS_PER_RR, (const uint8_t[]){0x06}, 1) == 0,
+                "responder slot validation preload slots failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_RESPONDER_SLOT_INDEX,
+                                           &responder_slot_index, &value_len) == 0,
+                "responder slot validation fetch original value failed");
+    original_responder_slot_index = responder_slot_index;
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_RESPONDER_SLOT_INDEX;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x06;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "responder slot index outside slots_per_rr should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "responder slot invalid status");
+    ASSERT_TRUE(result.has_notification, "responder slot invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "responder slot invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "responder slot invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_RESPONDER_SLOT_INDEX,
+                                           &responder_slot_index, &value_len) == 0,
+                "responder slot validation refetch original value failed");
+    ASSERT_EQ_U8(original_responder_slot_index, responder_slot_index,
+                 "invalid responder slot index should not overwrite stored value");
+    PASS();
+}
+
 static void test_block_stride_length_validation_requires_block_time_struct(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -3650,7 +3703,7 @@ static void test_session_app_config_storage(void) {
     request.payload_len = 8;
     request.payload[5] = 0x1E;
     request.payload[6] = 1;
-    request.payload[7] = 0x07;
+    request.payload[7] = 0x05;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set responder slot index app config failed");
 
     request.payload[5] = 0x1F;
@@ -4100,7 +4153,7 @@ static void test_session_app_config_storage(void) {
                                              (const uint8_t[]){ 0x2D, 0x00 }, 2),
                 "get extended app config missing rng data ntf aoa bound");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x1E,
-                                             (const uint8_t[]){ 0x07 }, 1),
+                                             (const uint8_t[]){ 0x05 }, 1),
                 "get extended app config missing responder slot index");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x1F,
                                              (const uint8_t[]){ 0x01 }, 1),
@@ -4256,7 +4309,7 @@ static void test_session_app_config_storage(void) {
                                              (const uint8_t[]){ 0x2D, 0x00 }, 2),
                 "get all app config missing rng data ntf aoa bound");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x1E,
-                                             (const uint8_t[]){ 0x07 }, 1),
+                                             (const uint8_t[]){ 0x05 }, 1),
                 "get all app config missing responder slot index");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x1F,
                                              (const uint8_t[]){ 0x01 }, 1),
@@ -5183,6 +5236,7 @@ int main(void) {
     test_ranging_time_struct_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_ranging_time_struct();
     test_slots_per_rr_validation_rejects_zero();
+    test_responder_slot_index_validation_rejects_out_of_range_for_slots_per_rr();
     test_block_stride_length_validation_requires_block_time_struct();
     test_session_start_rejects_block_stride_without_block_time_struct();
     test_scheduled_mode_validation_rejects_unsupported_values();

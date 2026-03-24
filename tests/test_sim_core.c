@@ -1080,6 +1080,94 @@ static void test_session_start_rejects_invalid_sfd_id(void) {
     PASS();
 }
 
+static void test_psdu_data_rate_validation_rejects_unsupported_values(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t psdu_data_rate = 0x00;
+    uint8_t original_psdu_data_rate = 0x00;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "psdu data rate validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "psdu data rate validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_PSDU_DATA_RATE, &psdu_data_rate, &value_len) == 0,
+                "psdu data rate validation fetch original value failed");
+    original_psdu_data_rate = psdu_data_rate;
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_PSDU_DATA_RATE;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x04;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "unsupported psdu data rate should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "psdu data rate invalid status");
+    ASSERT_TRUE(result.has_notification, "psdu data rate invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "psdu data rate invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "psdu data rate invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_PSDU_DATA_RATE, &psdu_data_rate, &value_len) == 0,
+                "psdu data rate validation refetch original value failed");
+    ASSERT_EQ_U8(original_psdu_data_rate, psdu_data_rate,
+                 "invalid psdu data rate should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_psdu_data_rate(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_psdu_data_rate = 0x04;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "psdu data rate start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "psdu data rate start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_PSDU_DATA_RATE,
+                                             &invalid_psdu_data_rate,
+                                             sizeof(invalid_psdu_data_rate)) == 0,
+                "psdu data rate start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid psdu data rate should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid psdu data rate status");
+    ASSERT_TRUE(result.has_notification, "start invalid psdu data rate should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid psdu data rate generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid psdu data rate generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid psdu data rate should preserve session state");
+    PASS();
+}
+
 static void test_rssi_reporting_validation_rejects_unsupported_values(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -4428,6 +4516,8 @@ int main(void) {
     test_session_start_rejects_invalid_preamble_code_index();
     test_sfd_id_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_sfd_id();
+    test_psdu_data_rate_validation_rejects_unsupported_values();
+    test_session_start_rejects_invalid_psdu_data_rate();
     test_rssi_reporting_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_rssi_reporting();
     test_ranging_round_usage_validation_rejects_unsupported_values();

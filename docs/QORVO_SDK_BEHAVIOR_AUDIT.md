@@ -533,7 +533,7 @@ codebase does not currently expose them as app-config parameters. That means:
 | `0x12` | `RFRAME_CONFIG` | RFrame configuration. | `strong_inference` | Payload/measurement interpretation input. |
 | `0x14` | `PREAMBLE_CODE_INDEX` | PHY preamble code. | `proven` | Cherry documents `9-12` for BPRF and `25-32` for HPRF; simulator should validate it against `PRF_MODE` and keep deeper PHY effects deferred. |
 | `0x15` | `SFD_ID` | Start-of-frame delimiter selection. | `proven` | Cherry documents `0 or 2` in BPRF and `1-4` in HPRF; simulator should validate it against `PRF_MODE` and defer deeper PHY effects. |
-| `0x16` | `PSDU_DATA_RATE` | PSDU rate. | `strong_inference` | PHY metadata. |
+| `0x16` | `PSDU_DATA_RATE` | PSDU rate. Cherry common enums include a broader `850K` value, but the Cherry session app-config setter documents only `0x00..0x03` on this FiRa session surface. | `proven` | Validate against the narrower session-surface enum now; defer deeper PHY effects. |
 | `0x17` | `PREAMBLE_DURATION` | Preamble duration. | `strong_inference` | PHY metadata. |
 | `0x18` | `LINK_LAYER_MODE` | Standard vs extended link-layer mode. | `strong_inference` | Likely packet/feature-shape input. |
 | `0x19` | `DATA_REPETITION_COUNT` | Data repetition count. | `strong_inference` | Measurement/data behavior input. |

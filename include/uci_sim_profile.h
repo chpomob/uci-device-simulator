@@ -66,6 +66,10 @@ typedef struct {
     uint8_t invalid_sfd_id_status;
     uint8_t invalid_sfd_id_reason_code;
     uint8_t invalid_sfd_id_surface;
+    uint8_t supported_psdu_data_rate_max;
+    uint8_t invalid_psdu_data_rate_status;
+    uint8_t invalid_psdu_data_rate_reason_code;
+    uint8_t invalid_psdu_data_rate_surface;
     uint8_t supported_rssi_reporting_max;
     uint8_t invalid_rssi_reporting_status;
     uint8_t invalid_rssi_reporting_reason_code;

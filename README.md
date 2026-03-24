@@ -148,7 +148,11 @@ default profile, and `SESSION_START` re-validates the classic pairing with
 in the default profile, and `SESSION_START` re-validates the one proven
 runtime topology constraint from the local Cherry setup flows: `UNICAST`
 sessions must still describe a single peer (`NUMBER_OF_CONTROLEES == 1` and a
-single `DST_MAC_ADDRESS`).
+single `DST_MAC_ADDRESS`). `SLOTS_PER_RR` is no longer storage-only either:
+the default profile rejects `0`, `SESSION_START` rejects sessions whose
+effective responder slot index would fall outside the configured slot count,
+and emitted `RANGE_DATA_NTF` packets now source their slot index from the
+session configuration instead of leaving it as a fixed template byte.
 At this stage that means:
 - bit 0 controls the distance/ToF-derived field
 - bit 1 controls azimuth fields

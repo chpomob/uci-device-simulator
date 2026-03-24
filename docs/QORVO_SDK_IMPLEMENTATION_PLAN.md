@@ -148,6 +148,14 @@ This layer should sit between:
 
 It should not live in handlers.
 
+Current progress on this layer:
+
+- report controls (`RESULT_REPORT_CONFIG`, `AOA_RESULT_REQ`, `RSSI_REPORTING`)
+  are already behavioral
+- `RANGING_INTERVAL` already drives emitted interval fields and engine timing
+- `SLOTS_PER_RR` now also crosses the seam indirectly by constraining valid
+  slot topology and by sourcing the emitted slot index from session state
+
 ### 2. Validation Layer
 
 Purpose:

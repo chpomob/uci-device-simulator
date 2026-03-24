@@ -149,6 +149,8 @@ uint8_t uci_sim_session_get_ranging_round_usage(const uci_sim_session_t* session
 uint8_t uci_sim_session_get_data_repetition_count(const uci_sim_session_t* session);
 uint32_t uci_sim_session_get_ranging_interval_ms(const uci_sim_session_t* session,
                                                  const uci_sim_profile_t* profile);
+uint8_t uci_sim_session_get_slots_per_rr(const uci_sim_session_t* session);
+uint8_t uci_sim_session_get_responder_slot_index(const uci_sim_session_t* session);
 uint8_t uci_sim_session_get_aoa_result_req(const uci_sim_session_t* session);
 uint8_t uci_sim_session_get_rssi_reporting(const uci_sim_session_t* session);
 uint8_t uci_sim_session_get_result_report_config(const uci_sim_session_t* session);

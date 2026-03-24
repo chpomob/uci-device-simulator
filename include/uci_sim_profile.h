@@ -82,6 +82,11 @@ typedef struct {
     uint8_t invalid_ranging_time_struct_status;
     uint8_t invalid_ranging_time_struct_reason_code;
     uint8_t invalid_ranging_time_struct_surface;
+    uint8_t supported_min_slots_per_rr;
+    uint8_t supported_max_slots_per_rr;
+    uint8_t invalid_slots_per_rr_status;
+    uint8_t invalid_slots_per_rr_reason_code;
+    uint8_t invalid_slots_per_rr_surface;
     uint8_t supported_rssi_reporting_max;
     uint8_t invalid_rssi_reporting_status;
     uint8_t invalid_rssi_reporting_reason_code;

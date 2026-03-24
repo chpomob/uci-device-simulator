@@ -389,6 +389,34 @@ static void test_rssi_reporting_masks_range_notification_rssi(void) {
     PASS();
 }
 
+static void test_measurement_uses_session_slot_index(void) {
+    const uci_sim_profile_t* profile = uci_sim_default_profile();
+    uci_sim_session_t session;
+    uci_sim_measurement_t measurement;
+    uci_sim_measurement_policy_result_t policy_result;
+    uci_sim_packet_t notification;
+    uint8_t responder_slot_index = 0x05;
+
+    memset(&session, 0, sizeof(session));
+    session.session_id = 0x12345678U;
+    ASSERT_TRUE(uci_sim_session_store_config(&session, 0x1E, &responder_slot_index, 1) == 0,
+                "slot-index responder slot store failed");
+
+    uci_sim_measurement_init_ranging_sample(profile, &session, &measurement);
+    measurement.sequence_number = 6U;
+    uci_sim_measurement_evaluate_range_notification_policy(&session, &measurement, &policy_result);
+    ASSERT_TRUE(uci_sim_measurement_build_range_data_notification(profile,
+                                                                  &measurement,
+                                                                  &policy_result,
+                                                                  profile->range_data_notification_oid,
+                                                                  &notification) == 0,
+                "slot-index notification build failed");
+    ASSERT_EQ_U8(0x05,
+                 notification.payload[profile->range_data_measurement_distance_offset + 14],
+                 "slot-index should follow stored responder slot index");
+    PASS();
+}
+
 static uci_sim_time_ms_t fake_clock_now_ms(void* context) {
     (void)context;
     return g_fake_clock_ms;
@@ -1429,6 +1457,94 @@ static void test_session_start_rejects_invalid_ranging_time_struct(void) {
     ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid ranging time struct generic error oid");
     ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid ranging time struct generic error status");
     ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid ranging time struct should preserve session state");
+    PASS();
+}
+
+static void test_slots_per_rr_validation_rejects_zero(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t slots_per_rr = 0x00;
+    uint8_t original_slots_per_rr = 0x00;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "slots per rr validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "slots per rr validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_SLOTS_PER_RR, &slots_per_rr, &value_len) == 0,
+                "slots per rr validation fetch original value failed");
+    original_slots_per_rr = slots_per_rr;
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_SLOTS_PER_RR;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x00;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "zero slots per rr should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "slots per rr invalid status");
+    ASSERT_TRUE(result.has_notification, "slots per rr invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "slots per rr invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "slots per rr invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_SLOTS_PER_RR, &slots_per_rr, &value_len) == 0,
+                "slots per rr validation refetch original value failed");
+    ASSERT_EQ_U8(original_slots_per_rr, slots_per_rr,
+                 "invalid slots per rr should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_insufficient_slots_per_rr(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t slots_per_rr = 0x06;
+    const uint8_t responder_slot_index = 0x07;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "slots per rr start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "slots per rr start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session, UCI_APP_CONFIG_SLOTS_PER_RR, &slots_per_rr, 1) == 0,
+                "slots per rr start validation preload failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session, 0x1E, &responder_slot_index, 1) == 0,
+                "responder slot index start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with insufficient slots per rr should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start insufficient slots per rr status");
+    ASSERT_TRUE(result.has_notification, "start insufficient slots per rr should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start insufficient slots per rr generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start insufficient slots per rr generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start insufficient slots per rr should preserve session state");
     PASS();
 }
 
@@ -4890,6 +5006,8 @@ int main(void) {
     test_session_start_rejects_invalid_link_layer_mode();
     test_ranging_time_struct_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_ranging_time_struct();
+    test_slots_per_rr_validation_rejects_zero();
+    test_session_start_rejects_insufficient_slots_per_rr();
     test_rssi_reporting_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_rssi_reporting();
     test_ranging_round_usage_validation_rejects_unsupported_values();
@@ -4910,6 +5028,7 @@ int main(void) {
     test_result_report_config_masks_range_notification_fields();
     test_aoa_result_req_masks_range_notification_axes();
     test_rssi_reporting_masks_range_notification_rssi();
+    test_measurement_uses_session_slot_index();
     test_core_device_info();
     test_default_profile_is_applied();
     test_default_profile_feature_matrix();

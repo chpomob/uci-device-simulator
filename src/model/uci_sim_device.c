@@ -492,6 +492,38 @@ uint32_t uci_sim_session_get_ranging_interval_ms(const uci_sim_session_t* sessio
     return read_u32_le(value);
 }
 
+uint8_t uci_sim_session_get_slots_per_rr(const uci_sim_session_t* session) {
+    uint8_t value = 0x01;
+    uint8_t value_len = 0;
+
+    if (!session) {
+        return 0x01;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_SLOTS_PER_RR, &value, &value_len) != 0 ||
+        value_len != 1) {
+        return 0x01;
+    }
+
+    return value;
+}
+
+uint8_t uci_sim_session_get_responder_slot_index(const uci_sim_session_t* session) {
+    uint8_t value = 0x00;
+    uint8_t value_len = 0;
+
+    if (!session) {
+        return 0x00;
+    }
+
+    if (uci_sim_session_get_config(session, 0x1E, &value, &value_len) != 0 ||
+        value_len != 1) {
+        return 0x00;
+    }
+
+    return value;
+}
+
 uint8_t uci_sim_session_get_aoa_result_req(const uci_sim_session_t* session) {
     uint8_t value = 0x00;
     uint8_t value_len = 0;

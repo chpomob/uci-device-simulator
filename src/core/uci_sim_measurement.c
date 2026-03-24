@@ -44,6 +44,7 @@ void uci_sim_measurement_init_ranging_sample(const uci_sim_profile_t* profile,
     sample->distance_cm = (uint16_t)distance_cm;
     sample->measurement_type = map_measurement_type_from_round_usage(
         uci_sim_session_get_ranging_round_usage(session));
+    sample->slot_index = uci_sim_session_get_responder_slot_index(session);
 }
 
 void uci_sim_measurement_evaluate_range_notification_policy(
@@ -152,6 +153,7 @@ int uci_sim_measurement_build_range_data_notification(const uci_sim_profile_t* p
     uint8_t remote_azimuth_fom_offset;
     uint8_t remote_elevation_offset;
     uint8_t remote_elevation_fom_offset;
+    uint8_t slot_index_offset;
     uint8_t rssi_offset;
 
     if (!profile || !sample || !policy_result || !notification) {
@@ -187,6 +189,7 @@ int uci_sim_measurement_build_range_data_notification(const uci_sim_profile_t* p
     remote_azimuth_fom_offset = (uint8_t)(remote_azimuth_offset + 2U);
     remote_elevation_offset = (uint8_t)(remote_azimuth_fom_offset + 1U);
     remote_elevation_fom_offset = (uint8_t)(remote_elevation_offset + 2U);
+    slot_index_offset = (uint8_t)(remote_elevation_fom_offset + 1U);
     rssi_offset = (uint8_t)(remote_elevation_fom_offset + 2U);
 
     if ((policy_result->emitted_field_mask & UCI_SIM_MEAS_FIELD_DISTANCE) != 0U) {
@@ -220,6 +223,8 @@ int uci_sim_measurement_build_range_data_notification(const uci_sim_profile_t* p
         payload[local_elevation_fom_offset] = 0x00;
         payload[remote_elevation_fom_offset] = 0x00;
     }
+
+    payload[slot_index_offset] = sample->slot_index;
 
     if ((policy_result->emitted_field_mask & UCI_SIM_MEAS_FIELD_RSSI) == 0U) {
         payload[rssi_offset] = 0x00;

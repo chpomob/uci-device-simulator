@@ -248,6 +248,25 @@ static int validate_ranging_time_struct(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_slots_per_rr(const uci_sim_profile_t* profile,
+                                 uint8_t slots_per_rr,
+                                 uci_sim_validation_result_t* result) {
+    if (!profile) {
+        return 0;
+    }
+
+    if (slots_per_rr < profile->supported_min_slots_per_rr ||
+        slots_per_rr > profile->supported_max_slots_per_rr) {
+        set_invalid_result(result,
+                           profile->invalid_slots_per_rr_status,
+                           profile->invalid_slots_per_rr_reason_code,
+                           profile->invalid_slots_per_rr_surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int validate_rssi_reporting(const uci_sim_profile_t* profile,
                                    uint8_t rssi_reporting,
                                    uci_sim_validation_result_t* result) {
@@ -586,6 +605,40 @@ static int validate_multi_node_mode_topology(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_slots_per_rr_topology(const uci_sim_profile_t* profile,
+                                          const uci_sim_session_t* session,
+                                          uci_sim_validation_result_t* result) {
+    uint8_t slots_per_rr = 0U;
+    uint8_t responder_slot_index = 0U;
+    uint8_t responder_slot_index_len = 0U;
+    uint8_t status = profile ? profile->invalid_slots_per_rr_status : UCI_STATUS_INVALID_PARAM;
+    uint8_t reason = profile ? profile->invalid_slots_per_rr_reason_code
+                             : UCI_SESSION_REASON_ERROR_INSUFFICIENT_SLOTS_PER_RR;
+    uint8_t surface = profile ? profile->invalid_slots_per_rr_surface
+                              : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE;
+
+    if (get_session_u8_config(session, UCI_APP_CONFIG_SLOTS_PER_RR, &slots_per_rr,
+                              result, status, reason, surface) != 0) {
+        return -1;
+    }
+    if (validate_slots_per_rr(profile, slots_per_rr, result) != 0) {
+        return -1;
+    }
+
+    if (uci_sim_session_get_config(session, 0x1E, &responder_slot_index, &responder_slot_index_len) != 0 ||
+        responder_slot_index_len != 1U) {
+        set_invalid_result(result, status, reason, surface);
+        return -1;
+    }
+
+    if (responder_slot_index >= slots_per_rr) {
+        set_invalid_result(result, status, reason, surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int require_session_config_len(const uci_sim_profile_t* profile,
                                       const uci_sim_session_t* session,
                                       uint8_t config_id,
@@ -891,6 +944,18 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
             }
             return validate_ranging_time_struct(profile, value[0], result);
         }
+        if (config_id == UCI_APP_CONFIG_SLOTS_PER_RR) {
+            if (!value || value_len != 1) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   profile ? profile->invalid_slots_per_rr_reason_code
+                                           : UCI_SESSION_REASON_ERROR_INSUFFICIENT_SLOTS_PER_RR,
+                                   profile ? profile->invalid_slots_per_rr_surface
+                                           : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+            return validate_slots_per_rr(profile, value[0], result);
+        }
         if (config_id == UCI_APP_CONFIG_RSSI_REPORTING) {
             if (!value || value_len != 1) {
                 set_invalid_result(result,
@@ -951,6 +1016,8 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
     uint8_t link_layer_mode_len = 0;
     uint8_t ranging_time_struct = 0;
     uint8_t ranging_time_struct_len = 0;
+    uint8_t slots_per_rr = 0;
+    uint8_t slots_per_rr_len = 0;
     uint8_t rssi_reporting;
     uint8_t ranging_round_usage;
     uint8_t channel_number = 0;
@@ -1114,6 +1181,24 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
         return -1;
     }
     if (validate_ranging_time_struct(profile, ranging_time_struct, result) != 0) {
+        return -1;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_SLOTS_PER_RR,
+                                   &slots_per_rr, &slots_per_rr_len) != 0 ||
+        slots_per_rr_len != 1U) {
+        set_invalid_result(result,
+                           profile ? profile->invalid_slots_per_rr_status : UCI_STATUS_INVALID_PARAM,
+                           profile ? profile->invalid_slots_per_rr_reason_code
+                                   : UCI_SESSION_REASON_ERROR_INSUFFICIENT_SLOTS_PER_RR,
+                           profile ? profile->invalid_slots_per_rr_surface
+                                   : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+        return -1;
+    }
+    if (validate_slots_per_rr(profile, slots_per_rr, result) != 0) {
+        return -1;
+    }
+    if (validate_slots_per_rr_topology(profile, session, result) != 0) {
         return -1;
     }
 

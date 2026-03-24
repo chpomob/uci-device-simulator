@@ -503,10 +503,11 @@ codebase does not currently expose them as app-config parameters. That means:
 | `0x2D` | `BLOCK_STRIDE_LENGTH` | Cherry setter uses a `uint8_t` value; local sources do not prove standalone timing math, but they do justify treating non-zero block stride as meaningful only in block-based, time-scheduled sessions. | `strong_inference` | Keep 1-byte storage/wire semantics, default to `0`, and validate as a combination parameter with `RANGING_TIME_STRUCT` and `SCHEDULED_MODE`. |
 | `0x21` | `TX_JITTER_WINDOW_SIZE` | Jitter window size. | `weak_inference` | Future timing/randomization input. |
 | `0x2B` | `UWB_INITIATION_TIME` | Initiation/start reference time. | `weak_inference` | Scheduler/profile input later. |
+| `0x32` | `MAX_NUMBER_OF_MEASUREMENTS` | Cherry uses a `uint16_t` value on the FiRa session surface; FiRa defines an explicit `MAX_NUMBER_OF_MEASUREMENTS_REACHED` session reason, and local Qorvo Python tooling consistently documents `0` as unlimited. | `proven` | Session-lifecycle input: should limit the number of produced measurements and eventually stop or idle the session with the matching reason. |
 | `0x33` | `UL_TDOA_TX_INTERVAL` | UL-TDoA interval. | `strong_inference` | Scheduler input for UL-TDoA later. |
 | `0x34` | `UL_TDOA_RANDOM_WINDOW` | UL-TDoA randomization window. | `weak_inference` | Scheduler/randomization input. |
 | `0x36` | `SUSPEND_RANGING_ROUNDS` | Round suspension count/behavior. | `weak_inference` | Scheduler/state-machine input. |
-| `0x48` | `SESSION_TIME_BASE` | Time-base sync with another session. | `strong_inference` | Strong architectural impact; should not remain storage-only forever. |
+| `0x48` | `SESSION_TIME_BASE` | Cherry exposes it as a structured 9-byte setting with enable/continue/resync flags, reference session handle, and offset in microseconds. Python tooling confirms the same `[1, 4, 4]` layout. | `proven` | Strong scheduler architecture input; should not remain storage-only forever. |
 
 ### 3. Session Topology And Addressing
 
@@ -1075,6 +1076,31 @@ Current gap:
 
 - the simulator stores this parameter but does not affect measurement output
 
+### `MAX_NUMBER_OF_MEASUREMENTS` (`0x32`)
+
+Sources:
+
+- Cherry setter uses a `uint16_t` app-config payload.
+- Cherry getter also treats it as `uint16_t`.
+- FiRa defines the session reason
+  `UCI_SESSION_REASON_MAX_NUMBER_OF_MEASUREMENTS_REACHED`.
+- Local Qorvo Python tools consistently document `0` as unlimited.
+
+Conclusions:
+
+- this is not just reporting metadata
+- it is a session-lifecycle control
+- the simulator should eventually stop or idle a session when the configured
+  measurement budget is exhausted
+- `0` should be treated as unlimited in the default FiRa/Qorvo-compatible
+  profile unless stronger contrary evidence appears
+
+Confidence:
+
+- `proven` for wire size and the existence of the matching session-stop reason
+- `strong_inference` for the exact simulator stop-vs-idle policy, because the
+  local SDK does not fully pin the firmware surfacing path
+
 ### `SESSION_TIME_BASE` (`0x48`)
 
 Sources:
@@ -1089,6 +1115,7 @@ Sources:
 - Cherry unit test `set_session_session_time_baseOk` verifies a 9-byte payload
   carrying those flags plus reference session and offset
 - Python helper layer also describes `SessionTimeBase` as a 9-byte structure
+  with shape `[1, 4, 4]`
 
 Conclusion:
 

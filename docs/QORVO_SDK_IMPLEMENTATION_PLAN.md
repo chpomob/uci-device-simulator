@@ -199,6 +199,7 @@ Responsibilities:
 
 - compute next ranging event time
 - expose current visible ranging interval to notification serializer
+- enforce finite measurement budgets such as `MAX_NUMBER_OF_MEASUREMENTS`
 - future session synchronization through `SESSION_TIME_BASE`
 - future slot/time-grid behavior
 
@@ -373,7 +374,28 @@ Acceptance criteria:
 - reason codes used only where justified by audit evidence
 - tests explicitly pin both command response and later notification behavior
 
-### Phase 6: `SESSION_TIME_BASE` Architecture
+### Phase 6: `MAX_NUMBER_OF_MEASUREMENTS` Lifecycle
+
+Tasks:
+
+1. Add explicit session measurement-budget state:
+   - configured maximum
+   - current emitted measurement count
+   - unlimited mode when value is `0`
+2. Connect that budget to the measurement/scheduler seam, not packet builders.
+3. When the finite budget is reached:
+   - stop producing new measurements
+   - surface the matching FiRa session reason
+4. Keep the first implementation deterministic:
+   - count produced measurements, not transport retries
+   - reuse the existing scenario clock and stream scheduling
+
+Acceptance criteria:
+
+- `0` behaves as unlimited
+- finite values cap measurement production deterministically
+- the matching FiRa reason is observable in tests
+### Phase 7: `SESSION_TIME_BASE` Architecture
 
 Tasks:
 

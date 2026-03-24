@@ -498,7 +498,7 @@ codebase does not currently expose them as app-config parameters. That means:
 | --- | --- | --- | --- | --- |
 | `0x08` | `SLOT_DURATION` | Slot duration in RSTU. | `strong_inference` | Future scheduler/time-grid input. |
 | `0x09` | `RANGING_INTERVAL` | Interval between rangings. | `proven` | Should drive event scheduling. |
-| `0x1A` | `RANGING_TIME_STRUCT` | Time-structure choice. | `weak_inference` | Likely time-grid behavior input. |
+| `0x1A` | `RANGING_TIME_STRUCT` | Time-structure selection. Local Qorvo/Cherry evidence only proves block-based scheduling as the concrete non-RFU capability concept; no local source proves standalone scheduler semantics for this app-config yet. | `strong_inference` | Validate conservatively now; defer scheduler behavior until handled with `SLOTS_PER_RR`, `BLOCK_STRIDE_LENGTH`, and `SCHEDULED_MODE`. |
 | `0x1B` | `SLOTS_PER_RR` | Slots per ranging round. | `strong_inference` | Future measurement scheduling input. |
 | `0x21` | `TX_JITTER_WINDOW_SIZE` | Jitter window size. | `weak_inference` | Future timing/randomization input. |
 | `0x2B` | `UWB_INITIATION_TIME` | Initiation/start reference time. | `weak_inference` | Scheduler/profile input later. |

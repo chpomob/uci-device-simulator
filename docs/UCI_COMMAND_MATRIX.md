@@ -111,7 +111,7 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x17` | `PREAMBLE_DURATION` | `supported` | Default-profile stored/retrievable |
 | `0x18` | `LINK_LAYER_MODE` | `supported` | Default-profile stored/retrievable |
 | `0x19` | `DATA_REPETITION_COUNT` | `supported` | Default-profile stored/retrievable; now also drives repeated data-transfer progression and ongoing-transfer rejection |
-| `0x1A` | `RANGING_TIME_STRUCT` | `supported` | Default-profile stored/retrievable |
+| `0x1A` | `RANGING_TIME_STRUCT` | `supported` | Default-profile stored/retrievable; now conservatively validated to `0..1`, with scheduler impact intentionally deferred |
 | `0x1B` | `SLOTS_PER_RR` | `supported` | Default-profile stored/retrievable |
 | `0x1C` | `TX_ADAPTIVE_PAYLOAD_POWER` | `supported` | Default-profile stored/retrievable |
 | `0x1D` | `RNG_DATA_NTF_AOA_BOUND` | `supported` | Default-profile stored/retrievable |

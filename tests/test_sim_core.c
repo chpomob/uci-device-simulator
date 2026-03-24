@@ -1344,6 +1344,94 @@ static void test_session_start_rejects_invalid_link_layer_mode(void) {
     PASS();
 }
 
+static void test_ranging_time_struct_validation_rejects_unsupported_values(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t ranging_time_struct = 0x00;
+    uint8_t original_ranging_time_struct = 0x00;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging time struct validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "ranging time struct validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_RANGING_TIME_STRUCT, &ranging_time_struct, &value_len) == 0,
+                "ranging time struct validation fetch original value failed");
+    original_ranging_time_struct = ranging_time_struct;
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_RANGING_TIME_STRUCT;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x02;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "unsupported ranging time struct should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "ranging time struct invalid status");
+    ASSERT_TRUE(result.has_notification, "ranging time struct invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "ranging time struct invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "ranging time struct invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_RANGING_TIME_STRUCT, &ranging_time_struct, &value_len) == 0,
+                "ranging time struct validation refetch original value failed");
+    ASSERT_EQ_U8(original_ranging_time_struct, ranging_time_struct,
+                 "invalid ranging time struct should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_ranging_time_struct(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_ranging_time_struct = 0x02;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging time struct start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "ranging time struct start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_RANGING_TIME_STRUCT,
+                                             &invalid_ranging_time_struct,
+                                             sizeof(invalid_ranging_time_struct)) == 0,
+                "ranging time struct start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid ranging time struct should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid ranging time struct status");
+    ASSERT_TRUE(result.has_notification, "start invalid ranging time struct should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid ranging time struct generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid ranging time struct generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid ranging time struct should preserve session state");
+    PASS();
+}
+
 static void test_rssi_reporting_validation_rejects_unsupported_values(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -3247,7 +3335,7 @@ static void test_session_app_config_storage(void) {
 
     request.payload[5] = 0x1A;
     request.payload[6] = 1;
-    request.payload[7] = 0x03;
+    request.payload[7] = 0x01;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set ranging time struct app config failed");
 
     request.payload[5] = 0x1B;
@@ -4800,6 +4888,8 @@ int main(void) {
     test_session_start_rejects_invalid_preamble_duration();
     test_link_layer_mode_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_link_layer_mode();
+    test_ranging_time_struct_validation_rejects_unsupported_values();
+    test_session_start_rejects_invalid_ranging_time_struct();
     test_rssi_reporting_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_rssi_reporting();
     test_ranging_round_usage_validation_rejects_unsupported_values();

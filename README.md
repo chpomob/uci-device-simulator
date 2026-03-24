@@ -122,6 +122,12 @@ documented low four report bits (`TOF`, `AoA azimuth`, `AoA elevation`,
 `AOA_RESULT_REQ` now uses the same validation seam: only the documented enum
 values `0..3` are accepted, while unsupported higher values are rejected with
 `INVALID_PARAM`, are not stored, and are also re-validated on `SESSION_START`.
+`RANGING_TIME_STRUCT` now uses that same seam conservatively: the default
+profile accepts only `0x00` and `0x01`, because the local Qorvo/Cherry sources
+only prove block-based scheduling as the concrete non-RFU time-structure
+concept. The simulator intentionally does not invent standalone scheduler
+behavior from this parameter yet; that is deferred until `SLOTS_PER_RR`,
+`BLOCK_STRIDE_LENGTH`, and `SCHEDULED_MODE` are modeled together.
 `RSSI_REPORTING` now uses that same profile-driven validation seam: only the
 documented `0..1` on/off values are accepted, while unsupported higher values
 are rejected with `INVALID_PARAM`, are not stored, and are also re-validated

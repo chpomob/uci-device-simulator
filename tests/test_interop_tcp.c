@@ -3349,6 +3349,19 @@ static void test_control_edge_cases_over_tcp(void) {
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_generic_error_invalid_param_ntf.hex",
                           "dtp missing session generic error ntf");
 
+    ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_ranging_time_struct_invalid_cmd.hex",
+                                 request,
+                                 sizeof(request),
+                                 &request_len) == 0,
+                "load ranging_time_struct invalid");
+    ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, "write ranging_time_struct invalid");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_ranging_time_struct_invalid_rsp.hex",
+                          "ranging_time_struct invalid rsp");
+    assert_fixture_packet(fd,
+                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_generic_error_invalid_param_ntf.hex",
+                          "ranging_time_struct invalid generic error ntf");
+
     ASSERT_TRUE(load_hex_fixture("/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_logical_link_close_short_cmd.hex",
                                  request,
                                  sizeof(request),

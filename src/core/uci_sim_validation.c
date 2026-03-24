@@ -234,6 +234,24 @@ static int validate_preamble_duration(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_sts_length(const uci_sim_profile_t* profile,
+                               uint8_t sts_length,
+                               uci_sim_validation_result_t* result) {
+    if (!profile) {
+        return 0;
+    }
+
+    if (sts_length > profile->supported_sts_length_max) {
+        set_invalid_result(result,
+                           profile->invalid_sts_length_status,
+                           profile->invalid_sts_length_reason_code,
+                           profile->invalid_sts_length_surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int validate_link_layer_mode(const uci_sim_profile_t* profile,
                                     uint8_t link_layer_mode,
                                     uci_sim_validation_result_t* result) {
@@ -1275,6 +1293,18 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
             }
             return validate_preamble_duration(profile, value[0], result);
         }
+        if (config_id == UCI_APP_CONFIG_STS_LENGTH) {
+            if (!value || value_len != 1) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   profile ? profile->invalid_sts_length_reason_code
+                                           : UCI_SESSION_REASON_ERROR_INVALID_STS_LENGTH,
+                                   profile ? profile->invalid_sts_length_surface
+                                           : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+            return validate_sts_length(profile, value[0], result);
+        }
         if (config_id == UCI_APP_CONFIG_LINK_LAYER_MODE) {
             if (!value || value_len != 1) {
                 set_invalid_result(result,
@@ -1449,6 +1479,8 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
     uint8_t psdu_data_rate_len = 0;
     uint8_t preamble_duration = 0;
     uint8_t preamble_duration_len = 0;
+    uint8_t sts_length = 0;
+    uint8_t sts_length_len = 0;
     uint8_t link_layer_mode = 0;
     uint8_t link_layer_mode_len = 0;
     uint8_t slot_duration[2] = { 0x00, 0x00 };
@@ -1610,6 +1642,21 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
         return -1;
     }
     if (validate_preamble_duration(profile, preamble_duration, result) != 0) {
+        return -1;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_STS_LENGTH,
+                                   &sts_length, &sts_length_len) != 0 ||
+        sts_length_len != 1U) {
+        set_invalid_result(result,
+                           profile ? profile->invalid_sts_length_status : UCI_STATUS_INVALID_PARAM,
+                           profile ? profile->invalid_sts_length_reason_code
+                                   : UCI_SESSION_REASON_ERROR_INVALID_STS_LENGTH,
+                           profile ? profile->invalid_sts_length_surface
+                                   : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+        return -1;
+    }
+    if (validate_sts_length(profile, sts_length, result) != 0) {
         return -1;
     }
 

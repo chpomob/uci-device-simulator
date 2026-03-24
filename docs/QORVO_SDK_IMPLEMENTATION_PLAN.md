@@ -163,6 +163,8 @@ Current progress on this layer:
 - `SCHEDULED_MODE` now uses the validation layer with a profile-owned support
   mask; the default profile accepts only `TIME_SCHEDULED` until contention and
   hybrid scheduling are implemented as real engine behavior
+- `STS_LENGTH` now uses the validation side of the security seam through the
+  Cherry/FIra `0..2` enum and is re-validated on `SESSION_START`
 - `SLOT_DURATION` now uses the same capability-driven validation seam through
   the profile minimum supported slot-duration setting
 

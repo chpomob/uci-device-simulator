@@ -172,6 +172,10 @@ re-validated on `SESSION_START` together with the security material those modes
 depend on (`STATIC_STS_IV` for static STS and `SESSION_KEY` for provisioned
 STS, plus `SUBSESSION_KEY` for provisioned responder-specific sub-session
 mode).
+`STS_LENGTH` now uses that same security validation seam too: only the
+documented Cherry/FIra values `0x00..0x02` are accepted, while RFU values are
+rejected with `INVALID_PARAM`, are not stored, and are also re-validated on
+`SESSION_START`.
 `DEVICE_TYPE` now also uses the validation seam for the classic FiRa role
 model: only `CONTROLEE (0x00)` and `CONTROLLER (0x01)` are accepted in the
 default profile, and `SESSION_START` re-validates the classic pairing with

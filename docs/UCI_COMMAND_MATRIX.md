@@ -138,7 +138,7 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x32` | `MAX_NUMBER_OF_MEASUREMENTS` | `supported` | Default-profile stored/retrievable; `0` means unlimited, finite values now stop the ranging stream with `SESSION_STATUS_NTF(MAX_NUMBER_OF_MEASUREMENTS_REACHED)` |
 | `0x33` | `UL_TDOA_TX_INTERVAL` | `supported` | Default-profile stored/retrievable |
 | `0x34` | `UL_TDOA_RANDOM_WINDOW` | `supported` | Default-profile stored/retrievable |
-| `0x35` | `STS_LENGTH` | `supported` | Default-profile stored/retrievable |
+| `0x35` | `STS_LENGTH` | `supported` | Default-profile stored/retrievable and validated against the Cherry/FIra `0..2` enum |
 | `0x36` | `SUSPEND_RANGING_ROUNDS` | `supported` | Default-profile stored/retrievable |
 | `0x37` | `UL_TDOA_NTF_REPORT_CONFIG` | `supported` | Default-profile stored/retrievable |
 | `0x38` | `UL_TDOA_DEVICE_ID` | `supported` | Default-profile stored/retrievable |

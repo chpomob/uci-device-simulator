@@ -145,6 +145,10 @@ source-backed:
 
 This keeps STS behavior in the validation/policy layer until there is stronger
 source evidence for packet-level crypto/runtime effects.
+- `STS_LENGTH` now uses that same seam too:
+  - only the documented FiRa/Cherry enum values (`0x00..0x02`) are accepted
+  - invalid enum values are rejected with `ERROR_INVALID_STS_LENGTH`
+  - `SESSION_START` re-validates the stored value before transition
 - `DEVICE_TYPE` now uses that same seam for the classic FiRa topology model:
   only `CONTROLEE (0x00)` and `CONTROLLER (0x01)` are accepted in the default
   profile, and `SESSION_START` re-validates the classic `DEVICE_TYPE` /

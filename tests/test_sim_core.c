@@ -1425,6 +1425,95 @@ static void test_session_start_rejects_invalid_preamble_duration(void) {
     PASS();
 }
 
+static void test_sts_length_validation_rejects_unsupported_values(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t sts_length = 0x00;
+    uint8_t original_sts_length = 0x00;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "sts length validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "sts length validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_STS_LENGTH, &sts_length, &value_len) == 0,
+                "sts length validation fetch original value failed");
+    ASSERT_EQ_U8(1, value_len, "sts length validation original value len");
+    original_sts_length = sts_length;
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_STS_LENGTH;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x03;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "unsupported sts length should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "sts length invalid status");
+    ASSERT_TRUE(result.has_notification, "sts length invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "sts length invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "sts length invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_STS_LENGTH, &sts_length, &value_len) == 0,
+                "sts length validation refetch original value failed");
+    ASSERT_EQ_U8(original_sts_length, sts_length,
+                 "invalid sts length should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_sts_length(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_sts_length = 0x03;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "sts length start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "sts length start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_STS_LENGTH,
+                                             &invalid_sts_length,
+                                             sizeof(invalid_sts_length)) == 0,
+                "sts length start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid sts length should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid sts length status");
+    ASSERT_TRUE(result.has_notification, "start invalid sts length should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid sts length generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid sts length generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid sts length should preserve session state");
+    PASS();
+}
+
 static void test_link_layer_mode_validation_rejects_unsupported_values(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -5846,6 +5935,8 @@ int main(void) {
     test_session_start_rejects_invalid_psdu_data_rate();
     test_preamble_duration_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_preamble_duration();
+    test_sts_length_validation_rejects_unsupported_values();
+    test_session_start_rejects_invalid_sts_length();
     test_link_layer_mode_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_link_layer_mode();
     test_ranging_time_struct_validation_rejects_unsupported_values();

@@ -1116,7 +1116,7 @@ static int handle_session_control(uci_sim_device_t* device, const uci_sim_packet
     if (request->oid == UCI_SESSION_START) {
         uci_sim_validation_result_t validation;
 
-        if (uci_sim_validate_session_start(profile, session, &validation) != 0) {
+        if (uci_sim_validate_session_start(profile, device, session, &validation) != 0) {
             if (validation.surface == UCI_SIM_INVALID_CONFIG_SURFACE_SESSION_STATUS) {
                 make_status_response(request, result, UCI_STATUS_OK);
                 emit_session_status_ntf_with_reason(device,

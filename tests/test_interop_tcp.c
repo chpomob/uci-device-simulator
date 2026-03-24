@@ -146,60 +146,156 @@ static int set_socket_timeout_ms(int fd, int timeout_ms) {
 
 static void assert_fixture_packet(int fd, const char* fixture_path, const char* step_name);
 
-static void set_ranging_interval_ms(int fd, uint32_t interval_ms, const char* step_name) {
+static void set_app_config_single_tlv(int fd,
+                                      uint32_t session_id,
+                                      uint8_t config_id,
+                                      const uint8_t* value,
+                                      uint8_t value_len,
+                                      const char* step_name) {
     uint8_t request[UCI_SIM_MAX_PACKET] = {0};
     char message[160];
 
     request[0] = 0x21;
     request[1] = 0x03;
     request[2] = 0x00;
-    request[3] = 0x0B;
-    request[4] = 0x78;
-    request[5] = 0x56;
-    request[6] = 0x34;
-    request[7] = 0x12;
+    request[3] = (uint8_t)(7U + value_len);
+    request[4] = (uint8_t)(session_id & 0xFFU);
+    request[5] = (uint8_t)((session_id >> 8) & 0xFFU);
+    request[6] = (uint8_t)((session_id >> 16) & 0xFFU);
+    request[7] = (uint8_t)((session_id >> 24) & 0xFFU);
     request[8] = 0x01;
-    request[9] = UCI_APP_CONFIG_RANGING_INTERVAL;
-    request[10] = 0x04;
-    request[11] = (uint8_t)(interval_ms & 0xFFU);
-    request[12] = (uint8_t)((interval_ms >> 8) & 0xFFU);
-    request[13] = (uint8_t)((interval_ms >> 16) & 0xFFU);
-    request[14] = (uint8_t)((interval_ms >> 24) & 0xFFU);
+    request[9] = config_id;
+    request[10] = value_len;
+    memcpy(&request[11], value, value_len);
 
-    snprintf(message, sizeof(message), "%s write ranging interval", step_name);
-    ASSERT_TRUE(write_full(fd, request, 15) == 15, message);
-    snprintf(message, sizeof(message), "%s ranging interval rsp", step_name);
+    snprintf(message, sizeof(message), "%s write app config", step_name);
+    ASSERT_TRUE(write_full(fd, request, 11 + value_len) == (ssize_t)(11 + value_len), message);
+    snprintf(message, sizeof(message), "%s set app config rsp", step_name);
     assert_fixture_packet(fd,
                           "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
                           message);
 }
 
+static void set_ranging_interval_ms_for_session(int fd,
+                                                uint32_t session_id,
+                                                uint32_t interval_ms,
+                                                const char* step_name) {
+    uint8_t value[4];
+
+    value[0] = (uint8_t)(interval_ms & 0xFFU);
+    value[1] = (uint8_t)((interval_ms >> 8) & 0xFFU);
+    value[2] = (uint8_t)((interval_ms >> 16) & 0xFFU);
+    value[3] = (uint8_t)((interval_ms >> 24) & 0xFFU);
+    set_app_config_single_tlv(fd, session_id, UCI_APP_CONFIG_RANGING_INTERVAL, value, 4, step_name);
+}
+
+static void set_ranging_interval_ms(int fd, uint32_t interval_ms, const char* step_name) {
+    set_ranging_interval_ms_for_session(fd, 0x12345678U, interval_ms, step_name);
+}
+
 static void set_max_number_of_measurements(int fd,
                                            uint16_t max_number_of_measurements,
                                            const char* step_name) {
+    uint8_t value[2];
+
+    value[0] = (uint8_t)(max_number_of_measurements & 0xFFU);
+    value[1] = (uint8_t)((max_number_of_measurements >> 8) & 0xFFU);
+    set_app_config_single_tlv(fd,
+                              0x12345678U,
+                              UCI_APP_CONFIG_MAX_NUMBER_OF_MEASUREMENTS,
+                              value,
+                              2,
+                              step_name);
+}
+
+static void set_session_time_base(int fd,
+                                  uint32_t session_id,
+                                  uint8_t flags,
+                                  uint32_t reference_session_id,
+                                  uint32_t offset_us,
+                                  const char* step_name) {
+    uint8_t value[9];
+
+    value[0] = flags;
+    value[1] = (uint8_t)(reference_session_id & 0xFFU);
+    value[2] = (uint8_t)((reference_session_id >> 8) & 0xFFU);
+    value[3] = (uint8_t)((reference_session_id >> 16) & 0xFFU);
+    value[4] = (uint8_t)((reference_session_id >> 24) & 0xFFU);
+    value[5] = (uint8_t)(offset_us & 0xFFU);
+    value[6] = (uint8_t)((offset_us >> 8) & 0xFFU);
+    value[7] = (uint8_t)((offset_us >> 16) & 0xFFU);
+    value[8] = (uint8_t)((offset_us >> 24) & 0xFFU);
+    set_app_config_single_tlv(fd, session_id, UCI_APP_CONFIG_SESSION_TIME_BASE, value, 9, step_name);
+}
+
+static void init_session_dynamic(int fd, uint32_t session_id, const char* step_name) {
     uint8_t request[UCI_SIM_MAX_PACKET] = {0};
+    uint8_t packet[UCI_SIM_MAX_PACKET];
+    uci_sim_packet_t parsed;
+    size_t packet_len = 0;
     char message[160];
 
     request[0] = 0x21;
-    request[1] = 0x03;
+    request[1] = 0x00;
     request[2] = 0x00;
-    request[3] = 0x09;
-    request[4] = 0x78;
-    request[5] = 0x56;
-    request[6] = 0x34;
-    request[7] = 0x12;
-    request[8] = 0x01;
-    request[9] = UCI_APP_CONFIG_MAX_NUMBER_OF_MEASUREMENTS;
-    request[10] = 0x02;
-    request[11] = (uint8_t)(max_number_of_measurements & 0xFFU);
-    request[12] = (uint8_t)((max_number_of_measurements >> 8) & 0xFFU);
+    request[3] = 0x05;
+    request[4] = (uint8_t)(session_id & 0xFFU);
+    request[5] = (uint8_t)((session_id >> 8) & 0xFFU);
+    request[6] = (uint8_t)((session_id >> 16) & 0xFFU);
+    request[7] = (uint8_t)((session_id >> 24) & 0xFFU);
+    request[8] = UCI_SESSION_TYPE_RANGING;
 
-    snprintf(message, sizeof(message), "%s write max measurements", step_name);
-    ASSERT_TRUE(write_full(fd, request, 13) == 13, message);
-    snprintf(message, sizeof(message), "%s max measurements rsp", step_name);
-    assert_fixture_packet(fd,
-                          "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
-                          message);
+    snprintf(message, sizeof(message), "%s write session init", step_name);
+    ASSERT_TRUE(write_full(fd, request, 9) == 9, message);
+    snprintf(message, sizeof(message), "%s read session init rsp", step_name);
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, message);
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse dynamic init rsp");
+    ASSERT_EQ_INT(UCI_GID_SESSION_CONFIG, parsed.gid, "dynamic init rsp gid");
+    ASSERT_EQ_INT(UCI_SESSION_INIT, parsed.oid, "dynamic init rsp oid");
+    ASSERT_EQ_INT(UCI_STATUS_OK, parsed.payload[0], "dynamic init rsp status");
+    ASSERT_EQ_INT((int)session_id, (int)read_u32_le(&parsed.payload[1]), "dynamic init rsp session id");
+
+    snprintf(message, sizeof(message), "%s read session init ntf", step_name);
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, message);
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse dynamic init ntf");
+    ASSERT_EQ_INT(UCI_GID_SESSION_CONFIG, parsed.gid, "dynamic init ntf gid");
+    ASSERT_EQ_INT(UCI_SESSION_STATUS_NTF, parsed.oid, "dynamic init ntf oid");
+    ASSERT_EQ_INT((int)session_id, (int)read_u32_le(parsed.payload), "dynamic init ntf session id");
+    ASSERT_EQ_INT(UCI_SESSION_STATE_INIT, parsed.payload[4], "dynamic init ntf state");
+}
+
+static void start_session_dynamic(int fd, uint32_t session_id, const char* step_name) {
+    uint8_t request[UCI_SIM_MAX_PACKET] = {0};
+    uint8_t packet[UCI_SIM_MAX_PACKET];
+    uci_sim_packet_t parsed;
+    size_t packet_len = 0;
+    char message[160];
+
+    request[0] = 0x22;
+    request[1] = 0x00;
+    request[2] = 0x00;
+    request[3] = 0x04;
+    request[4] = (uint8_t)(session_id & 0xFFU);
+    request[5] = (uint8_t)((session_id >> 8) & 0xFFU);
+    request[6] = (uint8_t)((session_id >> 16) & 0xFFU);
+    request[7] = (uint8_t)((session_id >> 24) & 0xFFU);
+
+    snprintf(message, sizeof(message), "%s write session start", step_name);
+    ASSERT_TRUE(write_full(fd, request, 8) == 8, message);
+    snprintf(message, sizeof(message), "%s read session start rsp", step_name);
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, message);
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse dynamic start rsp");
+    ASSERT_EQ_INT(UCI_GID_SESSION_CONTROL, parsed.gid, "dynamic start rsp gid");
+    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "dynamic start rsp oid");
+    ASSERT_EQ_INT(UCI_STATUS_OK, parsed.payload[0], "dynamic start rsp status");
+
+    snprintf(message, sizeof(message), "%s read session start ntf", step_name);
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, message);
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse dynamic start ntf");
+    ASSERT_EQ_INT(UCI_GID_SESSION_CONFIG, parsed.gid, "dynamic start ntf gid");
+    ASSERT_EQ_INT(UCI_SESSION_STATUS_NTF, parsed.oid, "dynamic start ntf oid");
+    ASSERT_EQ_INT((int)session_id, (int)read_u32_le(parsed.payload), "dynamic start ntf session id");
+    ASSERT_EQ_INT(UCI_SESSION_STATE_ACTIVE, parsed.payload[4], "dynamic start ntf state");
 }
 
 static int start_server(test_server_t* server) {
@@ -2124,6 +2220,53 @@ static void test_ranging_stream_max_number_of_measurements_over_tcp(void) {
     PASS();
 }
 
+static void test_session_time_base_reference_alignment_over_tcp(void) {
+    test_server_t server = {0};
+    uint8_t packet[UCI_SIM_MAX_PACKET];
+    uci_sim_packet_t parsed;
+    size_t packet_len = 0;
+    int fd = -1;
+    const uint32_t reference_session_id = 0x11111111U;
+    const uint32_t dependent_session_id = 0x22222222U;
+
+    server.scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
+    ASSERT_TRUE(start_server(&server) == 0, "start session_time_base server");
+    fd = connect_with_retry(server.port);
+    ASSERT_TRUE(fd >= 0, "connect session_time_base server");
+    ASSERT_TRUE(set_socket_timeout_ms(fd, 500) == 0, "set session_time_base timeout");
+
+    init_session_dynamic(fd, reference_session_id, "session_time_base ref");
+    init_session_dynamic(fd, dependent_session_id, "session_time_base dep");
+    set_ranging_interval_ms_for_session(fd, reference_session_id, 50U, "session_time_base ref");
+    set_ranging_interval_ms_for_session(fd, dependent_session_id, 50U, "session_time_base dep");
+    set_session_time_base(fd,
+                          dependent_session_id,
+                          0x01U,
+                          reference_session_id,
+                          20000U,
+                          "session_time_base dep");
+    start_session_dynamic(fd, reference_session_id, "session_time_base ref");
+    start_session_dynamic(fd, dependent_session_id, "session_time_base dep");
+
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_time_base reference range");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse session_time_base reference range");
+    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "session_time_base first range oid");
+    ASSERT_EQ_INT((int)reference_session_id,
+                  (int)read_u32_le(&parsed.payload[4]),
+                  "session_time_base first range should be reference session");
+
+    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_time_base dependent range");
+    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse session_time_base dependent range");
+    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "session_time_base second range oid");
+    ASSERT_EQ_INT((int)dependent_session_id,
+                  (int)read_u32_le(&parsed.payload[4]),
+                  "session_time_base second range should be dependent session");
+
+    close(fd);
+    stop_server(&server);
+    PASS();
+}
+
 static void test_ranging_interval_validation_over_tcp(void) {
     test_server_t server = {0};
     uint8_t request[UCI_SIM_MAX_PACKET];
@@ -3532,6 +3675,7 @@ int main(void) {
     test_ranging_stream_rssi_reporting_over_tcp();
     test_ranging_stream_ranging_interval_over_tcp();
     test_ranging_stream_max_number_of_measurements_over_tcp();
+    test_session_time_base_reference_alignment_over_tcp();
     test_ranging_interval_validation_over_tcp();
     test_result_report_config_validation_over_tcp();
     test_number_of_controlees_validation_over_tcp();

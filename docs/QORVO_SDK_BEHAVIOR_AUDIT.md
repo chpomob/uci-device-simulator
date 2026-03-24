@@ -1132,10 +1132,28 @@ Simulator implication:
   sessions in the engine clock domain
 - this belongs to scheduler/state-machine work, not to packet-format work
 
-Current gap:
+Current implementation status:
 
-- the simulator stores the value but does not use it to align or constrain
-  session timing
+- the simulator no longer treats this as storage-only
+- the default profile keeps the value disabled by default and parses the
+  9-byte structure into enable / continue / resync flags, reference session
+  handle, and offset in microseconds
+- scheduler behavior is intentionally conservative and deterministic:
+  - first dependent ranging event aligns to the active reference session’s
+    next pending range event plus offset
+  - `resync` allows an already-active dependent session to be rescheduled when
+    the reference session starts later
+  - clearing `continue` causes the dependent session to drop back to `IDLE`
+    with `ERROR_REF_UWB_SESSION_LOST` if the reference session stops
+- start-time validation currently enforces only the source-backed relationship
+  checks: legal flag bits, existing reference session, no self-reference, and
+  active-reference requirement when `continue` is clear
+
+Remaining gap:
+
+- the simulator still does not model the stronger firmware-specific checks
+  implied by FiRa reason codes such as ranging-duration mismatch or invalid
+  offset time
 
 ### `SESSION_KEY` (`0x45`) And `SUBSESSION_KEY` (`0x46`)
 

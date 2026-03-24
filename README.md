@@ -119,6 +119,21 @@ also re-validates the effective session interval before entering `ACTIVE`.
 range-data production once the measurement count is reached, transitions the
 session back to `IDLE`, and emits `SESSION_STATUS_NTF` with FiRa reason
 `MAX_NUMBER_OF_MEASUREMENTS_REACHED`.
+`SESSION_TIME_BASE` now uses the same scheduler seam in a deliberately
+conservative form. The stored 9-byte structure is parsed into enable /
+continue / resync flags, a reference session handle, and an offset in
+microseconds. When enabled, a dependent session’s first range event aligns to
+the active reference session’s next pending range event plus the configured
+offset; the `resync` flag lets a later reference start pull an already-active
+dependent session onto that new schedule, and disabling `continue` causes the
+dependent session to return to `IDLE` with
+`ERROR_REF_UWB_SESSION_LOST` if the reference session stops. The default
+profile keeps `session_time_base` disabled by default and currently validates
+only the proven relationship checks: 9-byte shape, legal flag bits, no
+self-reference, existing reference session, and active-reference requirement
+when `continue` is clear. More advanced firmware-specific checks such as
+ranging-duration mismatch and invalid-offset rejection are still deferred
+until the local Qorvo evidence is stronger.
 `RESULT_REPORT_CONFIG` remains the measurement-field policy for the current
 TWR path, and the default Qorvo-like profile now also validates it: only the
 documented low four report bits (`TOF`, `AoA azimuth`, `AoA elevation`,

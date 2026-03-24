@@ -96,6 +96,14 @@ controls which result fields remain meaningful:
   enforce a deterministic measurement budget: `0` means unlimited, while a
   finite budget stops further range production, returns the session to `IDLE`,
   and emits the matching FiRa session-status reason
+- `SESSION_TIME_BASE` now also uses the scheduler seam in a typed form
+  instead of raw packet bytes: the simulator parses enable / continue /
+  resync flags, reference session id, and offset microseconds into an
+  internal relationship model, aligns a dependent session’s first range event
+  to the reference session’s next pending range event plus offset, optionally
+  resyncs active dependents when the reference session starts, and tears down
+  non-continuing dependents with `ERROR_REF_UWB_SESSION_LOST` when the
+  reference session stops
 
 `RANGING_ROUND_USAGE` now also participates in that seam, but with an explicit
 profile boundary. The default Qorvo-like profile only accepts the FiRa

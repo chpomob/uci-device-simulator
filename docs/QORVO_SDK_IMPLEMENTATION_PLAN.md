@@ -408,27 +408,35 @@ Status:
 
 ### Phase 7: `SESSION_TIME_BASE` Architecture
 
-Tasks:
+Status:
 
-1. Add internal representation for time-base relationship:
+- Implemented in the default profile and `ranging_stream` scenario with the
+  intentionally conservative scheduler model described in the audit.
+
+Implemented behavior:
+
+1. Internal typed representation now exists for:
    - enabled
    - continue behavior
    - resync behavior
    - reference session
    - offset
-2. Connect this to scheduler policy, not packet builders.
-3. Initially support only safe deterministic semantics:
-   - reference session existence validation
-   - stored dependency
-   - scheduler-visible offset model
+2. The scheduler, not packet builders, consumes that representation.
+3. Current deterministic semantics are in place:
+   - start-time reference validation
+   - first-event alignment to the active reference session’s next pending
+     range event plus offset
+   - optional resync of an already-active dependent when the reference session
+     starts later
+   - non-continuing dependents return to `IDLE` with
+     `ERROR_REF_UWB_SESSION_LOST` when the reference session stops
 
-Do not start with full multi-session realism.
+Still deferred:
 
-Acceptance criteria:
-
-- reference-session validation exists
-- engine timing can observe the configured relationship
-- tests are deterministic under manual clock control
+- stronger firmware-specific checks such as ranging-duration mismatch and
+  invalid offset-time rejection
+- full multi-session realism beyond the deterministic relationship model used
+  by the current tests
 
 ## Deferred Phases
 

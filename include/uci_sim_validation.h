@@ -18,6 +18,7 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
                                         uint8_t value_len,
                                         uci_sim_validation_result_t* result);
 int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
+                                   const uci_sim_device_t* device,
                                    const uci_sim_session_t* session,
                                    uci_sim_validation_result_t* result);
 

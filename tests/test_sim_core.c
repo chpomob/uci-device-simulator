@@ -979,6 +979,107 @@ static void test_session_start_rejects_invalid_preamble_code_index(void) {
     PASS();
 }
 
+static void test_sfd_id_validation_rejects_unsupported_values(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t sfd_id = 0x00;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "sfd validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "sfd validation session lookup failed");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_PRF_MODE;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set hprf prf mode for sfd failed");
+
+    request.payload[5] = UCI_APP_CONFIG_SFD_ID;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set valid hprf sfd failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_SFD_ID, &sfd_id, &value_len) == 0,
+                "sfd validation fetch valid stored value failed");
+    ASSERT_EQ_U8(1, value_len, "sfd validation stored value len");
+    ASSERT_EQ_U8(0x01, sfd_id, "valid sfd should be stored");
+
+    request.payload[7] = 0x00;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "unsupported sfd id should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "sfd invalid status");
+    ASSERT_TRUE(result.has_notification, "sfd invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "sfd invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "sfd invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_SFD_ID, &sfd_id, &value_len) == 0,
+                "sfd validation refetch stored value failed");
+    ASSERT_EQ_U8(0x01, sfd_id,
+                 "invalid sfd id should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_sfd_id(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t hprf_mode = 0x01;
+    const uint8_t invalid_sfd_id = 0x00;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "sfd start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "sfd start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_PRF_MODE,
+                                             &hprf_mode,
+                                             sizeof(hprf_mode)) == 0,
+                "sfd start validation prf preload failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_SFD_ID,
+                                             &invalid_sfd_id,
+                                             sizeof(invalid_sfd_id)) == 0,
+                "sfd start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid sfd id should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid sfd status");
+    ASSERT_TRUE(result.has_notification, "start invalid sfd should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid sfd generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid sfd generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid sfd should preserve session state");
+    PASS();
+}
+
 static void test_rssi_reporting_validation_rejects_unsupported_values(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -2857,7 +2958,7 @@ static void test_session_app_config_storage(void) {
 
     request.payload[5] = 0x15;
     request.payload[6] = 1;
-    request.payload[7] = 0x01;
+    request.payload[7] = 0x02;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set sfd id app config failed");
 
     request.payload[5] = 0x16;
@@ -3334,7 +3435,7 @@ static void test_session_app_config_storage(void) {
                                              (const uint8_t[]){ 0x0C }, 1),
                 "get extended app config missing preamble code index");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x15,
-                                             (const uint8_t[]){ 0x01 }, 1),
+                                             (const uint8_t[]){ 0x02 }, 1),
                 "get extended app config missing sfd id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x16,
                                              (const uint8_t[]){ 0x02 }, 1),
@@ -3490,7 +3591,7 @@ static void test_session_app_config_storage(void) {
                                              (const uint8_t[]){ 0x0C }, 1),
                 "get all app config missing preamble code index");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x15,
-                                             (const uint8_t[]){ 0x01 }, 1),
+                                             (const uint8_t[]){ 0x02 }, 1),
                 "get all app config missing sfd id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x16,
                                              (const uint8_t[]){ 0x02 }, 1),
@@ -4325,6 +4426,8 @@ int main(void) {
     test_session_start_rejects_invalid_prf_mode();
     test_preamble_code_index_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_preamble_code_index();
+    test_sfd_id_validation_rejects_unsupported_values();
+    test_session_start_rejects_invalid_sfd_id();
     test_rssi_reporting_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_rssi_reporting();
     test_ranging_round_usage_validation_rejects_unsupported_values();

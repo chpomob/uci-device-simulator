@@ -147,6 +147,34 @@ static int validate_preamble_code_index(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_sfd_id(const uci_sim_profile_t* profile,
+                           uint8_t sfd_id,
+                           uint8_t prf_mode,
+                           uci_sim_validation_result_t* result) {
+    uint8_t allowed_mask;
+
+    if (!profile) {
+        return 0;
+    }
+
+    if (validate_prf_mode(profile, prf_mode, result) != 0) {
+        return -1;
+    }
+
+    allowed_mask = (prf_mode == 0U) ? profile->supported_bprf_sfd_id_mask
+                                    : profile->supported_hprf_sfd_id_mask;
+
+    if (sfd_id >= 8U || (allowed_mask & (uint8_t)(1U << sfd_id)) == 0U) {
+        set_invalid_result(result,
+                           profile->invalid_sfd_id_status,
+                           profile->invalid_sfd_id_reason_code,
+                           profile->invalid_sfd_id_surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int validate_rssi_reporting(const uci_sim_profile_t* profile,
                                    uint8_t rssi_reporting,
                                    uci_sim_validation_result_t* result) {
@@ -720,6 +748,28 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
 
             return validate_preamble_code_index(profile, value[0], 0U, result);
         }
+        if (config_id == UCI_APP_CONFIG_SFD_ID) {
+            uint8_t prf_mode = 0U;
+            uint8_t prf_mode_len = 0U;
+
+            if (!value || value_len != 1) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   profile ? profile->invalid_sfd_id_reason_code
+                                           : UCI_SESSION_REASON_ERROR_INVALID_SFD_ID,
+                                   profile ? profile->invalid_sfd_id_surface
+                                           : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+
+            if (session &&
+                uci_sim_session_get_config(session, UCI_APP_CONFIG_PRF_MODE, &prf_mode, &prf_mode_len) == 0 &&
+                prf_mode_len == 1U) {
+                return validate_sfd_id(profile, value[0], prf_mode, result);
+            }
+
+            return validate_sfd_id(profile, value[0], 0U, result);
+        }
         if (config_id == UCI_APP_CONFIG_RSSI_REPORTING) {
             if (!value || value_len != 1) {
                 set_invalid_result(result,
@@ -770,6 +820,8 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
     uint8_t prf_mode_len = 0;
     uint8_t preamble_code_index = 0;
     uint8_t preamble_code_index_len = 0;
+    uint8_t sfd_id = 0;
+    uint8_t sfd_id_len = 0;
     uint8_t rssi_reporting;
     uint8_t ranging_round_usage;
     uint8_t channel_number = 0;
@@ -859,6 +911,20 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
         return -1;
     }
     if (validate_preamble_code_index(profile, preamble_code_index, prf_mode, result) != 0) {
+        return -1;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_SFD_ID, &sfd_id, &sfd_id_len) != 0 ||
+        sfd_id_len != 1U) {
+        set_invalid_result(result,
+                           profile ? profile->invalid_sfd_id_status : UCI_STATUS_INVALID_PARAM,
+                           profile ? profile->invalid_sfd_id_reason_code
+                                   : UCI_SESSION_REASON_ERROR_INVALID_SFD_ID,
+                           profile ? profile->invalid_sfd_id_surface
+                                   : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+        return -1;
+    }
+    if (validate_sfd_id(profile, sfd_id, prf_mode, result) != 0) {
         return -1;
     }
 

@@ -1168,6 +1168,94 @@ static void test_session_start_rejects_invalid_psdu_data_rate(void) {
     PASS();
 }
 
+static void test_preamble_duration_validation_rejects_unsupported_values(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t preamble_duration = 0x00;
+    uint8_t original_preamble_duration = 0x00;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "preamble duration validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "preamble duration validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_PREAMBLE_DURATION, &preamble_duration, &value_len) == 0,
+                "preamble duration validation fetch original value failed");
+    original_preamble_duration = preamble_duration;
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_PREAMBLE_DURATION;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x02;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "unsupported preamble duration should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "preamble duration invalid status");
+    ASSERT_TRUE(result.has_notification, "preamble duration invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "preamble duration invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "preamble duration invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_PREAMBLE_DURATION, &preamble_duration, &value_len) == 0,
+                "preamble duration validation refetch original value failed");
+    ASSERT_EQ_U8(original_preamble_duration, preamble_duration,
+                 "invalid preamble duration should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_preamble_duration(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_preamble_duration = 0x02;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "preamble duration start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "preamble duration start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_PREAMBLE_DURATION,
+                                             &invalid_preamble_duration,
+                                             sizeof(invalid_preamble_duration)) == 0,
+                "preamble duration start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid preamble duration should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid preamble duration status");
+    ASSERT_TRUE(result.has_notification, "start invalid preamble duration should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid preamble duration generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid preamble duration generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid preamble duration should preserve session state");
+    PASS();
+}
+
 static void test_rssi_reporting_validation_rejects_unsupported_values(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -3056,7 +3144,7 @@ static void test_session_app_config_storage(void) {
 
     request.payload[5] = 0x17;
     request.payload[6] = 1;
-    request.payload[7] = 0x02;
+    request.payload[7] = 0x01;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set preamble duration app config failed");
 
     request.payload[5] = 0x18;
@@ -3529,7 +3617,7 @@ static void test_session_app_config_storage(void) {
                                              (const uint8_t[]){ 0x02 }, 1),
                 "get extended app config missing psdu data rate");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x17,
-                                             (const uint8_t[]){ 0x02 }, 1),
+                                             (const uint8_t[]){ 0x01 }, 1),
                 "get extended app config missing preamble duration");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x18,
                                              (const uint8_t[]){ 0x01 }, 1),
@@ -3685,7 +3773,7 @@ static void test_session_app_config_storage(void) {
                                              (const uint8_t[]){ 0x02 }, 1),
                 "get all app config missing psdu data rate");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x17,
-                                             (const uint8_t[]){ 0x02 }, 1),
+                                             (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing preamble duration");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x18,
                                              (const uint8_t[]){ 0x01 }, 1),
@@ -4518,6 +4606,8 @@ int main(void) {
     test_session_start_rejects_invalid_sfd_id();
     test_psdu_data_rate_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_psdu_data_rate();
+    test_preamble_duration_validation_rejects_unsupported_values();
+    test_session_start_rejects_invalid_preamble_duration();
     test_rssi_reporting_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_rssi_reporting();
     test_ranging_round_usage_validation_rejects_unsupported_values();

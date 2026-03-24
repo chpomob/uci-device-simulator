@@ -70,6 +70,10 @@ typedef struct {
     uint8_t invalid_psdu_data_rate_status;
     uint8_t invalid_psdu_data_rate_reason_code;
     uint8_t invalid_psdu_data_rate_surface;
+    uint8_t supported_preamble_duration_max;
+    uint8_t invalid_preamble_duration_status;
+    uint8_t invalid_preamble_duration_reason_code;
+    uint8_t invalid_preamble_duration_surface;
     uint8_t supported_rssi_reporting_max;
     uint8_t invalid_rssi_reporting_status;
     uint8_t invalid_rssi_reporting_reason_code;

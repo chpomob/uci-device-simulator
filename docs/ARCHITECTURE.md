@@ -157,6 +157,11 @@ source evidence for packet-level crypto/runtime effects.
   - only the documented Cherry enum (`0..1`) is accepted
   - invalid values are rejected with `INVALID_PARAM`
   - `SESSION_START` rejects enabled rotation outside Dynamic/Provisioned `STS_CONFIG`
+- `NUMBER_OF_STS_SEGMENTS` now uses that same seam on a clearly-labeled
+  `strong_inference` basis:
+  - the default profile conservatively accepts `0..4`
+  - invalid values are rejected with `INVALID_PARAM`
+  - `SESSION_START` re-validates the stored value before transition
 - `DEVICE_TYPE` now uses that same seam for the classic FiRa topology model:
   only `CONTROLEE (0x00)` and `CONTROLLER (0x01)` are accepted in the default
   profile, and `SESSION_START` re-validates the classic `DEVICE_TYPE` /

@@ -180,6 +180,10 @@ rejected with `INVALID_PARAM`, are not stored, and are also re-validated on
 documented Cherry values `0..1` are accepted, while other values are rejected
 with `INVALID_PARAM`, are not stored, and `SESSION_START` also rejects enabled
 rotation outside Dynamic/Provisioned `STS_CONFIG`.
+`NUMBER_OF_STS_SEGMENTS` now uses that same security validation seam on a
+conservative local-Qorvo/Cherry basis: the default profile accepts `0..4`,
+rejects higher values with `INVALID_PARAM`, does not store invalid values, and
+re-validates the stored value on `SESSION_START`.
 `KEY_ROTATION_RATE` now uses that same security validation seam too: only the
 documented Cherry range `0..15` is accepted, while higher values are rejected
 with `INVALID_PARAM`, are not stored, and are also re-validated on

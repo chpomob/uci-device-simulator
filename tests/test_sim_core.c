@@ -1609,6 +1609,53 @@ static void test_key_rotation_validation_rejects_unsupported_values(void) {
     PASS();
 }
 
+static void test_number_of_sts_segments_validation_rejects_unsupported_values(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_number_of_sts_segments = 0x05;
+    uint8_t number_of_sts_segments = 0x00;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "number_of_sts_segments validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "number_of_sts_segments validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_NUMBER_OF_STS_SEGMENTS, &number_of_sts_segments, &value_len) == 0,
+                "number_of_sts_segments validation fetch original value failed");
+    ASSERT_EQ_U8(1, value_len, "number_of_sts_segments validation original value len");
+    ASSERT_EQ_U8(0x02, number_of_sts_segments, "number_of_sts_segments validation original value");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_NUMBER_OF_STS_SEGMENTS;
+    request.payload[6] = 0x01;
+    request.payload[7] = invalid_number_of_sts_segments;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "unsupported number_of_sts_segments should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "number_of_sts_segments invalid status");
+    ASSERT_TRUE(result.has_notification, "number_of_sts_segments invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "number_of_sts_segments invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "number_of_sts_segments invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_NUMBER_OF_STS_SEGMENTS, &number_of_sts_segments, &value_len) == 0,
+                "number_of_sts_segments validation refetch original value failed");
+    ASSERT_EQ_U8(0x02, number_of_sts_segments, "invalid number_of_sts_segments should not overwrite stored value");
+    PASS();
+}
+
 static void test_session_start_rejects_incompatible_key_rotation(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -1647,6 +1694,47 @@ static void test_session_start_rejects_incompatible_key_rotation(void) {
     ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start incompatible key rotation generic error oid");
     ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start incompatible key rotation generic error status");
     ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start incompatible key rotation should preserve session state");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_number_of_sts_segments(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_number_of_sts_segments = 0x05;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "number_of_sts_segments start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "number_of_sts_segments start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_NUMBER_OF_STS_SEGMENTS,
+                                             &invalid_number_of_sts_segments,
+                                             sizeof(invalid_number_of_sts_segments)) == 0,
+                "number_of_sts_segments start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid number_of_sts_segments should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid number_of_sts_segments status");
+    ASSERT_TRUE(result.has_notification, "start invalid number_of_sts_segments should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid number_of_sts_segments generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid number_of_sts_segments generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid number_of_sts_segments should preserve session state");
     PASS();
 }
 
@@ -6115,8 +6203,10 @@ int main(void) {
     test_sts_length_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_sts_length();
     test_key_rotation_validation_rejects_unsupported_values();
+    test_number_of_sts_segments_validation_rejects_unsupported_values();
     test_key_rotation_rate_validation_rejects_unsupported_values();
     test_session_start_rejects_incompatible_key_rotation();
+    test_session_start_rejects_invalid_number_of_sts_segments();
     test_session_start_rejects_invalid_key_rotation_rate();
     test_link_layer_mode_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_link_layer_mode();

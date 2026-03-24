@@ -169,6 +169,9 @@ Current progress on this layer:
   clearly-labeled `strong_inference` basis: local Qorvo/Cherry material treats
   it as a 1-byte field and repeatedly points to `0..4` as the practical range,
   without proving that higher values are universally RFU
+- `NUMBER_OF_STS_SEGMENTS` now uses that same security seam on that
+  `strong_inference` basis: the default profile conservatively accepts `0..4`
+  and re-validates the stored value on `SESSION_START`
 - `KEY_ROTATION_RATE` now uses that same security seam through the Cherry
   `0..15` range and is re-validated on `SESSION_START`
 - `SLOT_DURATION` now uses the same capability-driven validation seam through

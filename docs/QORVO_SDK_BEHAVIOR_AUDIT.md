@@ -540,7 +540,7 @@ codebase does not currently expose them as app-config parameters. That means:
 | `0x1C` | `TX_ADAPTIVE_PAYLOAD_POWER` | Adaptive TX power policy. | `weak_inference` | Lower priority; likely metadata. |
 | `0x1F` | `PRF_MODE` | Cherry documents valid values `0x00..0x02` for BPRF/HPRF modes. | `proven` | Validation now; deeper PHY/measurement coupling later. |
 | `0x20` | `CAP_SIZE_RANGE` | CAP size bounds. | `weak_inference` | Future scheduler/contention input. |
-| `0x22` | `SCHEDULED_MODE` | Scheduled mode enable/choice. | `strong_inference` | Scheduler mode input later. |
+| `0x22` | `SCHEDULED_MODE` | Scheduled mode enable/choice. Cherry exposes a 3-value enum (`CONTENTION_BASED`, `TIME_SCHEDULED`, `HYBRID`) but also documents hybrid as not supported, and all local FiRa setup flows force `TIME_SCHEDULED`. | `strong_inference` | Validate now; default profile should support only `TIME_SCHEDULED` until the simulator can model contention/hybrid behavior honestly. |
 
 ### 5. Security
 

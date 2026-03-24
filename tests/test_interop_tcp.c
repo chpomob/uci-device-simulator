@@ -813,6 +813,12 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
             "session_set_app_config_scheduled_mode"
         },
         {
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_scheduled_mode_invalid_cmd.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_scheduled_mode_invalid_rsp.hex",
+            "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/core_generic_error_invalid_param_ntf.hex",
+            "session_set_app_config_scheduled_mode_invalid"
+        },
+        {
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_key_rotation_cmd.hex",
             "/media/chpo/HDD-papa/gemini_test/uci_device_simulator/tests/fixtures/tcp/session_set_app_config_rsp.hex",
             NULL,

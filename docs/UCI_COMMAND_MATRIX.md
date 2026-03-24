@@ -93,7 +93,7 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x05` | `NUMBER_OF_CONTROLEES` | `supported` | Default-profile stored/retrievable |
 | `0x06` | `DEVICE_MAC_ADDRESS` | `supported` | Default-profile stored/retrievable |
 | `0x07` | `DST_MAC_ADDRESS` | `supported` | Default-profile stored/retrievable |
-| `0x08` | `SLOT_DURATION` | `supported` | Default-profile stored/retrievable |
+| `0x08` | `SLOT_DURATION` | `supported` | Default-profile stored/retrievable and validated against the profile minimum supported slot duration capability |
 | `0x09` | `RANGING_INTERVAL` | `supported` | Behavioral: stored as `RANGING_DURATION` in the current shell surface, drives emitted interval field and future ranging-stream timing |
 | `0x0A` | `STS_INDEX` | `supported` | Default-profile stored/retrievable |
 | `0x0B` | `MAC_FCS_TYPE` | `supported` | Default-profile stored/retrievable |

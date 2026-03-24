@@ -150,6 +150,12 @@ only prove block-based scheduling as the concrete non-RFU time-structure
 concept. The simulator intentionally does not invent standalone scheduler
 behavior from this parameter yet; that is deferred until `SLOTS_PER_RR`,
 `BLOCK_STRIDE_LENGTH`, and `SCHEDULED_MODE` are modeled together.
+`SLOT_DURATION` now uses that same seam too, but only for the source-backed
+capability rule the local stack actually exposes: the default profile rejects
+values below its minimum supported slot duration capability (`16 RSTU`),
+does not store them, and re-validates the effective value again on
+`SESSION_START`. Deeper scheduler math from `SLOT_DURATION` is still deferred
+until the local Qorvo evidence is stronger.
 `SCHEDULED_MODE` now uses that same seam too: the local Cherry surface exposes
 the full enum (`CONTENTION_BASED`, `TIME_SCHEDULED`, `HYBRID`), but the default
 simulator profile accepts only `TIME_SCHEDULED (0x01)` because that is the

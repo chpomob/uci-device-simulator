@@ -121,6 +121,10 @@ That layer owns the first profile-driven behavioral rejection rule:
   `INVALID_RANGE`
 - invalid values are not stored during `SET_APP_CONFIG`
 - `SESSION_START` re-validates the effective session interval before state
+- `SLOT_DURATION` now uses the same profile-owned capability pattern:
+  values below the default profile’s minimum supported slot duration are
+  rejected with `INVALID_PARAM`, not stored, and re-validated on
+  `SESSION_START`
 
 `STS_CONFIG` now also uses that validation seam as a security-mode selector.
 The current implementation intentionally keeps the runtime effect narrow and

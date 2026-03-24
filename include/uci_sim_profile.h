@@ -38,6 +38,10 @@ typedef struct {
     uint8_t invalid_ranging_interval_status;
     uint8_t invalid_ranging_interval_reason_code;
     uint8_t invalid_ranging_interval_surface;
+    uint16_t supported_min_slot_duration_rstu;
+    uint8_t invalid_slot_duration_status;
+    uint8_t invalid_slot_duration_reason_code;
+    uint8_t invalid_slot_duration_surface;
     uint8_t supported_result_report_config_mask;
     uint8_t invalid_result_report_config_status;
     uint8_t invalid_result_report_config_reason_code;

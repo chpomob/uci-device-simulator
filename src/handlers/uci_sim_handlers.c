@@ -836,6 +836,7 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
                 config_id == UCI_APP_CONFIG_MAC_ADDRESS_MODE ||
                 config_id == UCI_APP_CONFIG_STS_CONFIG ||
                 config_id == UCI_APP_CONFIG_RANGING_INTERVAL ||
+                config_id == UCI_APP_CONFIG_SLOT_DURATION ||
                 config_id == UCI_APP_CONFIG_RANGING_ROUND_USAGE ||
                 config_id == UCI_APP_CONFIG_AOA_RESULT_REQ ||
                 config_id == UCI_APP_CONFIG_PRF_MODE ||

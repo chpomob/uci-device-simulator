@@ -161,6 +161,7 @@ int uci_sim_session_get_session_time_base(const uci_sim_session_t* session,
                                           uci_sim_session_time_base_t* time_base);
 uint32_t uci_sim_session_get_ranging_interval_ms(const uci_sim_session_t* session,
                                                  const uci_sim_profile_t* profile);
+uint16_t uci_sim_session_get_slot_duration_rstu(const uci_sim_session_t* session);
 uint8_t uci_sim_session_get_slots_per_rr(const uci_sim_session_t* session);
 uint8_t uci_sim_session_get_responder_slot_index(const uci_sim_session_t* session);
 uint8_t uci_sim_session_get_aoa_result_req(const uci_sim_session_t* session);

@@ -496,7 +496,7 @@ codebase does not currently expose them as app-config parameters. That means:
 
 | ID | Parameter | Understanding | Confidence | Runtime Impact |
 | --- | --- | --- | --- | --- |
-| `0x08` | `SLOT_DURATION` | Slot duration in RSTU. | `strong_inference` | Future scheduler/time-grid input. |
+| `0x08` | `SLOT_DURATION` | Slot duration in RSTU. The local capability surface also exposes a minimum supported slot duration in RSTU. | `strong_inference` | Now validated against the profile minimum capability; deeper scheduler/time-grid impact remains future work. |
 | `0x09` | `RANGING_INTERVAL` | Interval between rangings. | `proven` | Should drive event scheduling. |
 | `0x1A` | `RANGING_TIME_STRUCT` | Time-structure selection. Local Qorvo/Cherry evidence only proves block-based scheduling as the concrete non-RFU capability concept; no local source proves standalone scheduler semantics for this app-config yet. | `strong_inference` | Validate conservatively now; defer scheduler behavior until handled with `SLOTS_PER_RR`, `BLOCK_STRIDE_LENGTH`, and `SCHEDULED_MODE`. |
 | `0x1B` | `SLOTS_PER_RR` | Slots per ranging round. Local Qorvo/Cherry evidence clearly makes it a real session-topology constraint, and the simulator now also uses it to keep emitted slot indices coherent with the configured responder slot. | `strong_inference` | Validate now; reject impossible responder-slot topology at session start; future scheduler/time-grid input. |

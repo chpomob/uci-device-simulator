@@ -155,6 +155,8 @@ Current progress on this layer:
 - `RANGING_INTERVAL` already drives emitted interval fields and engine timing
 - `SLOTS_PER_RR` now also crosses the seam indirectly by constraining valid
   slot topology and by sourcing the emitted slot index from session state
+- `SLOT_DURATION` now uses the validation side of that same seam through the
+  profile-owned minimum supported slot-duration capability
 - `BLOCK_STRIDE_LENGTH` now uses the validation side of the scheduler seam:
   it stays 1-byte wide, defaults to `0`, and non-zero values are only valid
   for block-based time-scheduled sessions

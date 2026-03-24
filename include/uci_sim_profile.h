@@ -54,6 +54,13 @@ typedef struct {
     uint8_t invalid_prf_mode_status;
     uint8_t invalid_prf_mode_reason_code;
     uint8_t invalid_prf_mode_surface;
+    uint8_t supported_bprf_preamble_code_index_min;
+    uint8_t supported_bprf_preamble_code_index_max;
+    uint8_t supported_hprf_preamble_code_index_min;
+    uint8_t supported_hprf_preamble_code_index_max;
+    uint8_t invalid_preamble_code_index_status;
+    uint8_t invalid_preamble_code_index_reason_code;
+    uint8_t invalid_preamble_code_index_surface;
     uint8_t supported_rssi_reporting_max;
     uint8_t invalid_rssi_reporting_status;
     uint8_t invalid_rssi_reporting_reason_code;

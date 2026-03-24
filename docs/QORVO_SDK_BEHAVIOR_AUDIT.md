@@ -531,7 +531,7 @@ codebase does not currently expose them as app-config parameters. That means:
 | `0x0B` | `MAC_FCS_TYPE` | FCS mode. | `strong_inference` | Mostly packet-format/PHY metadata. |
 | `0x0C` | `RANGING_ROUND_CONTROL` | Round control flags. | `weak_inference` | Likely session/control input later. |
 | `0x12` | `RFRAME_CONFIG` | RFrame configuration. | `strong_inference` | Payload/measurement interpretation input. |
-| `0x14` | `PREAMBLE_CODE_INDEX` | PHY preamble code. | `strong_inference` | PHY metadata; may affect capabilities/validation. |
+| `0x14` | `PREAMBLE_CODE_INDEX` | PHY preamble code. | `proven` | Cherry documents `9-12` for BPRF and `25-32` for HPRF; simulator should validate it against `PRF_MODE` and keep deeper PHY effects deferred. |
 | `0x15` | `SFD_ID` | Start-of-frame delimiter selection. | `strong_inference` | PHY metadata. |
 | `0x16` | `PSDU_DATA_RATE` | PSDU rate. | `strong_inference` | PHY metadata. |
 | `0x17` | `PREAMBLE_DURATION` | Preamble duration. | `strong_inference` | PHY metadata. |

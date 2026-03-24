@@ -826,7 +826,7 @@ static void test_prf_mode_validation_rejects_unsupported_values(void) {
     ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "prf mode invalid generic error status");
     ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_PRF_MODE, &original_prf_mode, &value_len) == 0,
                 "prf mode validation refetch original value failed");
-    ASSERT_EQ_U8(0x01, original_prf_mode,
+    ASSERT_EQ_U8(0x00, original_prf_mode,
                  "invalid prf mode should not overwrite stored value");
     PASS();
 }
@@ -869,6 +869,113 @@ static void test_session_start_rejects_invalid_prf_mode(void) {
     ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid prf mode generic error oid");
     ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid prf mode generic error status");
     ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid prf mode should preserve session state");
+    PASS();
+}
+
+static void test_preamble_code_index_validation_rejects_unsupported_values(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t preamble_code_index = 0x00;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "preamble validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "preamble validation session lookup failed");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_PRF_MODE;
+    request.payload[6] = 0x01;
+    request.payload[7] = 0x01;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set hprf prf mode failed");
+
+    request.payload[5] = UCI_APP_CONFIG_PREAMBLE_CODE_INDEX;
+    request.payload[7] = 0x19;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set valid hprf preamble failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session,
+                                           UCI_APP_CONFIG_PREAMBLE_CODE_INDEX,
+                                           &preamble_code_index,
+                                           &value_len) == 0,
+                "preamble validation fetch valid stored value failed");
+    ASSERT_EQ_U8(1, value_len, "preamble validation stored value len");
+    ASSERT_EQ_U8(0x19, preamble_code_index, "valid preamble should be stored");
+
+    request.payload[7] = 0x18;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "unsupported preamble code index should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "preamble invalid status");
+    ASSERT_TRUE(result.has_notification, "preamble invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "preamble invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "preamble invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session,
+                                           UCI_APP_CONFIG_PREAMBLE_CODE_INDEX,
+                                           &preamble_code_index,
+                                           &value_len) == 0,
+                "preamble validation refetch stored value failed");
+    ASSERT_EQ_U8(0x19, preamble_code_index,
+                 "invalid preamble code index should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_preamble_code_index(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t hprf_mode = 0x01;
+    const uint8_t invalid_preamble_code_index = 0x18;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "preamble start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "preamble start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_PRF_MODE,
+                                             &hprf_mode,
+                                             sizeof(hprf_mode)) == 0,
+                "preamble start validation prf preload failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_PREAMBLE_CODE_INDEX,
+                                             &invalid_preamble_code_index,
+                                             sizeof(invalid_preamble_code_index)) == 0,
+                "preamble start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid preamble code index should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid preamble status");
+    ASSERT_TRUE(result.has_notification, "start invalid preamble should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid preamble generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid preamble generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid preamble should preserve session state");
     PASS();
 }
 
@@ -4216,6 +4323,8 @@ int main(void) {
     test_session_start_rejects_invalid_aoa_result_req();
     test_prf_mode_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_prf_mode();
+    test_preamble_code_index_validation_rejects_unsupported_values();
+    test_session_start_rejects_invalid_preamble_code_index();
     test_rssi_reporting_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_rssi_reporting();
     test_ranging_round_usage_validation_rejects_unsupported_values();

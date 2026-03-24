@@ -86,6 +86,10 @@ typedef struct {
     uint8_t invalid_scheduled_mode_status;
     uint8_t invalid_scheduled_mode_reason_code;
     uint8_t invalid_scheduled_mode_surface;
+    uint8_t supported_max_block_stride_length;
+    uint8_t invalid_block_stride_length_status;
+    uint8_t invalid_block_stride_length_reason_code;
+    uint8_t invalid_block_stride_length_surface;
     uint8_t supported_min_slots_per_rr;
     uint8_t supported_max_slots_per_rr;
     uint8_t invalid_slots_per_rr_status;

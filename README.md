@@ -158,6 +158,10 @@ the default profile rejects `0`, `SESSION_START` rejects sessions whose
 effective responder slot index would fall outside the configured slot count,
 and emitted `RANGE_DATA_NTF` packets now source their slot index from the
 session configuration instead of leaving it as a fixed template byte.
+`BLOCK_STRIDE_LENGTH` now uses the same validation-first scheduler seam: it is
+kept as a 1-byte FiRa/Qorvo parameter, defaults to `0` in the profile, and
+non-zero values are only accepted when the effective session is both
+block-based (`RANGING_TIME_STRUCT = 0x01`) and `TIME_SCHEDULED`.
 At this stage that means:
 - bit 0 controls the distance/ToF-derived field
 - bit 1 controls azimuth fields

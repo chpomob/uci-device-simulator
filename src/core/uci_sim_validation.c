@@ -267,6 +267,24 @@ static int validate_scheduled_mode(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_block_stride_length(const uci_sim_profile_t* profile,
+                                        uint8_t block_stride_length,
+                                        uci_sim_validation_result_t* result) {
+    if (!profile) {
+        return 0;
+    }
+
+    if (block_stride_length > profile->supported_max_block_stride_length) {
+        set_invalid_result(result,
+                           profile->invalid_block_stride_length_status,
+                           profile->invalid_block_stride_length_reason_code,
+                           profile->invalid_block_stride_length_surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int validate_slots_per_rr(const uci_sim_profile_t* profile,
                                  uint8_t slots_per_rr,
                                  uci_sim_validation_result_t* result) {
@@ -658,6 +676,87 @@ static int validate_slots_per_rr_topology(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_block_stride_context(const uci_sim_profile_t* profile,
+                                         const uci_sim_session_t* session,
+                                         uint8_t override_config_id,
+                                         const uint8_t* override_value,
+                                         uint8_t override_value_len,
+                                         uci_sim_validation_result_t* result) {
+    uint8_t block_stride_length = 0U;
+    uint8_t ranging_time_struct = 0U;
+    uint8_t scheduled_mode = UCI_SCHEDULED_MODE_TIME_SCHEDULED;
+    uint8_t value_len = 0U;
+    uint8_t status = profile ? profile->invalid_block_stride_length_status : UCI_STATUS_INVALID_PARAM;
+    uint8_t reason = profile ? profile->invalid_block_stride_length_reason_code
+                             : UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS;
+    uint8_t surface = profile ? profile->invalid_block_stride_length_surface
+                              : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE;
+
+    if (override_config_id == UCI_APP_CONFIG_BLOCK_STRIDE_LENGTH) {
+        if (!override_value || override_value_len != 1U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+        block_stride_length = override_value[0];
+    } else {
+        if (!session ||
+            uci_sim_session_get_config(session, UCI_APP_CONFIG_BLOCK_STRIDE_LENGTH,
+                                       &block_stride_length, &value_len) != 0 ||
+            value_len != 1U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+    }
+
+    if (validate_block_stride_length(profile, block_stride_length, result) != 0) {
+        return -1;
+    }
+
+    if (block_stride_length == 0U) {
+        return 0;
+    }
+
+    if (override_config_id == UCI_APP_CONFIG_RANGING_TIME_STRUCT) {
+        if (!override_value || override_value_len != 1U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+        ranging_time_struct = override_value[0];
+    } else {
+        if (!session ||
+            uci_sim_session_get_config(session, UCI_APP_CONFIG_RANGING_TIME_STRUCT,
+                                       &ranging_time_struct, &value_len) != 0 ||
+            value_len != 1U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+    }
+
+    if (override_config_id == UCI_APP_CONFIG_SCHEDULED_MODE) {
+        if (!override_value || override_value_len != 1U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+        scheduled_mode = override_value[0];
+    } else {
+        if (!session ||
+            uci_sim_session_get_config(session, UCI_APP_CONFIG_SCHEDULED_MODE,
+                                       &scheduled_mode, &value_len) != 0 ||
+            value_len != 1U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+    }
+
+    if (ranging_time_struct != 0x01U ||
+        scheduled_mode != UCI_SCHEDULED_MODE_TIME_SCHEDULED) {
+        set_invalid_result(result, status, reason, surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int require_session_config_len(const uci_sim_profile_t* profile,
                                       const uci_sim_session_t* session,
                                       uint8_t config_id,
@@ -961,7 +1060,10 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
                                            : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
                 return -1;
             }
-            return validate_ranging_time_struct(profile, value[0], result);
+            if (validate_ranging_time_struct(profile, value[0], result) != 0) {
+                return -1;
+            }
+            return validate_block_stride_context(profile, session, config_id, value, value_len, result);
         }
         if (config_id == UCI_APP_CONFIG_SCHEDULED_MODE) {
             if (!value || value_len != 1) {
@@ -973,7 +1075,25 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
                                            : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
                 return -1;
             }
-            return validate_scheduled_mode(profile, value[0], result);
+            if (validate_scheduled_mode(profile, value[0], result) != 0) {
+                return -1;
+            }
+            return validate_block_stride_context(profile, session, config_id, value, value_len, result);
+        }
+        if (config_id == UCI_APP_CONFIG_BLOCK_STRIDE_LENGTH) {
+            if (!value || value_len != 1) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   profile ? profile->invalid_block_stride_length_reason_code
+                                           : UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+                                   profile ? profile->invalid_block_stride_length_surface
+                                           : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+            if (validate_block_stride_length(profile, value[0], result) != 0) {
+                return -1;
+            }
+            return validate_block_stride_context(profile, session, config_id, value, value_len, result);
         }
         if (config_id == UCI_APP_CONFIG_SLOTS_PER_RR) {
             if (!value || value_len != 1) {
@@ -1049,6 +1169,8 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
     uint8_t ranging_time_struct_len = 0;
     uint8_t scheduled_mode = 0;
     uint8_t scheduled_mode_len = 0;
+    uint8_t block_stride_length = 0;
+    uint8_t block_stride_length_len = 0;
     uint8_t slots_per_rr = 0;
     uint8_t slots_per_rr_len = 0;
     uint8_t rssi_reporting;
@@ -1229,6 +1351,24 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
         return -1;
     }
     if (validate_scheduled_mode(profile, scheduled_mode, result) != 0) {
+        return -1;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_BLOCK_STRIDE_LENGTH,
+                                   &block_stride_length, &block_stride_length_len) != 0 ||
+        block_stride_length_len != 1U) {
+        set_invalid_result(result,
+                           profile ? profile->invalid_block_stride_length_status : UCI_STATUS_INVALID_PARAM,
+                           profile ? profile->invalid_block_stride_length_reason_code
+                                   : UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+                           profile ? profile->invalid_block_stride_length_surface
+                                   : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+        return -1;
+    }
+    if (validate_block_stride_length(profile, block_stride_length, result) != 0) {
+        return -1;
+    }
+    if (validate_block_stride_context(profile, session, 0xFFU, NULL, 0U, result) != 0) {
         return -1;
     }
 

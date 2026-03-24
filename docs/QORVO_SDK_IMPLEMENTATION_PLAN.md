@@ -377,22 +377,32 @@ the parameter meaning and the invalid-cap-size reason surface, but they do not
 yet justify inventing real contention scheduler behavior in the default
 time-scheduled profile.
 
-The next scheduler/contention candidate is still `0x21`, but it should remain
-blocked until naming/semantic resolution is stronger:
+The deeper audit also shows that contention mode is a larger profile slice, not
+just one extra parameter:
+
+- Cherry defines contention-specific `RANGING_ROUND_USAGE` values `0x07` and
+  `0x08`
+- local Python sample scripts treat contention mode as a different topology
+  regime and explicitly avoid some normal time-scheduled peer-address settings
+- `CAP_SIZE_RANGE` is therefore best modeled as part of a future
+  contention-mode profile, not as an isolated scheduler tweak
+
+The next scheduler/contention candidate should therefore not be `0x21` code
+work. `0x21` still remains blocked until naming/semantic resolution is
+stronger:
 
 - the local shell surface calls it `TX_JITTER_WINDOW_SIZE`
 - the local Cherry FiRa header marks `0x21` as RFU and comments it as
   `CONTENTION_PHASE_UPDATE_LENGTH`
+- the local Qorvo Python helper also treats `0x21` as RFU/reserved
 
-That means `0x21` needs another audit pass before code changes.
-   contention honestly
-  - `SESSION_START` re-validates the classic `DEVICE_TYPE` / `DEVICE_ROLE`
-    pairing for `RESPONDER` / `INITIATOR` sessions
-  - `MULTI_NODE_MODE` accepts only the documented FiRa `UNICAST (0x00)`,
-    `ONE_TO_MANY (0x01)`, and `MANY_TO_MANY (0x02)` values in the default
-    profile
-  - `SESSION_START` re-validates the one source-backed runtime topology rule
-    for that parameter: `UNICAST` must still describe a single peer
+If contention-mode work is resumed later, the correct next scope is:
+
+1. define a separate contention-capable profile
+2. revisit `SCHEDULED_MODE`, `CAP_SIZE_RANGE`, and contention-specific
+   `RANGING_ROUND_USAGE` together
+3. document the topology rules for `DST_MAC_ADDRESS` and
+   `NUMBER_OF_CONTROLEES` under that profile before implementing behavior
 - delayed/session-status surfacing remains intentionally configurable work for
   later profiles once stronger firmware evidence exists
 

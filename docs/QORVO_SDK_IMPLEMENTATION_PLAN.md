@@ -163,6 +163,8 @@ Current progress on this layer:
 - `SCHEDULED_MODE` now uses the validation layer with a profile-owned support
   mask; the default profile accepts only `TIME_SCHEDULED` until contention and
   hybrid scheduling are implemented as real engine behavior
+- `SLOT_DURATION` now uses the same capability-driven validation seam through
+  the profile minimum supported slot-duration setting
 
 ### 2. Validation Layer
 
@@ -334,6 +336,7 @@ Current status:
 - `STS_CONFIG` is now the fifth validated parameter
 - `DEVICE_TYPE` is now the sixth validated parameter
 - `MULTI_NODE_MODE` is now the seventh validated parameter
+- `SLOT_DURATION` is now the eighth validated parameter
 - default profile behavior:
   - minimum supported interval: `50 ms`
   - status on invalid value: `INVALID_RANGE`
@@ -350,6 +353,47 @@ Current status:
     local Cherry helpers prove for static and provisioned modes
   - `DEVICE_TYPE` accepts only the documented FiRa `CONTROLEE (0x00)` and
     `CONTROLLER (0x01)` values in the default profile
+  - `MULTI_NODE_MODE` accepts only the documented FiRa `UNICAST`,
+    `ONE_TO_MANY`, and `MANY_TO_MANY` values in the default profile
+  - `SESSION_START` re-validates the default-profile topology rule that
+    `UNICAST` must still describe exactly one peer
+  - `SLOT_DURATION` is now validated against the profile minimum supported
+    slot-duration capability
+
+### Next Audited Parameter Decision
+
+The next scheduler/contention parameter should be `CAP_SIZE_RANGE`, not
+`TX_JITTER_WINDOW_SIZE`.
+
+Reasoning:
+
+- local Cherry FiRa headers give `CAP_SIZE_RANGE` real semantics:
+  - maximum and minimum CAP size for contention-based ranging
+- local Qorvo Python helpers make the wire layout concrete:
+  - 2-byte word
+  - MSB = minimum CAP size
+  - LSB = maximum CAP size
+  - common default maximum derived from `SLOTS_PER_RR - 1`
+- the local reason-code surface exposes `ERROR_INVALID_CAP_SIZE_RANGE`
+
+By contrast, `0x21` is not yet safe to implement:
+
+- the local shell surface calls it `TX_JITTER_WINDOW_SIZE`
+- the local Cherry FiRa header marks `0x21` as RFU and comments it as
+  `CONTENTION_PHASE_UPDATE_LENGTH`
+
+That means `0x21` needs naming/semantic resolution before code changes.
+
+Recommended next implementation step:
+
+1. introduce a typed `CAP_SIZE_RANGE` parser in the validation layer
+2. validate it as a min/max pair before session start
+3. tie validation to:
+   - `SCHEDULED_MODE`
+   - `SLOTS_PER_RR`
+   - future contention-mode support
+4. keep runtime scheduler behavior deferred until the simulator can model
+   contention honestly
   - `SESSION_START` re-validates the classic `DEVICE_TYPE` / `DEVICE_ROLE`
     pairing for `RESPONDER` / `INITIATOR` sessions
   - `MULTI_NODE_MODE` accepts only the documented FiRa `UNICAST (0x00)`,

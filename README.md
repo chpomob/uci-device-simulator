@@ -193,6 +193,13 @@ session configuration instead of leaving it as a fixed template byte.
 kept as a 1-byte FiRa/Qorvo parameter, defaults to `0` in the profile, and
 non-zero values are only accepted when the effective session is both
 block-based (`RANGING_TIME_STRUCT = 0x01`) and `TIME_SCHEDULED`.
+`CAP_SIZE_RANGE` now uses that same scheduler/contention validation seam too:
+the simulator parses it as a typed 2-byte min/max pair, accepts the neutral
+`0x0000` value in the default profile, rejects inverted min/max pairs, and
+rejects non-zero values unless the effective session is contention-based and
+slot-topology-consistent. The default profile still models only
+`TIME_SCHEDULED`, so non-zero CAP sizes are validation-tested but not yet
+behavioral there.
 At this stage that means:
 - bit 0 controls the distance/ToF-derived field
 - bit 1 controls azimuth fields

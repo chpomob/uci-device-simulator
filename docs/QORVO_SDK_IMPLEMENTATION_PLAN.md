@@ -360,39 +360,31 @@ Current status:
   - `SLOT_DURATION` is now validated against the profile minimum supported
     slot-duration capability
 
-### Next Audited Parameter Decision
+### Scheduler / Contention Status
 
-The next scheduler/contention parameter should be `CAP_SIZE_RANGE`, not
-`TX_JITTER_WINDOW_SIZE`.
+`CAP_SIZE_RANGE` is now implemented on the validation seam.
 
-Reasoning:
+Current enforced behavior:
 
-- local Cherry FiRa headers give `CAP_SIZE_RANGE` real semantics:
-  - maximum and minimum CAP size for contention-based ranging
-- local Qorvo Python helpers make the wire layout concrete:
-  - 2-byte word
-  - MSB = minimum CAP size
-  - LSB = maximum CAP size
-  - common default maximum derived from `SLOTS_PER_RR - 1`
-- the local reason-code surface exposes `ERROR_INVALID_CAP_SIZE_RANGE`
+1. the simulator parses it as a typed 2-byte min/max pair
+2. `min > max` is rejected
+3. neutral `0x0000` is accepted in the default profile
+4. non-zero values are rejected unless the effective session is contention-based
+5. slot-topology consistency is enforced before `SESSION_START`
 
-By contrast, `0x21` is not yet safe to implement:
+This is the right stopping point for now. The local Cherry/Qorvo sources prove
+the parameter meaning and the invalid-cap-size reason surface, but they do not
+yet justify inventing real contention scheduler behavior in the default
+time-scheduled profile.
+
+The next scheduler/contention candidate is still `0x21`, but it should remain
+blocked until naming/semantic resolution is stronger:
 
 - the local shell surface calls it `TX_JITTER_WINDOW_SIZE`
 - the local Cherry FiRa header marks `0x21` as RFU and comments it as
   `CONTENTION_PHASE_UPDATE_LENGTH`
 
-That means `0x21` needs naming/semantic resolution before code changes.
-
-Recommended next implementation step:
-
-1. introduce a typed `CAP_SIZE_RANGE` parser in the validation layer
-2. validate it as a min/max pair before session start
-3. tie validation to:
-   - `SCHEDULED_MODE`
-   - `SLOTS_PER_RR`
-   - future contention-mode support
-4. keep runtime scheduler behavior deferred until the simulator can model
+That means `0x21` needs another audit pass before code changes.
    contention honestly
   - `SESSION_START` re-validates the classic `DEVICE_TYPE` / `DEVICE_ROLE`
     pairing for `RESPONDER` / `INITIATOR` sessions

@@ -845,6 +845,7 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
                 config_id == UCI_APP_CONFIG_PSDU_DATA_RATE ||
                 config_id == UCI_APP_CONFIG_PREAMBLE_DURATION ||
                 config_id == UCI_APP_CONFIG_LINK_LAYER_MODE ||
+                config_id == UCI_APP_CONFIG_CAP_SIZE_RANGE ||
                 config_id == UCI_APP_CONFIG_RANGING_TIME_STRUCT ||
                 config_id == UCI_APP_CONFIG_SCHEDULED_MODE ||
                 config_id == UCI_APP_CONFIG_BLOCK_STRIDE_LENGTH ||

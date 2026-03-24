@@ -803,6 +803,96 @@ static int validate_block_stride_context(const uci_sim_profile_t* profile,
     return 0;
 }
 
+static int validate_cap_size_range_context(const uci_sim_profile_t* profile,
+                                           const uci_sim_session_t* session,
+                                           uint8_t override_config_id,
+                                           const uint8_t* override_value,
+                                           uint8_t override_value_len,
+                                           uci_sim_validation_result_t* result) {
+    uint8_t cap_size_range[2] = { 0U, 0U };
+    uint8_t cap_size_range_len = 0U;
+    uint8_t slots_per_rr = 0U;
+    uint8_t scheduled_mode = UCI_SCHEDULED_MODE_TIME_SCHEDULED;
+    uint8_t value_len = 0U;
+    uint8_t cap_size_min;
+    uint8_t cap_size_max;
+    uint8_t status = profile ? profile->invalid_cap_size_range_status : UCI_STATUS_INVALID_PARAM;
+    uint8_t reason = profile ? profile->invalid_cap_size_range_reason_code
+                             : UCI_SESSION_REASON_ERROR_INVALID_CAP_SIZE_RANGE;
+    uint8_t surface = profile ? profile->invalid_cap_size_range_surface
+                              : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE;
+
+    if (override_config_id == UCI_APP_CONFIG_CAP_SIZE_RANGE) {
+        if (!override_value || override_value_len != 2U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+        cap_size_range[0] = override_value[0];
+        cap_size_range[1] = override_value[1];
+        cap_size_range_len = 2U;
+    } else {
+        if (!session ||
+            uci_sim_session_get_config(session, UCI_APP_CONFIG_CAP_SIZE_RANGE,
+                                       cap_size_range, &cap_size_range_len) != 0 ||
+            cap_size_range_len != 2U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+    }
+
+    cap_size_max = cap_size_range[0];
+    cap_size_min = cap_size_range[1];
+    if (cap_size_min > cap_size_max) {
+        set_invalid_result(result, status, reason, surface);
+        return -1;
+    }
+
+    if (cap_size_min == 0U && cap_size_max == 0U) {
+        return 0;
+    }
+
+    if (override_config_id == UCI_APP_CONFIG_SCHEDULED_MODE) {
+        if (!override_value || override_value_len != 1U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+        scheduled_mode = override_value[0];
+    } else {
+        if (!session ||
+            uci_sim_session_get_config(session, UCI_APP_CONFIG_SCHEDULED_MODE,
+                                       &scheduled_mode, &value_len) != 0 ||
+            value_len != 1U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+    }
+
+    if (override_config_id == UCI_APP_CONFIG_SLOTS_PER_RR) {
+        if (!override_value || override_value_len != 1U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+        slots_per_rr = override_value[0];
+    } else {
+        if (!session ||
+            uci_sim_session_get_config(session, UCI_APP_CONFIG_SLOTS_PER_RR,
+                                       &slots_per_rr, &value_len) != 0 ||
+            value_len != 1U) {
+            set_invalid_result(result, status, reason, surface);
+            return -1;
+        }
+    }
+
+    if (scheduled_mode != UCI_SCHEDULED_MODE_CONTENTION_BASED ||
+        slots_per_rr == 0U ||
+        cap_size_max > (uint8_t)(slots_per_rr - 1U)) {
+        set_invalid_result(result, status, reason, surface);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int validate_session_time_base_value(const uci_sim_profile_t* profile,
                                             const uint8_t* value,
                                             uint8_t value_len,
@@ -1237,7 +1327,10 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
             if (validate_scheduled_mode(profile, value[0], result) != 0) {
                 return -1;
             }
-            return validate_block_stride_context(profile, session, config_id, value, value_len, result);
+            if (validate_block_stride_context(profile, session, config_id, value, value_len, result) != 0) {
+                return -1;
+            }
+            return validate_cap_size_range_context(profile, session, config_id, value, value_len, result);
         }
         if (config_id == UCI_APP_CONFIG_BLOCK_STRIDE_LENGTH) {
             if (!value || value_len != 1) {
@@ -1270,7 +1363,10 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
             if (validate_slots_per_rr(profile, value[0], result) != 0) {
                 return -1;
             }
-            return validate_slot_topology_context(profile, session, config_id, value, value_len, result);
+            if (validate_slot_topology_context(profile, session, config_id, value, value_len, result) != 0) {
+                return -1;
+            }
+            return validate_cap_size_range_context(profile, session, config_id, value, value_len, result);
         }
         if (config_id == UCI_APP_CONFIG_RESPONDER_SLOT_INDEX) {
             if (!value || value_len != 1) {
@@ -1295,6 +1391,18 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
                 return -1;
             }
             return validate_rssi_reporting(profile, value[0], result);
+        }
+        if (config_id == UCI_APP_CONFIG_CAP_SIZE_RANGE) {
+            if (!value || value_len != 2U) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   profile ? profile->invalid_cap_size_range_reason_code
+                                           : UCI_SESSION_REASON_ERROR_INVALID_CAP_SIZE_RANGE,
+                                   profile ? profile->invalid_cap_size_range_surface
+                                           : UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+            return validate_cap_size_range_context(profile, session, config_id, value, value_len, result);
         }
         if (config_id == UCI_APP_CONFIG_RANGING_ROUND_USAGE) {
             if (!value || value_len != 1) {
@@ -1583,6 +1691,9 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
         return -1;
     }
     if (validate_slot_topology_context(profile, session, 0xFFU, NULL, 0U, result) != 0) {
+        return -1;
+    }
+    if (validate_cap_size_range_context(profile, session, 0xFFU, NULL, 0U, result) != 0) {
         return -1;
     }
 

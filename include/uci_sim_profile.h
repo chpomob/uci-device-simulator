@@ -99,6 +99,9 @@ typedef struct {
     uint8_t invalid_slots_per_rr_status;
     uint8_t invalid_slots_per_rr_reason_code;
     uint8_t invalid_slots_per_rr_surface;
+    uint8_t invalid_cap_size_range_status;
+    uint8_t invalid_cap_size_range_reason_code;
+    uint8_t invalid_cap_size_range_surface;
     uint8_t supported_rssi_reporting_max;
     uint8_t invalid_rssi_reporting_status;
     uint8_t invalid_rssi_reporting_reason_code;

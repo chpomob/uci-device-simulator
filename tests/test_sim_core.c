@@ -1877,6 +1877,104 @@ static void test_session_start_rejects_invalid_scheduled_mode(void) {
     PASS();
 }
 
+static void test_cap_size_range_validation_rejects_nonzero_for_time_scheduled(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t cap_size_range[2] = { 0x00, 0x00 };
+    uint8_t original_cap_size_range[2] = { 0x00, 0x00 };
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0,
+                "cap size range validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0,
+                "cap size range validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_CAP_SIZE_RANGE,
+                                           cap_size_range, &value_len) == 0,
+                "cap size range validation fetch original value failed");
+    ASSERT_EQ_U8(2U, value_len, "cap size range original len");
+    memcpy(original_cap_size_range, cap_size_range, sizeof(original_cap_size_range));
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 9;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_CAP_SIZE_RANGE;
+    request.payload[6] = 0x02;
+    request.payload[7] = 0x10;
+    request.payload[8] = 0x05;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "non-zero cap size range in time scheduled mode should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "cap size range invalid status");
+    ASSERT_TRUE(result.has_notification, "cap size range invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "cap size range invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "cap size range invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_CAP_SIZE_RANGE,
+                                           cap_size_range, &value_len) == 0,
+                "cap size range validation refetch original value failed");
+    ASSERT_TRUE(memcmp(original_cap_size_range,
+                       cap_size_range,
+                       sizeof(original_cap_size_range)) == 0,
+                "invalid cap size range should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_cap_size_range(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_cap_size_range[2] = { 0x10, 0x05 };
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0,
+                "cap size range start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0,
+                "cap size range start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_CAP_SIZE_RANGE,
+                                             invalid_cap_size_range,
+                                             sizeof(invalid_cap_size_range)) == 0,
+                "cap size range start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid cap size range should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid cap size range status");
+    ASSERT_TRUE(result.has_notification, "start invalid cap size range should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid cap size range generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid cap size range generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid cap size range should preserve session state");
+    PASS();
+}
+
 static void test_session_start_rejects_insufficient_slots_per_rr(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -4230,7 +4328,7 @@ static void test_session_app_config_storage(void) {
     request.payload[5] = 0x20;
     request.payload[6] = 2;
     request.payload[7] = 0x00;
-    request.payload[8] = 0x02;
+    request.payload[8] = 0x00;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set cap size range app config failed");
 
     request.payload[5] = 0x21;
@@ -4674,7 +4772,7 @@ static void test_session_app_config_storage(void) {
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get extended app config missing prf mode");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x20,
-                                             (const uint8_t[]){ 0x00, 0x02 }, 2),
+                                             (const uint8_t[]){ 0x00, 0x00 }, 2),
                 "get extended app config missing cap size range");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x21,
                                              (const uint8_t[]){ 0x10, 0x00 }, 2),
@@ -4830,7 +4928,7 @@ static void test_session_app_config_storage(void) {
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing prf mode");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x20,
-                                             (const uint8_t[]){ 0x00, 0x02 }, 2),
+                                             (const uint8_t[]){ 0x00, 0x00 }, 2),
                 "get all app config missing cap size range");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x21,
                                              (const uint8_t[]){ 0x10, 0x00 }, 2),
@@ -5758,6 +5856,8 @@ int main(void) {
     test_session_start_rejects_block_stride_without_block_time_struct();
     test_scheduled_mode_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_scheduled_mode();
+    test_cap_size_range_validation_rejects_nonzero_for_time_scheduled();
+    test_session_start_rejects_invalid_cap_size_range();
     test_session_start_rejects_insufficient_slots_per_rr();
     test_rssi_reporting_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_rssi_reporting();

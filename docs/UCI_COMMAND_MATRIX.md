@@ -117,7 +117,7 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x1D` | `RNG_DATA_NTF_AOA_BOUND` | `supported` | Default-profile stored/retrievable |
 | `0x1E` | `RESPONDER_SLOT_INDEX` | `supported` | Default-profile stored/retrievable |
 | `0x1F` | `PRF_MODE` | `supported` | Default-profile stored/retrievable |
-| `0x20` | `CAP_SIZE_RANGE` | `supported` | Default-profile stored/retrievable |
+| `0x20` | `CAP_SIZE_RANGE` | `supported` | Default-profile stored/retrievable and validated as a typed contention min/max pair; non-zero values are rejected in the default time-scheduled profile |
 | `0x21` | `TX_JITTER_WINDOW_SIZE` | `supported` | Default-profile stored/retrievable |
 | `0x22` | `SCHEDULED_MODE` | `supported` | Default-profile stored/retrievable |
 | `0x23` | `KEY_ROTATION` | `supported` | Default-profile stored/retrievable |

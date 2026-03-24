@@ -96,6 +96,11 @@ controls which result fields remain meaningful:
   enforce a deterministic measurement budget: `0` means unlimited, while a
   finite budget stops further range production, returns the session to `IDLE`,
   and emits the matching FiRa session-status reason
+- `CAP_SIZE_RANGE` now uses the scheduler/contention side of the same
+  validation seam as a typed min/max pair. The default profile keeps it
+  validation-only: `0x0000` is the neutral baseline, while non-zero values are
+  only acceptable for a contention-based session with coherent slot topology
+  and are otherwise rejected before runtime
 - `SESSION_TIME_BASE` now also uses the scheduler seam in a typed form
   instead of raw packet bytes: the simulator parses enable / continue /
   resync flags, reference session id, and offset microseconds into an

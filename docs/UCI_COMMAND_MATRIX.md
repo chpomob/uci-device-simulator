@@ -120,7 +120,7 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x20` | `CAP_SIZE_RANGE` | `supported` | Default-profile stored/retrievable and validated as a typed contention min/max pair; non-zero values are rejected in the default time-scheduled profile |
 | `0x21` | `TX_JITTER_WINDOW_SIZE` | `supported` | Default-profile stored/retrievable |
 | `0x22` | `SCHEDULED_MODE` | `supported` | Default-profile stored/retrievable |
-| `0x23` | `KEY_ROTATION` | `supported` | Default-profile stored/retrievable |
+| `0x23` | `KEY_ROTATION` | `supported` | Default-profile stored/retrievable and validated against the Cherry `0..1` range; `SESSION_START` also rejects enabled key rotation outside Dynamic/Provisioned STS |
 | `0x24` | `KEY_ROTATION_RATE` | `supported` | Default-profile stored/retrievable and validated against the Cherry `0..15` range |
 | `0x25` | `SESSION_PRIORITY` | `supported` | Default-profile stored/retrievable |
 | `0x26` | `MAC_ADDRESS_MODE` | `supported` | Default-profile stored/retrievable |

@@ -1562,6 +1562,94 @@ static void test_key_rotation_rate_validation_rejects_unsupported_values(void) {
     PASS();
 }
 
+static void test_key_rotation_validation_rejects_unsupported_values(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_key_rotation = 0x02;
+    uint8_t key_rotation = 0x00;
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "key rotation validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "key rotation validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_KEY_ROTATION, &key_rotation, &value_len) == 0,
+                "key rotation validation fetch original value failed");
+    ASSERT_EQ_U8(1, value_len, "key rotation validation original value len");
+    ASSERT_EQ_U8(0x01, key_rotation, "key rotation validation original value");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_KEY_ROTATION;
+    request.payload[6] = 0x01;
+    request.payload[7] = invalid_key_rotation;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "unsupported key rotation should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "key rotation invalid status");
+    ASSERT_TRUE(result.has_notification, "key rotation invalid should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "key rotation invalid generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "key rotation invalid generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_KEY_ROTATION, &key_rotation, &value_len) == 0,
+                "key rotation validation refetch original value failed");
+    ASSERT_EQ_U8(0x01, key_rotation, "invalid key rotation should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_incompatible_key_rotation(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t static_sts = 0x00;
+    const uint8_t enabled_key_rotation = 0x01;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "key rotation start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "key rotation start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session, UCI_APP_CONFIG_STS_CONFIG, &static_sts, sizeof(static_sts)) == 0,
+                "key rotation start validation preload sts config failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session, UCI_APP_CONFIG_KEY_ROTATION, &enabled_key_rotation, sizeof(enabled_key_rotation)) == 0,
+                "key rotation start validation preload key rotation failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with incompatible key rotation should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start incompatible key rotation status");
+    ASSERT_TRUE(result.has_notification, "start incompatible key rotation should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start incompatible key rotation generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start incompatible key rotation generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start incompatible key rotation should preserve session state");
+    PASS();
+}
+
 static void test_session_start_rejects_invalid_key_rotation_rate(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -6026,7 +6114,9 @@ int main(void) {
     test_session_start_rejects_invalid_preamble_duration();
     test_sts_length_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_sts_length();
+    test_key_rotation_validation_rejects_unsupported_values();
     test_key_rotation_rate_validation_rejects_unsupported_values();
+    test_session_start_rejects_incompatible_key_rotation();
     test_session_start_rejects_invalid_key_rotation_rate();
     test_link_layer_mode_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_link_layer_mode();

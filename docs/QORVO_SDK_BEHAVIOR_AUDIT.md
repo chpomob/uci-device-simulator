@@ -550,7 +550,7 @@ codebase does not currently expose them as app-config parameters. That means:
 | ID | Parameter | Understanding | Confidence | Runtime Impact |
 | --- | --- | --- | --- | --- |
 | `0x02` | `STS_CONFIG` | Security timestamp mode. | `proven` | Must affect whether keys/STS fields matter. |
-| `0x23` | `KEY_ROTATION` | Key rotation enable. | `strong_inference` | Security policy input. |
+| `0x23` | `KEY_ROTATION` | Cherry documents it explicitly as `0` to disable and `1` to enable, and says it applies during Dynamic or Provisioned STS ranging. | `proven` | Validate the narrow `0..1` range now; reject incompatible `STS_CONFIG`/`KEY_ROTATION` combinations at session start; deeper crypto effects later. |
 | `0x24` | `KEY_ROTATION_RATE` | Cherry documents it as `n` where `2^n` is the rotation cadence for dynamic/provisioned STS keys, with `0 <= n <= 15`. | `proven` | Validate against the narrow `0..15` range now; deeper scheduler/security effects later. |
 | `0x28` | `STATIC_STS_IV` | Static STS IV. | `proven` | Security material; should not be payload decoration only. |
 | `0x29` | `NUMBER_OF_STS_SEGMENTS` | Number of STS segments. | `strong_inference` | Security/session-shape input. |

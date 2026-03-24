@@ -176,6 +176,10 @@ mode).
 documented Cherry/FIra values `0x00..0x02` are accepted, while RFU values are
 rejected with `INVALID_PARAM`, are not stored, and are also re-validated on
 `SESSION_START`.
+`KEY_ROTATION` now uses that same security validation seam too: only the
+documented Cherry values `0..1` are accepted, while other values are rejected
+with `INVALID_PARAM`, are not stored, and `SESSION_START` also rejects enabled
+rotation outside Dynamic/Provisioned `STS_CONFIG`.
 `KEY_ROTATION_RATE` now uses that same security validation seam too: only the
 documented Cherry range `0..15` is accepted, while higher values are rejected
 with `INVALID_PARAM`, are not stored, and are also re-validated on

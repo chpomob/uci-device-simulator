@@ -522,7 +522,8 @@ Future phase:
 - `STATIC_STS_IV`
 - `SESSION_KEY`
 - `SUBSESSION_KEY`
-- `KEY_ROTATION`
+- `KEY_ROTATION` now uses that same security seam through the Cherry `0..1`
+  enum and Dynamic/Provisioned STS compatibility rule
 - `KEY_ROTATION_RATE`
 
 Target:

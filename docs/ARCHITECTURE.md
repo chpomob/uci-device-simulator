@@ -162,6 +162,11 @@ source evidence for packet-level crypto/runtime effects.
   - the default profile conservatively accepts `0..4`
   - invalid values are rejected with `INVALID_PARAM`
   - `SESSION_START` re-validates the stored value before transition
+- `MAX_RR_RETRY` now uses that same seam for wire-contract correctness:
+  - Cherry proves it is a `uint16_t`, not a 1-byte scalar
+  - default `0` means the retry limit is disabled/infinite
+  - malformed lengths are rejected at `SET_APP_CONFIG` and `SESSION_START`
+  - retry-exhaustion behavior is deferred until failed ranging rounds are modeled honestly
 - `DEVICE_TYPE` now uses that same seam for the classic FiRa topology model:
   only `CONTROLEE (0x00)` and `CONTROLLER (0x01)` are accepted in the default
   profile, and `SESSION_START` re-validates the classic `DEVICE_TYPE` /

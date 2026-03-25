@@ -1738,6 +1738,96 @@ static void test_session_start_rejects_invalid_number_of_sts_segments(void) {
     PASS();
 }
 
+static void test_max_rr_retry_validation_rejects_invalid_length(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_max_rr_retry = 0x04;
+    uint8_t max_rr_retry[2] = { 0x00, 0x00 };
+    uint8_t value_len = 0;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "max rr retry validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "max rr retry validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_MAX_RR_RETRY, max_rr_retry, &value_len) == 0,
+                "max rr retry validation fetch original value failed");
+    ASSERT_EQ_U8(2, value_len, "max rr retry validation original value len");
+    ASSERT_EQ_U8(0x00, max_rr_retry[0], "max rr retry validation original low byte");
+    ASSERT_EQ_U8(0x00, max_rr_retry[1], "max rr retry validation original high byte");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = 8;
+    request.payload[4] = 0x01;
+    request.payload[5] = UCI_APP_CONFIG_MAX_RR_RETRY;
+    request.payload[6] = 0x01;
+    request.payload[7] = invalid_max_rr_retry;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "short max rr retry should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "max rr retry invalid length status");
+    ASSERT_TRUE(result.has_notification, "max rr retry invalid length should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "max rr retry invalid length generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "max rr retry invalid length generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_MAX_RR_RETRY, max_rr_retry, &value_len) == 0,
+                "max rr retry validation refetch original value failed");
+    ASSERT_EQ_U8(0x00, max_rr_retry[0], "invalid max rr retry low byte should not overwrite stored value");
+    ASSERT_EQ_U8(0x00, max_rr_retry[1], "invalid max rr retry high byte should not overwrite stored value");
+    PASS();
+}
+
+static void test_session_start_rejects_invalid_max_rr_retry_length(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    const uint8_t invalid_max_rr_retry = 0x04;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "max rr retry start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "max rr retry start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session,
+                                             UCI_APP_CONFIG_MAX_RR_RETRY,
+                                             &invalid_max_rr_retry,
+                                             sizeof(invalid_max_rr_retry)) == 0,
+                "max rr retry start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid max rr retry length should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid max rr retry length status");
+    ASSERT_TRUE(result.has_notification, "start invalid max rr retry length should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid max rr retry length generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid max rr retry length generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid max rr retry length should preserve session state");
+    PASS();
+}
+
 static void test_session_start_rejects_invalid_key_rotation_rate(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -4746,9 +4836,11 @@ static void test_session_app_config_storage(void) {
     request.payload[7] = 0x02;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set number of sts segments app config failed");
 
+    request.payload_len = 9;
     request.payload[5] = 0x2A;
-    request.payload[6] = 1;
+    request.payload[6] = 2;
     request.payload[7] = 0x04;
+    request.payload[8] = 0x00;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set max rr retry app config failed");
 
     request.payload_len = 11;
@@ -5153,7 +5245,7 @@ static void test_session_app_config_storage(void) {
                                              (const uint8_t[]){ 0x02 }, 1),
                 "get extended app config missing number of sts segments");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x2A,
-                                             (const uint8_t[]){ 0x04 }, 1),
+                                             (const uint8_t[]){ 0x04, 0x00 }, 2),
                 "get extended app config missing max rr retry");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x2B,
                                              (const uint8_t[]){ 0xE8, 0x03, 0x00, 0x00 }, 4),
@@ -5309,7 +5401,7 @@ static void test_session_app_config_storage(void) {
                                              (const uint8_t[]){ 0x02 }, 1),
                 "get all app config missing number of sts segments");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x2A,
-                                             (const uint8_t[]){ 0x04 }, 1),
+                                             (const uint8_t[]){ 0x04, 0x00 }, 2),
                 "get all app config missing max rr retry");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x2B,
                                              (const uint8_t[]){ 0xE8, 0x03, 0x00, 0x00 }, 4),
@@ -6204,9 +6296,11 @@ int main(void) {
     test_session_start_rejects_invalid_sts_length();
     test_key_rotation_validation_rejects_unsupported_values();
     test_number_of_sts_segments_validation_rejects_unsupported_values();
+    test_max_rr_retry_validation_rejects_invalid_length();
     test_key_rotation_rate_validation_rejects_unsupported_values();
     test_session_start_rejects_incompatible_key_rotation();
     test_session_start_rejects_invalid_number_of_sts_segments();
+    test_session_start_rejects_invalid_max_rr_retry_length();
     test_session_start_rejects_invalid_key_rotation_rate();
     test_link_layer_mode_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_link_layer_mode();

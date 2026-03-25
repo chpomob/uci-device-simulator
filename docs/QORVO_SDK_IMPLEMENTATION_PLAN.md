@@ -532,6 +532,7 @@ Future phase:
 - `KEY_ROTATION` now uses that same security seam through the Cherry `0..1`
   enum and Dynamic/Provisioned STS compatibility rule
 - `KEY_ROTATION_RATE`
+- `MAX_RR_RETRY` now belongs here only for wire-contract alignment: keep it as a Cherry-backed `uint16_t` with default `0`, reject malformed lengths, and defer retry-exhaustion behavior until the engine can model failed ranging rounds honestly
 
 Target:
 

@@ -852,6 +852,7 @@ static int handle_session_set_get_config(uci_sim_device_t* device,
                 config_id == UCI_APP_CONFIG_SCHEDULED_MODE ||
                 config_id == UCI_APP_CONFIG_KEY_ROTATION_RATE ||
                 config_id == UCI_APP_CONFIG_NUMBER_OF_STS_SEGMENTS ||
+                config_id == UCI_APP_CONFIG_MAX_RR_RETRY ||
                 config_id == UCI_APP_CONFIG_BLOCK_STRIDE_LENGTH ||
                 config_id == UCI_APP_CONFIG_SLOTS_PER_RR ||
                 config_id == UCI_APP_CONFIG_RESPONDER_SLOT_INDEX ||

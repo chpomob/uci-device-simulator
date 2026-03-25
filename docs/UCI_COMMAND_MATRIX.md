@@ -127,7 +127,7 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x27` | `VENDOR_ID` | `supported` | Default-profile stored/retrievable |
 | `0x28` | `STATIC_STS_IV` | `supported` | Default-profile stored/retrievable |
 | `0x29` | `NUMBER_OF_STS_SEGMENTS` | `supported` | Default-profile stored/retrievable and conservatively validated against the locally evidenced `0..4` practical range |
-| `0x2A` | `MAX_RR_RETRY` | `supported` | Default-profile stored/retrievable |
+| `0x2A` | `MAX_RR_RETRY` | `supported` | Default-profile stored/retrievable as a Cherry-aligned `uint16_t`; default `0` disables the retry limit and malformed lengths are rejected |
 | `0x2B` | `UWB_INITIATION_TIME` | `supported` | Default-profile stored/retrievable |
 | `0x2C` | `HOPPING_MODE` | `supported` | Default-profile stored/retrievable |
 | `0x2D` | `BLOCK_STRIDE_LENGTH` | `supported` | Default-profile stored/retrievable |

@@ -1395,6 +1395,16 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
             }
             return validate_number_of_sts_segments(profile, value[0], result);
         }
+        if (config_id == UCI_APP_CONFIG_MAX_RR_RETRY) {
+            if (!value || value_len != 2) {
+                set_invalid_result(result,
+                                   UCI_STATUS_INVALID_PARAM,
+                                   UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+                                   UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
+                return -1;
+            }
+            return 0;
+        }
         if (config_id == UCI_APP_CONFIG_LINK_LAYER_MODE) {
             if (!value || value_len != 1) {
                 set_invalid_result(result,
@@ -1577,6 +1587,8 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
     uint8_t key_rotation_rate_len = 0;
     uint8_t number_of_sts_segments = 0;
     uint8_t number_of_sts_segments_len = 0;
+    uint8_t max_rr_retry[2] = { 0x00, 0x00 };
+    uint8_t max_rr_retry_len = 0;
     uint8_t link_layer_mode = 0;
     uint8_t link_layer_mode_len = 0;
     uint8_t slot_duration[2] = { 0x00, 0x00 };
@@ -1811,6 +1823,16 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
         return -1;
     }
     if (validate_number_of_sts_segments(profile, number_of_sts_segments, result) != 0) {
+        return -1;
+    }
+
+    if (uci_sim_session_get_config(session, UCI_APP_CONFIG_MAX_RR_RETRY,
+                                   max_rr_retry, &max_rr_retry_len) != 0 ||
+        max_rr_retry_len != 2U) {
+        set_invalid_result(result,
+                           UCI_STATUS_INVALID_PARAM,
+                           UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
+                           UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
         return -1;
     }
 

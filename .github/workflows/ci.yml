@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: make
+
+      - name: Test
+        run: make test
+
+      - name: Build simulator binary
+        run: make uci-device-sim
+
+      - name: Verify binary
+        run: test -f build/uci-device-sim && echo "✅ uci-device-sim built successfully"

@@ -1,0 +1,12 @@
+---
+# https://clang.llvm.org/docs/ClangFormatting.html
+BasedOnStyle: Google
+IndentWidth: 4
+ColumnLimit: 120
+UseTab: Never
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+BreakBeforeBraces: Allman
+PointerAlignment: Left
+Standard: c11

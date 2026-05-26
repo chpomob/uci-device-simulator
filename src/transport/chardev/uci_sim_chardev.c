@@ -237,8 +237,8 @@ int uci_sim_chardev_process_input(uci_sim_chardev_t *dev)
     } while (n < 0 && errno == EINTR);
 
     if (n < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) return 0; /* no data */
-        if (errno == EIO) return 0; /* PTY master: no slave connected yet */
+        if (errno == EAGAIN || errno == EWOULDBLOCK) goto flush; /* no data, but flush queued output */
+        if (errno == EIO) goto flush; /* PTY master: no slave connected yet */
         return -1;  /* real error */
     }
     if (n == 0) return -1;  /* master closed (EOF) */
@@ -271,6 +271,7 @@ int uci_sim_chardev_process_input(uci_sim_chardev_t *dev)
         return -1;
 
     /* 4. Flush engine-enqueued responses → master */
+flush:
     return master_flush(dev);
 }
 

@@ -13,6 +13,7 @@ static void apply_profile_defaults(uci_sim_device_t* device, const uci_sim_profi
     device->mac_version = effective_profile->mac_version;
     device->phy_version = effective_profile->phy_version;
     device->test_version = effective_profile->test_version;
+    device->device_stats_temperature = effective_profile->device_stats_temperature;
     device->device_state = effective_profile->default_device_state;
     device->next_uwbs_timestamp = effective_profile->initial_uwbs_timestamp;
 

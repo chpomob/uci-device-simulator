@@ -26,6 +26,9 @@ typedef struct {
     uint16_t mac_version;
     uint16_t phy_version;
     uint16_t test_version;
+    uint8_t vendor_specific_length;
+    uint8_t vendor_specific_data[UCI_SIM_MAX_PAYLOAD];
+    int16_t device_stats_temperature;
     uint8_t default_device_state;
     uint8_t default_low_power_mode;
     uint8_t default_device_pan_id[2];

@@ -215,6 +215,155 @@ static void emit_logical_link_notification(uci_sim_device_t* device,
                                            uint8_t link_id,
                                            uint8_t reason_or_credit);
 
+static int handle_qorvo_ext2(uci_sim_device_t* device, const uci_sim_packet_t* request, uci_sim_result_t* result) {
+    switch (request->oid) {
+        case UCI_OID_QORVO_CORE_GET_DEVICE_STATS:
+            result->has_response = 1;
+            result->response.mt = UCI_MT_RESPONSE;
+            result->response.pbf = UCI_PBF_COMPLETE;
+            result->response.gid = UCI_GID_QORVO_EXT2;
+            result->response.oid = UCI_OID_QORVO_CORE_GET_DEVICE_STATS;
+            result->response.payload_len = 3;
+            result->response.payload[0] = UCI_STATUS_OK;
+            /* temperature_100th_celsius (LE i16) */
+            result->response.payload[1] = (uint8_t)(device->device_stats_temperature & 0xFF);
+            result->response.payload[2] = (uint8_t)((device->device_stats_temperature >> 8) & 0xFF);
+            return 0;
+        default:
+            make_status_response(request, result, UCI_STATUS_UNKNOWN_OID);
+            return -1;
+    }
+}
+
+static int handle_qorvo_mac(uci_sim_device_t* device, const uci_sim_packet_t* request, uci_sim_result_t* result) {
+    (void)device;
+
+    switch (request->oid) {
+        case UCI_OID_QORVO_MAC_GET_CALIBRATIONS: {
+            /* Parse requested keys from payload, return simulated calibration data.
+             * Request format: count(u16 LE) + [key_length(u8) + key_name(variable)]*count */
+            uint16_t i;
+            size_t offset = 0;
+            size_t resp_off;
+            uint16_t num_keys;
+            uint16_t num_returned = 0;
+
+            result->has_response = 1;
+            result->response.mt = UCI_MT_RESPONSE;
+            result->response.pbf = UCI_PBF_COMPLETE;
+            result->response.gid = UCI_GID_QORVO_MAC;
+            result->response.oid = UCI_OID_QORVO_MAC_GET_CALIBRATIONS;
+
+            /* Need at least 2 bytes for count */
+            if (request->payload_len < 2) {
+                result->response.payload_len = 3;
+                result->response.payload[0] = UCI_STATUS_INVALID_MSG_SIZE;
+                result->response.payload[1] = 0x00;
+                result->response.payload[2] = 0x00;
+                return -1;
+            }
+
+            /* Read number of calibration keys */
+            num_keys = read_u16_le(request->payload);
+            offset = 2;
+
+            /* Response: status(1) + num_calib(2) + entries */
+            resp_off = 3;
+            result->response.payload[0] = UCI_STATUS_OK;
+
+            for (i = 0; i < num_keys && offset < request->payload_len; i++) {
+                uint8_t key_len;
+                const uint8_t* key_ptr;
+                uint8_t calib_value[32];
+                uint8_t calib_value_len = 0;
+                uint8_t jndex;
+                int is_port = 0;
+                int is_ants = 0;
+                int is_lut = 0;
+
+                if (offset >= request->payload_len) {
+                    break;
+                }
+                key_len = request->payload[offset];
+                offset++;
+                if (offset + key_len > request->payload_len) {
+                    break;
+                }
+                key_ptr = &request->payload[offset];
+
+                /* Determine value type: find LAST '.' in key name to get the suffix */
+                {
+                    int last_dot = -1;
+                    for (jndex = 0; jndex < key_len; jndex++) {
+                        if (key_ptr[jndex] == '.') last_dot = (int)jndex;
+                    }
+                    if (last_dot >= 0) {
+                        size_t suffix_len = key_len - (size_t)last_dot;
+                        const char* suffix = (const char*)&key_ptr[last_dot];
+                        if (suffix_len >= 5 && memcmp(suffix, ".port", 5) == 0) {
+                            is_port = 1;
+                        } else if (suffix_len >= 11 && memcmp(suffix, ".nb_rx_ants", 11) == 0) {
+                            is_ants = 1;
+                        } else if (suffix_len >= 7 && memcmp(suffix, ".lut_id", 7) == 0) {
+                            is_lut = 1;
+                        }
+                    }
+                }
+
+                if (is_port) {
+                    /* antX.port -> X is at position 3 */
+                    char c = (char)(key_len > 3 ? key_ptr[3] : '0');
+                    calib_value[0] = (c >= '0' && c <= '9') ? (uint8_t)(c - '0') : 0;
+                    calib_value_len = 1;
+                } else if (is_ants) {
+                    calib_value[0] = 6;
+                    calib_value_len = 1;
+                } else if (is_lut) {
+                    /* uint8: -1 (0xFF) means 'no LUT' */
+                    calib_value[0] = 0xFF;
+                    calib_value_len = 1;
+                } else {
+                    /* Unknown key — skip it */
+                    offset += key_len;
+                    continue;
+                }
+
+                /* Check if we have room for the entry */
+                if (resp_off + 1 + key_len + 1 + 1 + calib_value_len > UCI_SIM_MAX_PAYLOAD) {
+                    offset += key_len;
+                    continue;
+                }
+
+                /* Write entry: key_length + key_name + key_status + value_length + value */
+                result->response.payload[resp_off++] = key_len;
+                memcpy(&result->response.payload[resp_off], key_ptr, key_len);
+                resp_off += key_len;
+                result->response.payload[resp_off++] = 0; /* key_status = success */
+                result->response.payload[resp_off++] = calib_value_len;
+                memcpy(&result->response.payload[resp_off], calib_value, calib_value_len);
+                resp_off += calib_value_len;
+                num_returned++;
+
+                offset += key_len;
+            }
+
+            /* Write number of calibrations returned */
+            write_u16_le(&result->response.payload[1], num_returned);
+            result->response.payload_len = (uint16_t)resp_off;
+            return 0;
+        }
+
+        case UCI_OID_QORVO_MAC_SET_CALIBRATIONS:
+            /* Acknowledge but don't store */
+            make_status_response(request, result, UCI_STATUS_OK);
+            return 0;
+
+        default:
+            make_status_response(request, result, UCI_STATUS_UNKNOWN_OID);
+            return -1;
+    }
+}
+
 static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request, uci_sim_result_t* result) {
     if (!uci_sim_profile_supports_command(device->profile, request->gid, request->oid)) {
         make_status_response(request, result, UCI_STATUS_UNKNOWN_OID);
@@ -231,13 +380,17 @@ static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request
             make_status_response(request, result, UCI_STATUS_OK);
             emit_device_status_ntf(device, device->device_state, result);
             return 0;
-        case UCI_CORE_DEVICE_INFO:
+        case UCI_CORE_DEVICE_INFO: {
+            const uci_sim_profile_t* p = device->profile ? device->profile : uci_sim_default_profile();
+            uint16_t vendor_len = p->vendor_specific_length;
+            uint16_t total = 10 + vendor_len;
+
             result->has_response = 1;
             result->response.mt = UCI_MT_RESPONSE;
             result->response.pbf = UCI_PBF_COMPLETE;
             result->response.gid = UCI_GID_CORE;
             result->response.oid = UCI_CORE_DEVICE_INFO;
-            result->response.payload_len = 10;
+            result->response.payload_len = (uint8_t)(total < 256 ? total : 255);
             result->response.payload[0] = UCI_STATUS_OK;
             result->response.payload[1] = (uint8_t)(device->uci_version & 0xFFU);
             result->response.payload[2] = (uint8_t)((device->uci_version >> 8) & 0xFFU);
@@ -247,8 +400,12 @@ static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request
             result->response.payload[6] = (uint8_t)((device->phy_version >> 8) & 0xFFU);
             result->response.payload[7] = (uint8_t)(device->test_version & 0xFFU);
             result->response.payload[8] = (uint8_t)((device->test_version >> 8) & 0xFFU);
-            result->response.payload[9] = 0x00;
+            result->response.payload[9] = (uint8_t)(vendor_len & 0xFF);
+            if (vendor_len > 0 && vendor_len <= UCI_SIM_MAX_PAYLOAD - 10) {
+                memcpy(&result->response.payload[10], p->vendor_specific_data, vendor_len);
+            }
             return 0;
+        }
         case UCI_CORE_GET_CAPS_INFO:
             result->has_response = 1;
             result->response.mt = UCI_MT_RESPONSE;
@@ -1184,6 +1341,12 @@ int uci_sim_device_handle_packet(uci_sim_device_t* device,
             break;
         case UCI_GID_SESSION_CONTROL:
             rc = handle_session_control(device, request, result);
+            break;
+        case UCI_GID_QORVO_EXT2:
+            rc = handle_qorvo_ext2(device, request, result);
+            break;
+        case UCI_GID_QORVO_MAC:
+            rc = handle_qorvo_mac(device, request, result);
             break;
         default:
             make_status_response(request, result, UCI_STATUS_UNKNOWN_GID);

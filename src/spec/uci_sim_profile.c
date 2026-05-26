@@ -17,6 +17,38 @@ static const uci_sim_profile_t k_default_profile = {
     .mac_version = 0x0200,
     .phy_version = 0x0200,
     .test_version = 0x0100,
+    /* Vendor-specific DEVICE_INFO data (qm-firmware format, 52 bytes minimum):
+     * fw_major, fw_minor, fw_patch, fw_rc (4)
+     * build_job u64 LE (8)
+     * OEM version (4 — skipped by Cherry)
+     * soc_id (16)
+     * device_id u32 LE (4) = QM35825 (0x8BED)
+     * package_id (1) = 0x01
+     * flavor (24 bytes, optional)
+     * product_id u32 LE (4, optional) — Cherry uses this in newer firmware
+     * soi_variant u32 LE (4, optional) — Cherry needs this for calibration
+     * rom_revision u16 LE (2, optional)
+     * Total: 52 + 24 + 4 + 4 + 2 = 86 */
+    .vendor_specific_length = 86,
+    .vendor_specific_data = {
+        0x01, 0x00, 0x00, 0x00,  /* fw_major=1, minor=0, patch=0, rc=0 */
+        0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  /* build_job=66 */
+        0x00, 0x00, 0x00, 0x00,  /* OEM version (skipped) */
+        0x51, 0x4D, 0x33, 0x35, 0x38, 0x32, 0x35, 0x00,  /* soc_id: "QM35825\0..." */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  /* ...continued */
+        0xED, 0x8B, 0x00, 0x00,  /* device_id = 0x8BED (QM35825) */
+        0x01,                    /* package_id = SIP */
+        /* flavor (24 bytes) */
+        'Q','M','3','5','8','2','5','_','S','I','P','_','V','1','.','0',
+        0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+        /* product_id (4 bytes) */
+        0xED, 0x8B, 0x00, 0x00,  /* 0x8BED */
+        /* soi_variant (4 bytes) */
+        0x02, 0x00, 0x00, 0x00,  /* SOI variant 2 */
+        /* rom_revision (2 bytes) */
+        0x01, 0x00,               /* ROM rev 1 */
+    },
+    .device_stats_temperature = 3500,  /* 35.00°C */
     .default_device_state = UCI_DEVICE_STATE_READY,
     .default_low_power_mode = 0x00,
     .default_device_pan_id = { 0x00, 0x00 },

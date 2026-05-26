@@ -20,6 +20,8 @@ const char* uci_sim_gid_name(uint8_t gid) {
         case UCI_GID_CORE: return "CORE";
         case UCI_GID_SESSION_CONFIG: return "SESSION_CONFIG";
         case UCI_GID_SESSION_CONTROL: return "SESSION_CONTROL";
+        case UCI_GID_QORVO_EXT2: return "QORVO_EXT2";
+        case UCI_GID_QORVO_MAC: return "QORVO_MAC";
         default: return "UNKNOWN_GID";
     }
 }

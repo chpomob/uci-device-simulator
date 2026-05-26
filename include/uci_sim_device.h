@@ -108,6 +108,7 @@ typedef struct uci_sim_device {
     uint16_t mac_version;
     uint16_t phy_version;
     uint16_t test_version;
+    int16_t device_stats_temperature;
     uint8_t device_state;
     uint64_t next_uwbs_timestamp;
     const uci_sim_profile_t* profile;

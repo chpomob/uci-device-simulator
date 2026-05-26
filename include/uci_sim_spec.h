@@ -184,7 +184,10 @@ enum {
 };
 
 enum {
-    UCI_SESSION_TYPE_RANGING = 0x00
+    UCI_SESSION_TYPE_RANGING = 0x00,
+    UCI_SESSION_TYPE_DATA    = 0x01,
+    UCI_SESSION_TYPE_RADAR   = 0xA1,
+    UCI_SESSION_TYPE_TEST    = 0xD0
 };
 
 enum {

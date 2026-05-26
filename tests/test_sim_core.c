@@ -5535,6 +5535,30 @@ static void test_profile_rejects_unsupported_session_features(void) {
     PASS();
 }
 
+static void test_session_init_rejects_radar_type(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RADAR;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "radar session init should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_RANGE, result.response.payload[0],
+                 "radar session init status should be INVALID_RANGE");
+    PASS();
+}
+
 static void test_session_lifecycle(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -6363,6 +6387,7 @@ int main(void) {
     test_session_time_base_rejects_offset_outside_interval();
     test_session_app_config_storage();
     test_profile_rejects_unsupported_session_features();
+    test_session_init_rejects_radar_type();
     test_session_lifecycle();
     test_profile_enforces_session_transition_policy();
     test_session_multicast_list_updates();

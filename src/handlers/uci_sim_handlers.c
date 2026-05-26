@@ -564,6 +564,13 @@ static int handle_session_config(uci_sim_device_t* device, const uci_sim_packet_
                 return -1;
             }
             session_id = read_u32_le(request->payload);
+            {
+                uint8_t req_session_type = request->payload[4];
+                if (req_session_type != UCI_SESSION_TYPE_RANGING) {
+                    make_status_response(request, result, UCI_STATUS_INVALID_RANGE);
+                    return -1;
+                }
+            }
             session = find_session(device, session_id);
             if (session == NULL) {
                 session = alloc_session(device, session_id);

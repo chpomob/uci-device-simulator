@@ -39,7 +39,13 @@ int uci_sim_packet_serialize(const uci_sim_packet_t* packet, uint8_t* buffer, si
     if (!packet || !buffer || !written) {
         return -1;
     }
-    if (packet->payload_len > UCI_SIM_MAX_PAYLOAD || buffer_capacity < UCI_SIM_HEADER_SIZE + packet->payload_len) {
+    if (packet->payload_len > UCI_SIM_MAX_PAYLOAD) {
+        return -1;
+    }
+    if (packet->mt != UCI_MT_DATA && packet->payload_len > 255U) {
+        return -1;
+    }
+    if (buffer_capacity < UCI_SIM_HEADER_SIZE + packet->payload_len) {
         return -1;
     }
 
@@ -51,7 +57,7 @@ int uci_sim_packet_serialize(const uci_sim_packet_t* packet, uint8_t* buffer, si
         wire_len = packet->payload_len;
     } else {
         buffer[2] = 0;
-        wire_len = (packet->payload_len > 255U) ? 255U : (uint8_t)packet->payload_len;
+        wire_len = packet->payload_len;
         buffer[3] = (uint8_t)(wire_len & 0xFF);
     }
 

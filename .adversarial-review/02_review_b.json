@@ -1,0 +1,97 @@
+{
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "blocker",
+      "file": "src/core/uci_sim_packet.c",
+      "line": 57,
+      "category": "bug",
+      "title": "Control packets over 255 bytes are silently truncated",
+      "description": "For non-data packets, payload_len greater than 255 is clamped to 255 and only that many bytes are copied, while the function still returns success. This drops the rest of the response payload instead of fragmenting or rejecting it. Large responses such as GET_APP_CONFIG_ALL now lose data on the wire.",
+      "suggestion": "Do not truncate in the serializer. Return an error for oversized control payloads, or keep serializer exact and perform UCI PBF fragmentation in the transport before calling it."
+    },
+    {
+      "id": "B2",
+      "severity": "blocker",
+      "file": "src/transport/tcp/uci_sim_tcp_server.c",
+      "line": 50,
+      "category": "bug",
+      "title": "TCP transport no longer fragments large control responses",
+      "description": "The previous TCP implementation split control packets larger than 255 bytes into UCI fragments. The new send_to_client path serializes the packet directly, which combines with the serializer clamp to send only the first 255 bytes. Clients will receive incomplete responses marked as complete.",
+      "suggestion": "Restore transport-level fragmentation for non-data packets with payload_len > 255, setting PBF_NOT_COMPLETE on intermediate fragments and PBF_COMPLETE on the final fragment."
+    },
+    {
+      "id": "B3",
+      "severity": "major",
+      "file": "src/handlers/uci_sim_handlers.c",
+      "line": 299,
+      "category": "bug",
+      "title": "255-byte calibration key can hang the handler",
+      "description": "jndex is uint8_t and is used as the loop counter while iterating up to key_len. If key_len is 255, jndex wraps from 254 back to 0 and the loop never terminates. A malformed GET_CALIBRATIONS request can lock the simulator.",
+      "suggestion": "Use size_t or uint16_t for the loop index and validate key_len against the remaining payload before iterating."
+    },
+    {
+      "id": "B4",
+      "severity": "major",
+      "file": "src/transport/tcp/uci_sim_tcp_server.c",
+      "line": 113,
+      "category": "edge_case",
+      "title": "Oversized inbound payload desynchronizes the TCP stream",
+      "description": "When the header declares a payload larger than pkt->payload, read_command reads only sizeof(pkt->payload), then overwrites payload_len with the truncated amount. The unread bytes remain in the socket and will be parsed as the next packet header, corrupting the stream.",
+      "suggestion": "Reject oversized packets and drain the remaining declared payload bytes before continuing, or close the connection on invalid size."
+    },
+    {
+      "id": "B5",
+      "severity": "major",
+      "file": "src/transport/tcp/uci_sim_tcp_server.c",
+      "line": 196,
+      "category": "bug",
+      "title": "Simulator time advances per loop, not by elapsed time",
+      "description": "uci_sim_engine_tick(engine, 50) is called once per event-loop iteration regardless of how much wall time passed. A burst of client commands can advance simulated time by many 50 ms ticks immediately, causing delayed notifications and ranging events to fire too early.",
+      "suggestion": "Drive the engine from elapsed monotonic time, or restore the clock-based polling behavior so scheduled events are tied to real elapsed time instead of command volume."
+    },
+    {
+      "id": "B6",
+      "severity": "major",
+      "file": "src/spec/uci_sim_profile.c",
+      "line": 564,
+      "category": "bug",
+      "title": "Profile support checks now always accept every app config ID",
+      "description": "uci_sim_profile_supports_session_app_config ignores both the profile and config_id and always returns 1. This breaks custom profile restrictions and also makes NULL profiles report support for every app config.",
+      "suggestion": "Keep the profile-supported list check, or introduce a separate explicit profile option for permissive storage mode instead of changing the support predicate globally."
+    },
+    {
+      "id": "B7",
+      "severity": "major",
+      "file": "src/transport/tcp/uci_sim_tcp_server.c",
+      "line": 56,
+      "category": "error_handling",
+      "title": "send can terminate the process with SIGPIPE",
+      "description": "send_to_client calls send without MSG_NOSIGNAL and the server does not ignore SIGPIPE. If the client disconnects while the simulator flushes a response or notification, the process can be killed instead of returning an error.",
+      "suggestion": "Use MSG_NOSIGNAL where available, ignore SIGPIPE for the server process, or use send handling that cannot terminate the process on EPIPE."
+    },
+    {
+      "id": "B8",
+      "severity": "minor",
+      "file": "src/handlers/uci_sim_handlers.c",
+      "line": 291,
+      "category": "edge_case",
+      "title": "Truncated GET_CALIBRATIONS requests return partial OK responses",
+      "description": "If the declared key count is larger than the actual encoded keys, or a key length runs past the payload, the loop breaks and the handler still returns UCI_STATUS_OK with however many entries were parsed. Malformed requests should not be accepted as successful.",
+      "suggestion": "Return UCI_STATUS_INVALID_MSG_SIZE when the payload does not contain exactly the declared number of key entries."
+    },
+    {
+      "id": "B9",
+      "severity": "minor",
+      "file": "src/handlers/uci_sim_handlers.c",
+      "line": 394,
+      "category": "edge_case",
+      "title": "DEVICE_INFO can advertise more vendor bytes than it sends",
+      "description": "payload_len is capped to 255, but payload[9] still reports the full vendor_specific_length. For profiles with vendor_specific_length greater than 245, the response length cannot contain all advertised vendor bytes, producing an inconsistent DEVICE_INFO response.",
+      "suggestion": "Validate vendor_specific_length <= 245 for single control responses, or fragment the DEVICE_INFO response and ensure the advertised vendor length matches the bytes actually sent."
+    }
+  ],
+  "overall_assessment": "The patch adds useful compatibility behavior, but it regresses core transport framing and timing semantics. The largest risks are silent truncation of large UCI control responses, stream corruption on oversized inbound packets, and event timing that now depends on loop iterations rather than elapsed time.",
+  "verdict": "REQUEST_CHANGES",
+  "summary": "3 blocker/major transport bugs found, plus calibration parsing, profile enforcement, DEVICE_INFO edge cases, and error handling gaps."
+}

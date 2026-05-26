@@ -499,6 +499,96 @@ static int assert_fixture_packet(int fd, const char* fixture_path, const char* s
     return 0;
 }
 
+static int payload_contains_config_tlv(const uint8_t* payload,
+                                       size_t payload_len,
+                                       uint8_t config_id,
+                                       const uint8_t* expected_value,
+                                       uint8_t expected_value_len) {
+    size_t offset = 2;
+
+    if (!payload || (!expected_value && expected_value_len > 0) || payload_len < 2) {
+        return 0;
+    }
+
+    while (offset + 2 <= payload_len) {
+        uint8_t current_id = payload[offset++];
+        uint8_t current_len = payload[offset++];
+
+        if (offset + current_len > payload_len) {
+            return 0;
+        }
+        if (current_id == config_id &&
+            current_len == expected_value_len &&
+            memcmp(&payload[offset], expected_value, expected_value_len) == 0) {
+            return 1;
+        }
+        offset += current_len;
+    }
+
+    return 0;
+}
+
+static int assert_fragmented_get_app_config_all(int fd, const char* step_name) {
+    uint8_t packet[UCI_SIM_MAX_PACKET];
+    uint8_t payload[UCI_SIM_MAX_PAYLOAD];
+    size_t packet_len = 0;
+    size_t payload_len = 0;
+    size_t fragment_count = 0;
+    int complete = 0;
+    char message[160];
+
+    while (!complete) {
+        uci_sim_packet_t parsed;
+
+        snprintf(message, sizeof(message), "%s fragmented packet read", step_name);
+        if (read_packet(fd, packet, sizeof(packet), &packet_len) != 0) {
+            printf("FAIL: %s\n", message);
+            g_failed++;
+            return -1;
+        }
+        snprintf(message, sizeof(message), "%s fragmented packet parse", step_name);
+        if (uci_sim_packet_parse(packet, packet_len, &parsed) != 0) {
+            printf("FAIL: %s\n", message);
+            g_failed++;
+            return -1;
+        }
+        if (parsed.mt != UCI_MT_RESPONSE ||
+            parsed.gid != UCI_GID_SESSION_CONFIG ||
+            parsed.oid != UCI_SESSION_GET_APP_CONFIG) {
+            printf("FAIL: %s unexpected fragment header\n", step_name);
+            g_failed++;
+            return -1;
+        }
+        if (payload_len + parsed.payload_len > sizeof(payload)) {
+            printf("FAIL: %s reassembled payload too large\n", step_name);
+            g_failed++;
+            return -1;
+        }
+        memcpy(&payload[payload_len], parsed.payload, parsed.payload_len);
+        payload_len += parsed.payload_len;
+        fragment_count++;
+        complete = parsed.pbf == UCI_PBF_COMPLETE;
+    }
+
+    if (fragment_count < 2 || payload_len <= 255U) {
+        printf("FAIL: %s expected multi-fragment control response\n", step_name);
+        g_failed++;
+        return -1;
+    }
+    if (payload[0] != UCI_STATUS_OK || payload[1] != 0x4E) {
+        printf("FAIL: %s unexpected reassembled status/count\n", step_name);
+        g_failed++;
+        return -1;
+    }
+    if (!payload_contains_config_tlv(payload, payload_len, 0x4D, (const uint8_t[]){ 0x0A }, 1)) {
+        printf("FAIL: %s missing final default app config TLV\n", step_name);
+        g_failed++;
+        return -1;
+    }
+
+    return 0;
+}
+
 static void assert_two_fixture_packets_any_order(int fd,
                                                  const char* fixture_a,
                                                  const char* fixture_b,
@@ -1674,7 +1764,11 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
         snprintf(message, sizeof(message), "%s write", k_steps[i].step_name);
         ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, message);
 
-        assert_fixture_packet(fd, k_steps[i].response_fixture, k_steps[i].step_name);
+        if (strcmp(k_steps[i].step_name, "session_get_app_config_all") == 0) {
+            assert_fragmented_get_app_config_all(fd, k_steps[i].step_name);
+        } else {
+            assert_fixture_packet(fd, k_steps[i].response_fixture, k_steps[i].step_name);
+        }
         if (k_steps[i].notification_fixture) {
             char notification_step[160];
             snprintf(notification_step, sizeof(notification_step), "%s notification", k_steps[i].step_name);

@@ -24,6 +24,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 
 #define ENGINE_TICK_MS 50  /* ms */
@@ -40,19 +41,99 @@ static void sigterm_handler(int sig)
 
 /* ─── helpers ───────────────】 */
 
+static int monotonic_ms(uint64_t *now_ms)
+{
+    struct timespec ts;
+
+    if (now_ms == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+        return -1;
+    }
+
+    *now_ms = ((uint64_t)ts.tv_sec * 1000ULL) + ((uint64_t)ts.tv_nsec / 1000000ULL);
+    return 0;
+}
+
+static int send_all(int fd, const uint8_t *wire, size_t wire_len)
+{
+    size_t total = 0;
+
+    if (wire == NULL && wire_len > 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    while (total < wire_len) {
+        ssize_t n = send(fd, (const char*)wire + total, wire_len - total, 0);
+        if (n < 0) {
+            if (errno == EINTR) {
+                if (g_shutdown) {
+                    return -1;
+                }
+                continue;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue;
+            }
+            return -1;
+        }
+        if (n == 0) {
+            errno = EPIPE;
+            return -1;
+        }
+        total += (size_t)n;
+    }
+
+    return 0;
+}
+
 static int send_to_client(int fd, const uci_sim_packet_t *pkt)
 {
     uint8_t wire[UCI_SIM_MAX_PACKET];
     size_t w;
+
+    if (pkt == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (pkt->mt != UCI_MT_DATA && pkt->payload_len > 255U) {
+        size_t payload_offset = 0;
+
+        while (payload_offset < pkt->payload_len) {
+            uci_sim_packet_t frag;
+            size_t remaining = (size_t)pkt->payload_len - payload_offset;
+            size_t fragment_len = remaining > 255U ? 255U : remaining;
+
+            memset(&frag, 0, sizeof(frag));
+            frag.mt = pkt->mt;
+            frag.pbf = (remaining > 255U) ? UCI_PBF_NOT_COMPLETE : UCI_PBF_COMPLETE;
+            frag.gid = pkt->gid;
+            frag.oid = pkt->oid;
+            frag.payload_len = (uint16_t)fragment_len;
+            memcpy(frag.payload, &pkt->payload[payload_offset], fragment_len);
+
+            if (uci_sim_packet_serialize(&frag, wire, sizeof(wire), &w) != 0) {
+                return -1;
+            }
+            if (send_all(fd, wire, w) != 0) {
+                return -1;
+            }
+
+            payload_offset += fragment_len;
+        }
+        return 0;
+    }
+
     if (uci_sim_packet_serialize(pkt, wire, sizeof(wire), &w) != 0)
         return -1;
 
-    size_t total = 0;
-    while (total < w) {
-        ssize_t n = send(fd, (char*)wire + total, w - total, 0);
-        if (n <= 0) return -1;
-        total += (size_t)n;
-    }
+    if (send_all(fd, wire, w) != 0)
+        return -1;
+
     return 0;
 }
 
@@ -80,7 +161,13 @@ static int read_command(int fd, uci_sim_packet_t *pkt)
         while (off < 4) {
             ssize_t n = recv(fd, hdr + off, sizeof(hdr) - off, MSG_WAITALL);
             if (n <= 0) {
-                if (n < 0 && (errno == EAGAIN || errno == EINTR)) continue;
+                if (n < 0 && errno == EINTR) {
+                    if (g_shutdown) {
+                        return -1;
+                    }
+                    continue;
+                }
+                if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
                 return (n == 0) ? 1 : -1;
             }
             off += (size_t)n;
@@ -95,19 +182,26 @@ static int read_command(int fd, uci_sim_packet_t *pkt)
         ? ((uint16_t)hdr[2] | ((uint16_t)hdr[3] << 8))
         : (uint16_t)hdr[3];
 
+    if (pkt->payload_len > sizeof(pkt->payload)) {
+        return -1;
+    }
+
     if (pkt->payload_len > 0) {
         size_t poff = 0;
-        size_t max = pkt->payload_len;
-        if (max > sizeof(pkt->payload)) max = sizeof(pkt->payload);
-        while (poff < max) {
-            ssize_t n = recv(fd, (char*)pkt->payload + poff, max - poff, 0);
+        while (poff < pkt->payload_len) {
+            ssize_t n = recv(fd, (char*)pkt->payload + poff, (size_t)pkt->payload_len - poff, 0);
             if (n <= 0) {
-                if (n < 0 && (errno == EAGAIN || errno == EINTR)) continue;
+                if (n < 0 && errno == EINTR) {
+                    if (g_shutdown) {
+                        return -1;
+                    }
+                    continue;
+                }
+                if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
                 return (n == 0) ? 1 : -1;
             }
             poff += (size_t)n;
         }
-        pkt->payload_len = (uint16_t)poff;
     }
 
     return 0;
@@ -121,6 +215,7 @@ int uci_sim_tcp_serve(const char *host, uint16_t port, uci_sim_engine_t *engine)
     int listen_fd, client_fd;
     int reuse = 1;
     struct sockaddr_in addr;
+    uint64_t last_tick_ms;
 
     /* Install SIGTERM handler for test teardown */
     struct sigaction sa;
@@ -129,6 +224,7 @@ int uci_sim_tcp_serve(const char *host, uint16_t port, uci_sim_engine_t *engine)
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
     sigaction(SIGTERM, &sa, NULL);
+    signal(SIGPIPE, SIG_IGN);
 
     if (!engine) { errno = EINVAL; return -1; }
 
@@ -166,6 +262,13 @@ int uci_sim_tcp_serve(const char *host, uint16_t port, uci_sim_engine_t *engine)
 
     fprintf(stderr, "[tcp] client connected\n");
 
+    if (monotonic_ms(&last_tick_ms) != 0) {
+        perror("clock_gettime");
+        close(client_fd);
+        close(listen_fd);
+        return -1;
+    }
+
     /* Event loop */
     for (;;) {
         if (g_shutdown) {
@@ -179,7 +282,10 @@ int uci_sim_tcp_serve(const char *host, uint16_t port, uci_sim_engine_t *engine)
 
         int rc = poll(pfd, 2, ENGINE_TICK_MS);
         if (rc < 0) {
-            if (errno == EINTR) continue;
+            if (errno == EINTR) {
+                if (g_shutdown) break;
+                continue;
+            }
             perror("poll");
             break;
         }
@@ -200,8 +306,6 @@ int uci_sim_tcp_serve(const char *host, uint16_t port, uci_sim_engine_t *engine)
             if (cmd_rc == 1)  break;  /* disconnect */
             if (cmd_rc == 0) {
                 uci_sim_engine_submit_packet(engine, &pkt);
-                if (flush_to_client(client_fd, engine) != 0)
-                    break;
             } else {
                 break;
             }
@@ -210,8 +314,22 @@ int uci_sim_tcp_serve(const char *host, uint16_t port, uci_sim_engine_t *engine)
         if (pfd[0].revents & (POLLERR | POLLHUP | POLLNVAL))
             break;
 
-        uci_sim_engine_tick(engine, ENGINE_TICK_MS);
-        /* Flush any time-triggered outbound packets (range data, notifications) */
+        {
+            uint64_t now_ms;
+            if (monotonic_ms(&now_ms) != 0) {
+                perror("clock_gettime");
+                break;
+            }
+            if (now_ms > last_tick_ms) {
+                uint64_t elapsed_ms = now_ms - last_tick_ms;
+                uint32_t tick_ms = elapsed_ms > ENGINE_TICK_MS ? ENGINE_TICK_MS : (uint32_t)elapsed_ms;
+
+                uci_sim_engine_tick(engine, tick_ms);
+                last_tick_ms = now_ms;
+            }
+        }
+
+        /* Flush command responses and any time-triggered outbound packets. */
         if (flush_to_client(client_fd, engine) != 0)
             break;
     }

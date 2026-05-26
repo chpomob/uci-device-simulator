@@ -3294,6 +3294,28 @@ static void test_packet_round_trip(void) {
     PASS();
 }
 
+static void test_control_packet_serializer_rejects_oversized_payload(void) {
+    uint8_t bytes[UCI_SIM_MAX_PACKET];
+    size_t written = 0;
+    uci_sim_packet_t packet;
+
+    memset(&packet, 0, sizeof(packet));
+    packet.mt = UCI_MT_RESPONSE;
+    packet.pbf = UCI_PBF_COMPLETE;
+    packet.gid = UCI_GID_CORE;
+    packet.oid = UCI_CORE_GET_CAPS_INFO;
+    packet.payload_len = 256;
+
+    ASSERT_TRUE(uci_sim_packet_serialize(&packet, bytes, sizeof(bytes), &written) != 0,
+                "control serializer should reject payloads above 255 bytes");
+
+    packet.mt = UCI_MT_DATA;
+    ASSERT_TRUE(uci_sim_packet_serialize(&packet, bytes, sizeof(bytes), &written) == 0,
+                "data serializer should retain 16-bit payload lengths");
+    ASSERT_EQ_U16(260U, written, "data serializer written length");
+    PASS();
+}
+
 static void test_core_device_info(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -3310,6 +3332,92 @@ static void test_core_device_info(void) {
     ASSERT_TRUE(result.has_response, "device info missing response");
     ASSERT_EQ_U8(UCI_MT_RESPONSE, result.response.mt, "device info mt");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "device info status");
+    PASS();
+}
+
+static void test_core_device_info_clamps_vendor_length_to_payload_limit(void) {
+    uci_sim_profile_t profile;
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    size_t i;
+
+    profile = *uci_sim_default_profile();
+    profile.vendor_specific_length = 250;
+    for (i = 0; i < profile.vendor_specific_length; ++i) {
+        profile.vendor_specific_data[i] = (uint8_t)i;
+    }
+
+    uci_sim_device_init_with_profile(&device, &profile, UCI_SIM_SCENARIO_DEFAULT);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_DEVICE_INFO;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0,
+                "device info with long vendor data should succeed");
+    ASSERT_EQ_U16(255U, result.response.payload_len, "device info payload length");
+    ASSERT_EQ_U8(245U, result.response.payload[9], "device info vendor length");
+    ASSERT_EQ_U8(244U, result.response.payload[254], "device info last vendor byte");
+    PASS();
+}
+
+static void test_get_calibrations_rejects_malformed_key_list(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_QORVO_MAC;
+    request.oid = UCI_OID_QORVO_MAC_GET_CALIBRATIONS;
+    request.payload_len = 5;
+    request.payload[0] = 0x01;
+    request.payload[1] = 0x00;
+    request.payload[2] = 0x05;
+    request.payload[3] = 'a';
+    request.payload[4] = 'n';
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "malformed calibrations request should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_MSG_SIZE, result.response.payload[0],
+                 "malformed calibrations status");
+    ASSERT_EQ_U16(3U, result.response.payload_len, "malformed calibrations response length");
+    ASSERT_EQ_U16(0U, read_u16_le(&result.response.payload[1]), "malformed calibrations count");
+    PASS();
+}
+
+static void test_get_calibrations_caps_control_response_at_255_bytes(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uint16_t i;
+    size_t offset = 2;
+    const uint8_t key[] = { 'a', 'n', 't', '0', '.', 'p', 'o', 'r', 't' };
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_QORVO_MAC;
+    request.oid = UCI_OID_QORVO_MAC_GET_CALIBRATIONS;
+    request.payload[0] = 0x14;
+    request.payload[1] = 0x00;
+    for (i = 0; i < 20U; ++i) {
+        request.payload[offset++] = (uint8_t)sizeof(key);
+        memcpy(&request.payload[offset], key, sizeof(key));
+        offset += sizeof(key);
+    }
+    request.payload_len = (uint16_t)offset;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0,
+                "large calibrations request should succeed with capped response");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "large calibrations status");
+    ASSERT_TRUE(result.response.payload_len <= 255U, "calibrations response must fit control payload");
+    ASSERT_EQ_U16(19U, read_u16_le(&result.response.payload[1]), "calibrations returned count");
     PASS();
 }
 
@@ -3433,8 +3541,14 @@ static void test_default_profile_feature_matrix(void) {
                 "profile should support app config 0x3E");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x3F),
                 "profile should support app config 0x3F");
-    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x99),
-                "profile should accept all app config IDs");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0xB6),
+                "profile should support app config 0xB6");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0xE6),
+                "profile should support app config 0xE6");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0xE7),
+                "profile should support app config 0xE7");
+    ASSERT_TRUE(!uci_sim_profile_supports_session_app_config(profile, 0x99),
+                "profile should reject unsupported app config IDs");
     ASSERT_TRUE(start_transition != NULL, "profile should define session start transition");
     ASSERT_TRUE(stop_transition != NULL, "profile should define session stop transition");
     ASSERT_TRUE(uci_sim_profile_supports_command(profile, UCI_GID_CORE, UCI_CORE_DEVICE_RESET),
@@ -5516,9 +5630,8 @@ static void test_profile_rejects_unsupported_session_features(void) {
     request.payload[5] = 0x99;
     request.payload[6] = 1;
     request.payload[7] = 0x01;
-    /* All app config IDs are now accepted (faithful storage) */
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "app config set should succeed");
-    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "app config set status");
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "unsupported app config set should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "unsupported app config set status");
 
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;
@@ -6294,6 +6407,7 @@ static void test_hus_config_commands(void) {
 
 int main(void) {
     test_packet_round_trip();
+    test_control_packet_serializer_rejects_oversized_payload();
     test_engine_clock_poll_progression();
     test_engine_uses_session_ranging_interval_override();
     test_ranging_interval_validation_rejects_below_profile_min();
@@ -6362,6 +6476,9 @@ int main(void) {
     test_rssi_reporting_masks_range_notification_rssi();
     test_measurement_uses_session_slot_index();
     test_core_device_info();
+    test_core_device_info_clamps_vendor_length_to_payload_limit();
+    test_get_calibrations_rejects_malformed_key_list();
+    test_get_calibrations_caps_control_response_at_255_bytes();
     test_default_profile_is_applied();
     test_default_profile_feature_matrix();
     test_core_device_config_storage();

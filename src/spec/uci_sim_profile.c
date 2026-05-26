@@ -558,11 +558,13 @@ int uci_sim_profile_supports_core_config(const uci_sim_profile_t* profile, uint8
 }
 
 int uci_sim_profile_supports_session_app_config(const uci_sim_profile_t* profile, uint8_t config_id) {
-    (void)profile;
-    (void)config_id;
-    /* Accept all app config IDs — the simulator stores them faithfully.
-     * Validation for specific parameters happens in uci_sim_validate_session_app_config(). */
-    return 1;
+    if (profile == NULL) {
+        return 0;
+    }
+
+    return list_contains(profile->supported_session_app_config_ids,
+                         profile->supported_session_app_config_id_count,
+                         config_id);
 }
 
 int uci_sim_profile_supports_notification(const uci_sim_profile_t* profile, uint8_t oid) {

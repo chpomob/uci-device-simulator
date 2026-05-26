@@ -3,6 +3,9 @@
 
 #include <string.h>
 
+#define UCI_SIM_CONTROL_PAYLOAD_LIMIT 255U
+#define UCI_SIM_DEVICE_INFO_FIXED_LEN 10U
+
 static void emit_session_status_ntf_with_reason(uci_sim_device_t* device,
                                                 uint32_t session_id,
                                                 uint8_t state,
@@ -247,6 +250,7 @@ static int handle_qorvo_mac(uci_sim_device_t* device, const uci_sim_packet_t* re
             size_t resp_off;
             uint16_t num_keys;
             uint16_t num_returned = 0;
+            int malformed = 0;
 
             result->has_response = 1;
             result->response.mt = UCI_MT_RESPONSE;
@@ -271,7 +275,7 @@ static int handle_qorvo_mac(uci_sim_device_t* device, const uci_sim_packet_t* re
             resp_off = 3;
             result->response.payload[0] = UCI_STATUS_OK;
 
-            for (i = 0; i < num_keys && offset < request->payload_len; i++) {
+            for (i = 0; i < num_keys; i++) {
                 uint8_t key_len;
                 const uint8_t* key_ptr;
                 uint8_t calib_value[32];
@@ -282,11 +286,13 @@ static int handle_qorvo_mac(uci_sim_device_t* device, const uci_sim_packet_t* re
                 int is_lut = 0;
 
                 if (offset >= request->payload_len) {
+                    malformed = 1;
                     break;
                 }
                 key_len = request->payload[offset];
                 offset++;
                 if (offset + key_len > request->payload_len) {
+                    malformed = 1;
                     break;
                 }
                 key_ptr = &request->payload[offset];
@@ -329,7 +335,7 @@ static int handle_qorvo_mac(uci_sim_device_t* device, const uci_sim_packet_t* re
                 }
 
                 /* Check if we have room for the entry */
-                if (resp_off + 1 + key_len + 1 + 1 + calib_value_len > UCI_SIM_MAX_PAYLOAD) {
+                if (resp_off + 1 + key_len + 1 + 1 + calib_value_len > UCI_SIM_CONTROL_PAYLOAD_LIMIT) {
                     offset += key_len;
                     continue;
                 }
@@ -345,6 +351,14 @@ static int handle_qorvo_mac(uci_sim_device_t* device, const uci_sim_packet_t* re
                 num_returned++;
 
                 offset += key_len;
+            }
+
+            if (malformed || i != num_keys || offset != request->payload_len) {
+                result->response.payload[0] = UCI_STATUS_INVALID_MSG_SIZE;
+                result->response.payload[1] = 0x00;
+                result->response.payload[2] = 0x00;
+                result->response.payload_len = 3;
+                return -1;
             }
 
             /* Write number of calibrations returned */
@@ -383,14 +397,20 @@ static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request
         case UCI_CORE_DEVICE_INFO: {
             const uci_sim_profile_t* p = device->profile ? device->profile : uci_sim_default_profile();
             uint16_t vendor_len = p->vendor_specific_length;
-            uint16_t total = 10 + vendor_len;
+            uint16_t vendor_copy_len = vendor_len;
+            uint16_t total;
+
+            if (vendor_copy_len > UCI_SIM_CONTROL_PAYLOAD_LIMIT - UCI_SIM_DEVICE_INFO_FIXED_LEN) {
+                vendor_copy_len = UCI_SIM_CONTROL_PAYLOAD_LIMIT - UCI_SIM_DEVICE_INFO_FIXED_LEN;
+            }
+            total = UCI_SIM_DEVICE_INFO_FIXED_LEN + vendor_copy_len;
 
             result->has_response = 1;
             result->response.mt = UCI_MT_RESPONSE;
             result->response.pbf = UCI_PBF_COMPLETE;
             result->response.gid = UCI_GID_CORE;
             result->response.oid = UCI_CORE_DEVICE_INFO;
-            result->response.payload_len = (uint8_t)(total < 256 ? total : 255);
+            result->response.payload_len = total;
             result->response.payload[0] = UCI_STATUS_OK;
             result->response.payload[1] = (uint8_t)(device->uci_version & 0xFFU);
             result->response.payload[2] = (uint8_t)((device->uci_version >> 8) & 0xFFU);
@@ -400,9 +420,9 @@ static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request
             result->response.payload[6] = (uint8_t)((device->phy_version >> 8) & 0xFFU);
             result->response.payload[7] = (uint8_t)(device->test_version & 0xFFU);
             result->response.payload[8] = (uint8_t)((device->test_version >> 8) & 0xFFU);
-            result->response.payload[9] = (uint8_t)(vendor_len & 0xFF);
-            if (vendor_len > 0 && vendor_len <= UCI_SIM_MAX_PAYLOAD - 10) {
-                memcpy(&result->response.payload[10], p->vendor_specific_data, vendor_len);
+            result->response.payload[9] = (uint8_t)vendor_copy_len;
+            if (vendor_copy_len > 0) {
+                memcpy(&result->response.payload[10], p->vendor_specific_data, vendor_copy_len);
             }
             return 0;
         }

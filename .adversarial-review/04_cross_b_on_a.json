@@ -1,0 +1,75 @@
+{
+  "cross_review": [
+    {
+      "id": "A1",
+      "judgment": "CHALLENGE",
+      "rationale": "The security leak is not reachable in the current code. uci_sim_device_handle_packet() calls init_result(), which memset()s the whole result before dispatch, so skipped copies would expose zeros, not stale response bytes. Also vendor_specific_length is uint8_t and UCI_SIM_MAX_PAYLOAD is 1024, so the memcpy guard is always true for nonzero current-profile values. There is a DEVICE_INFO length-consistency bug for vendor_len > 245, but not the CWE-200 leak described here."
+    },
+    {
+      "id": "A2",
+      "judgment": "VALIDATE",
+      "rationale": "uci_sim_packet_serialize() silently emits only 255 bytes for non-DATA payloads larger than 255 and still returns success. Callers using UCI_SIM_MAX_PACKET capacity will treat that as a complete send, so oversized control responses are silently corrupted instead of rejected or fragmented."
+    },
+    {
+      "id": "A3",
+      "judgment": "VALIDATE",
+      "rationale": "GET_CALIBRATIONS can exceed 255 bytes with a valid control request because it echoes variable-length keys and only caps against UCI_SIM_MAX_PAYLOAD. The response count can then describe entries that are not fully serialized due to A2."
+    },
+    {
+      "id": "A4",
+      "judgment": "CHALLENGE",
+      "rationale": "The core concern is real: uci_sim_profile_supports_session_app_config() no longer gates explicit SET/GET requests, weakening profile-driven shaping. But the finding overstates the implementation: supported_session_app_config_ids is not dead, because GET_CONFIG with count == 0 still iterates it. The sharper issue is that the supports_* API now lies for requested IDs while another path still treats the list as authoritative."
+    },
+    {
+      "id": "A5",
+      "judgment": "CHALLENGE",
+      "rationale": "The behavior is accurately described, but the severity is overstated. The public header and source both document a one-client server. Accept-and-close is not great observability, and a log line would help, but this is not a major protocol or correctness bug by itself."
+    },
+    {
+      "id": "A6",
+      "judgment": "VALIDATE",
+      "rationale": "The SIGTERM handler and g_shutdown global make the server process-global and non-reentrant. The function also does not restore the prior handler, and g_shutdown is not reset at serve start, so a later call after SIGTERM can inherit stale shutdown state."
+    },
+    {
+      "id": "A7",
+      "judgment": "VALIDATE",
+      "rationale": "The loop ignores POLLERR, POLLHUP, and POLLNVAL on listen_fd. If the listening fd becomes invalid or errored, poll can wake repeatedly without useful progress."
+    },
+    {
+      "id": "A8",
+      "judgment": "VALIDATE",
+      "rationale": "Both setsockopt() and sigaction() return values are ignored. setsockopt failure should be surfaced because it changes restart behavior; sigaction failure should at least warn because teardown semantics change."
+    },
+    {
+      "id": "A9",
+      "judgment": "VALIDATE",
+      "rationale": "The .port parser accepts any key ending in .port but derives the antenna index from key_ptr[3], which only works for the undocumented antX.port shape. Other prefixes silently produce wrong calibration values."
+    },
+    {
+      "id": "A10",
+      "judgment": "CHALLENGE",
+      "rationale": "This is a normal profile-default to runtime-state copy pattern, also used for versions and device config defaults. The profile value represents initialization input; the device value represents mutable runtime state. A rename to default_device_stats_temperature could improve clarity, but duplication here is not itself a defect."
+    }
+  ],
+  "additions": [
+    {
+      "id": "ADD1",
+      "severity": "major",
+      "title": "Default profile overflows the supported app-config ID list",
+      "description": "src/spec/uci_sim_profile.c initializes 81 supported_session_app_config_ids while UCI_SIM_MAX_PROFILE_FEATURES is 80. GCC emits an excess-initializer warning and drops the final 0xE7 entry, but supported_session_app_config_id_count is still set to 81. GET_CONFIG with count == 0 then reads one byte past the array, likely into the count field, and will not enumerate TX_ANTENNA_SELECTION correctly."
+    },
+    {
+      "id": "ADD2",
+      "severity": "major",
+      "title": "TCP read path truncates oversized incoming DATA packets and desynchronizes the stream",
+      "description": "src/transport/tcp/uci_sim_tcp_server.c reads a 16-bit DATA payload length, caps the recv size to sizeof(pkt->payload), then rewrites pkt->payload_len to the truncated amount. Any remaining bytes stay on the TCP stream and are parsed as the next packet header. Oversized DATA input should be rejected by closing/draining the connection, not submitted as a shorter packet."
+    },
+    {
+      "id": "ADD3",
+      "severity": "major",
+      "title": "CORE_DEVICE_INFO can advertise more vendor bytes than fit in its control response",
+      "description": "For vendor_specific_length values above 245, handle_core() caps payload_len at 255 but still writes the original vendor_len byte at payload[9]. The wire packet then contains at most 245 vendor bytes after the fixed 10-byte header while claiming 246-255 bytes. This is not A1's uninitialized-memory leak, but it is a malformed response for custom profiles."
+    }
+  ],
+  "summary": "I validate the serializer truncation, QORVO_MAC overflow, SIGTERM/global-state, listen_fd polling, unchecked syscall, and brittle calibration-key findings. I challenge A1 as a false security leak, A5 as overstated, A10 as normal default-to-runtime state, and A4 because its central concern is real but some supporting claims are wrong. The most important extra issue is the 81-entry default app-config list in an 80-slot array."
+}

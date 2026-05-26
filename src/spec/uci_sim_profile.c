@@ -340,9 +340,13 @@ static const uci_sim_profile_t k_default_profile = {
         0x4A,
         0x4B,
         0x4C,
-        0x4D
+        0x4D,
+        /* Extended FiRa range for Cherry SDK compat */
+        0xB6,  /* ANTENNA_SET_ID */
+        0xE6,  /* RX_ANTENNA_SELECTION */
+        0xE7,  /* TX_ANTENNA_SELECTION */
     },
-    .supported_session_app_config_id_count = 78,
+    .supported_session_app_config_id_count = 81,
     .default_session_app_config_ids = {
         0x00,
         0x01,
@@ -554,13 +558,11 @@ int uci_sim_profile_supports_core_config(const uci_sim_profile_t* profile, uint8
 }
 
 int uci_sim_profile_supports_session_app_config(const uci_sim_profile_t* profile, uint8_t config_id) {
-    if (profile == NULL) {
-        return 0;
-    }
-
-    return list_contains(profile->supported_session_app_config_ids,
-                         profile->supported_session_app_config_id_count,
-                         config_id);
+    (void)profile;
+    (void)config_id;
+    /* Accept all app config IDs — the simulator stores them faithfully.
+     * Validation for specific parameters happens in uci_sim_validate_session_app_config(). */
+    return 1;
 }
 
 int uci_sim_profile_supports_notification(const uci_sim_profile_t* profile, uint8_t oid) {

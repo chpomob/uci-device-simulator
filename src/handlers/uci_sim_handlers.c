@@ -593,8 +593,9 @@ static int handle_session_config(uci_sim_device_t* device, const uci_sim_packet_
                 make_status_response(request, result, UCI_STATUS_INVALID_PARAM);
                 return -1;
             }
-            memset(session, 0, sizeof(*session));
             make_status_response(request, result, UCI_STATUS_OK);
+            emit_session_status_ntf(device, session_id, UCI_SESSION_STATE_DEINIT, result);
+            memset(session, 0, sizeof(*session));
             return 0;
         case UCI_SESSION_SET_APP_CONFIG:
             return handle_session_set_get_config(device, request, result, 1);

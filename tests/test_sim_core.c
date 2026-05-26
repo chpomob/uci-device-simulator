@@ -3433,8 +3433,8 @@ static void test_default_profile_feature_matrix(void) {
                 "profile should support app config 0x3E");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x3F),
                 "profile should support app config 0x3F");
-    ASSERT_TRUE(!uci_sim_profile_supports_session_app_config(profile, 0x99),
-                "profile should reject unknown app config");
+    ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0x99),
+                "profile should accept all app config IDs");
     ASSERT_TRUE(start_transition != NULL, "profile should define session start transition");
     ASSERT_TRUE(stop_transition != NULL, "profile should define session stop transition");
     ASSERT_TRUE(uci_sim_profile_supports_command(profile, UCI_GID_CORE, UCI_CORE_DEVICE_RESET),
@@ -5516,8 +5516,9 @@ static void test_profile_rejects_unsupported_session_features(void) {
     request.payload[5] = 0x99;
     request.payload[6] = 1;
     request.payload[7] = 0x01;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "unsupported app config set should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "unsupported app config set status");
+    /* All app config IDs are now accepted (faithful storage) */
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "app config set should succeed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "app config set status");
 
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;

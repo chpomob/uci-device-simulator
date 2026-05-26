@@ -91,20 +91,9 @@ static int read_command(int fd, uci_sim_packet_t *pkt)
     pkt->pbf     = (hdr[0] >> 4) & 0x01;
     pkt->gid     = hdr[0] & 0x0F;
     pkt->oid     = hdr[1] & 0x3F;
-
-    uint16_t wire_plen;
-    {
-        size_t off = 0;
-        while (off < 2) {
-            ssize_t n = recv(fd, (char*)&((uint8_t*)&wire_plen)[off], 2 - off, MSG_WAITALL);
-            if (n <= 0) {
-                if (n < 0 && (errno == EAGAIN || errno == EINTR)) continue;
-                return (n == 0) ? 1 : -1;
-            }
-            off += (size_t)n;
-        }
-    }
-    pkt->payload_len = (uint16_t)(uint16_t)(uint8_t)(wire_plen & 0xFF);
+    pkt->payload_len = (pkt->mt == UCI_MT_DATA)
+        ? ((uint16_t)hdr[2] | ((uint16_t)hdr[3] << 8))
+        : (uint16_t)hdr[3];
 
     if (pkt->payload_len > 0) {
         size_t poff = 0;
@@ -222,6 +211,9 @@ int uci_sim_tcp_serve(const char *host, uint16_t port, uci_sim_engine_t *engine)
             break;
 
         uci_sim_engine_tick(engine, ENGINE_TICK_MS);
+        /* Flush any time-triggered outbound packets (range data, notifications) */
+        if (flush_to_client(client_fd, engine) != 0)
+            break;
     }
 
     close(client_fd);

@@ -34,6 +34,8 @@ int uci_sim_packet_parse(const uint8_t* buffer, size_t buffer_len, uci_sim_packe
 }
 
 int uci_sim_packet_serialize(const uci_sim_packet_t* packet, uint8_t* buffer, size_t buffer_capacity, size_t* written) {
+    uint16_t wire_len;
+
     if (!packet || !buffer || !written) {
         return -1;
     }
@@ -46,14 +48,16 @@ int uci_sim_packet_serialize(const uci_sim_packet_t* packet, uint8_t* buffer, si
     if (packet->mt == UCI_MT_DATA) {
         buffer[2] = (uint8_t)(packet->payload_len & 0xFF);
         buffer[3] = (uint8_t)((packet->payload_len >> 8) & 0xFF);
+        wire_len = packet->payload_len;
     } else {
         buffer[2] = 0;
-        buffer[3] = (uint8_t)(packet->payload_len & 0xFF);
+        wire_len = (packet->payload_len > 255U) ? 255U : (uint8_t)packet->payload_len;
+        buffer[3] = (uint8_t)(wire_len & 0xFF);
     }
 
-    if (packet->payload_len > 0) {
-        memcpy(buffer + UCI_SIM_HEADER_SIZE, packet->payload, packet->payload_len);
+    if (wire_len > 0) {
+        memcpy(buffer + UCI_SIM_HEADER_SIZE, packet->payload, wire_len);
     }
-    *written = UCI_SIM_HEADER_SIZE + packet->payload_len;
+    *written = UCI_SIM_HEADER_SIZE + wire_len;
     return 0;
 }

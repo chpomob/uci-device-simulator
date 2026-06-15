@@ -240,7 +240,4 @@ enum {
     UCI_DATA_TRANSFER_STATUS_INVALID_FORMAT = 0x07
 };
 
-const char* uci_sim_status_name(uint8_t status);
-const char* uci_sim_gid_name(uint8_t gid);
-
 #endif

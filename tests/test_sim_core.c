@@ -8,7 +8,6 @@
 
 static int g_failed = 0;
 static int g_passed = 0;
-static uci_sim_time_ms_t g_fake_clock_ms = 0;
 
 #define ASSERT_TRUE(cond, msg) do { if (!(cond)) { printf("FAIL: %s\n", msg); g_failed++; return; } } while (0)
 #define ASSERT_EQ_U8(exp, act, msg) do { if ((unsigned)(exp) != (unsigned)(act)) { printf("FAIL: %s\n", msg); g_failed++; return; } } while (0)
@@ -417,11 +416,6 @@ static void test_measurement_uses_session_slot_index(void) {
     PASS();
 }
 
-static uci_sim_time_ms_t fake_clock_now_ms(void* context) {
-    (void)context;
-    return g_fake_clock_ms;
-}
-
 static int dequeue_outbound(uci_sim_engine_t* engine, uci_sim_packet_t* packet) {
     return uci_sim_engine_dequeue_outbound_packet(engine, packet);
 }
@@ -476,16 +470,13 @@ static void make_set_app_config_packet(uci_sim_packet_t* request,
     memcpy(&request->payload[7], value, value_len);
 }
 
-static void test_engine_clock_poll_progression(void) {
+static void test_engine_tick_progression(void) {
     uci_sim_engine_t engine;
     uci_sim_packet_t request;
     uci_sim_packet_t packet;
-    uci_sim_clock_t clock = { fake_clock_now_ms, NULL };
 
-    g_fake_clock_ms = 1;
     uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
-    uci_sim_engine_set_clock(&engine, &clock);
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine initial poll failed");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 0) == 0, "engine initial tick failed");
 
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;
@@ -498,37 +489,37 @@ static void test_engine_clock_poll_progression(void) {
     request.payload[2] = 0x34;
     request.payload[3] = 0x12;
     request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "engine clock init failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock init rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock init ntf missing");
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "engine tick init failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine tick init rsp missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine tick init ntf missing");
 
     request.gid = UCI_GID_SESSION_CONTROL;
     request.oid = UCI_SESSION_START;
     request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "engine clock start failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock start rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock start ntf missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine clock range 1 should wait for interval");
+    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "engine tick start failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine tick start rsp missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine tick start ntf missing");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine tick range 1 should wait for interval");
 
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine zero-delta poll failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine zero-delta poll should not emit range data");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 0) == 0, "engine zero-delta tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine zero-delta tick should not emit range data");
 
-    g_fake_clock_ms = 1U + engine.device.profile->ranging_interval_ms;
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine first deadline poll failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock range 1 missing");
-    ASSERT_EQ_U32(1, read_u32_le(packet.payload), "engine clock range 1 sequence");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine clock range 2 should wait for next deadline");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
+                "engine first deadline tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine tick range 1 missing");
+    ASSERT_EQ_U32(1, read_u32_le(packet.payload), "engine tick range 1 sequence");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine tick range 2 should wait for next deadline");
 
-    g_fake_clock_ms += engine.device.profile->ranging_interval_ms;
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine second deadline poll failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock range 2 missing");
-    ASSERT_EQ_U32(2, read_u32_le(packet.payload), "engine clock range 2 sequence");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine clock range 3 should wait for next deadline");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
+                "engine second deadline tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine tick range 2 missing");
+    ASSERT_EQ_U32(2, read_u32_le(packet.payload), "engine tick range 2 sequence");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine tick range 3 should wait for next deadline");
 
-    g_fake_clock_ms += engine.device.profile->ranging_interval_ms;
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine third deadline poll failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine clock range 3 missing");
-    ASSERT_EQ_U32(3, read_u32_le(packet.payload), "engine clock range 3 sequence");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, engine.device.profile->ranging_interval_ms) == 0,
+                "engine third deadline tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine tick range 3 missing");
+    ASSERT_EQ_U32(3, read_u32_le(packet.payload), "engine tick range 3 sequence");
     PASS();
 }
 
@@ -536,13 +527,10 @@ static void test_engine_uses_session_ranging_interval_override(void) {
     uci_sim_engine_t engine;
     uci_sim_packet_t request;
     uci_sim_packet_t packet;
-    uci_sim_clock_t clock = { fake_clock_now_ms, NULL };
     const uci_sim_profile_t* profile = uci_sim_default_profile();
 
-    g_fake_clock_ms = 1;
     uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
-    uci_sim_engine_set_clock(&engine, &clock);
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval initial poll failed");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 0) == 0, "engine interval initial tick failed");
 
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;
@@ -580,31 +568,27 @@ static void test_engine_uses_session_ranging_interval_override(void) {
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine interval start ntf missing");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine interval range 1 should wait for session interval");
 
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval zero-delta poll failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine interval zero-delta poll should not emit range data");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 0) == 0, "engine interval zero-delta tick failed");
+    ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine interval zero-delta tick should not emit range data");
 
-    g_fake_clock_ms = 3001U;
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval first deadline poll failed");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 3000U) == 0, "engine interval first deadline tick failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine interval range 1 missing");
     ASSERT_EQ_U32(1U, read_u32_le(packet.payload), "engine interval range 1 sequence");
     ASSERT_EQ_U32(3000U,
                   read_u32_le(&packet.payload[profile->range_data_interval_offset]),
                   "engine interval range 1 should use session interval");
 
-    g_fake_clock_ms = 6000U;
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval pre-deadline poll failed");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 2999U) == 0, "engine interval pre-deadline tick failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) != 0, "engine interval range 2 should wait for full override");
 
-    g_fake_clock_ms = 6001U;
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval second deadline poll failed");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 1U) == 0, "engine interval second deadline tick failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine interval range 2 missing");
     ASSERT_EQ_U32(2U, read_u32_le(packet.payload), "engine interval range 2 sequence");
     ASSERT_EQ_U32(3000U,
                   read_u32_le(&packet.payload[profile->range_data_interval_offset]),
                   "engine interval range 2 should use session interval");
 
-    g_fake_clock_ms = 9001U;
-    ASSERT_TRUE(uci_sim_engine_poll(&engine) == 0, "engine interval third deadline poll failed");
+    ASSERT_TRUE(uci_sim_engine_tick(&engine, 3000U) == 0, "engine interval third deadline tick failed");
     ASSERT_TRUE(dequeue_outbound(&engine, &packet) == 0, "engine interval range 3 missing");
     ASSERT_EQ_U32(3U, read_u32_le(packet.payload), "engine interval range 3 sequence");
     ASSERT_EQ_U32(3000U,
@@ -6408,7 +6392,7 @@ static void test_hus_config_commands(void) {
 int main(void) {
     test_packet_round_trip();
     test_control_packet_serializer_rejects_oversized_payload();
-    test_engine_clock_poll_progression();
+    test_engine_tick_progression();
     test_engine_uses_session_ranging_interval_override();
     test_ranging_interval_validation_rejects_below_profile_min();
     test_session_start_rejects_invalid_ranging_interval();

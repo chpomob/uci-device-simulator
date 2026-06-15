@@ -23,7 +23,6 @@
 #include "uci_sim_chardev.h"
 #include "uci_sim_engine.h"
 #include "uci_sim_packet.h"
-#include "uci_sim_spec.h"
 
 #include <errno.h>
 #include <fcntl.h>

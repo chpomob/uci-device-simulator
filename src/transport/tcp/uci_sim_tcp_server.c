@@ -12,7 +12,6 @@
 
 #include "uci_sim_tcp_server.h"
 #include "uci_sim_packet.h"
-#include "uci_sim_spec.h"
 
 #include <arpa/inet.h>
 #include <errno.h>

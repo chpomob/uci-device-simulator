@@ -14,6 +14,9 @@ static int g_passed = 0;
 #define ASSERT_EQ_U16(exp, act, msg) do { if ((unsigned)(exp) != (unsigned)(act)) { printf("FAIL: %s\n", msg); g_failed++; return; } } while (0)
 #define ASSERT_EQ_U32(exp, act, msg) do { if ((unsigned long)(exp) != (unsigned long)(act)) { printf("FAIL: %s\n", msg); g_failed++; return; } } while (0)
 #define PASS() do { g_passed++; } while (0)
+#define TEST_CASE(name) do { (void)(#name); } while (0)
+#define TEST_PASS() PASS()
+#define UCI_TEST_VALUE(...) ((const uint8_t[]){ __VA_ARGS__ })
 
 static uint32_t read_u32_le(const uint8_t* payload) {
     return (uint32_t)payload[0] |
@@ -37,6 +40,124 @@ static uint64_t read_u64_le(const uint8_t* payload) {
            ((uint64_t)payload[6] << 48) |
            ((uint64_t)payload[7] << 56);
 }
+
+static void test_config_validation(uint8_t config_id,
+                                   const uint8_t* bad_value,
+                                   size_t bad_value_len,
+                                   uint8_t expected_status,
+                                   const char* test_name) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+    uint8_t original_value[UCI_SIM_MAX_CONFIG_VALUE] = {0};
+    uint8_t current_value[UCI_SIM_MAX_CONFIG_VALUE] = {0};
+    uint8_t original_value_len = 0;
+    uint8_t current_value_len = 0;
+
+    (void)test_name;
+    ASSERT_TRUE(bad_value != NULL, "config validation bad value missing");
+    ASSERT_TRUE(bad_value_len <= UCI_SIM_MAX_CONFIG_VALUE, "config validation bad value too long");
+    ASSERT_TRUE(bad_value_len <= 248U, "config validation payload too long");
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "config validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0,
+                "config validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_get_config(session, config_id, original_value, &original_value_len) == 0,
+                "config validation fetch original value failed");
+
+    request.oid = UCI_SESSION_SET_APP_CONFIG;
+    request.payload_len = (uint16_t)(7U + bad_value_len);
+    request.payload[4] = 0x01;
+    request.payload[5] = config_id;
+    request.payload[6] = (uint8_t)bad_value_len;
+    memcpy(&request.payload[7], bad_value, bad_value_len);
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "invalid app config should fail");
+    ASSERT_EQ_U8(expected_status, result.response.payload[0], "invalid app config status");
+    ASSERT_EQ_U8(0x00, result.response.payload[1], "invalid app config status count");
+    ASSERT_TRUE(result.has_notification, "invalid app config should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "invalid app config generic error oid");
+    ASSERT_EQ_U8(expected_status, result.notification.payload[0], "invalid app config generic error status");
+    ASSERT_TRUE(uci_sim_session_get_config(session, config_id, current_value, &current_value_len) == 0,
+                "config validation refetch current value failed");
+    ASSERT_EQ_U8(original_value_len, current_value_len, "invalid app config should preserve original length");
+    ASSERT_TRUE(memcmp(original_value, current_value, original_value_len) == 0,
+                "invalid app config should not overwrite stored value");
+    TEST_PASS();
+}
+
+/* Single-config validation helpers cover tests with no cross-config preconditions. */
+static void test_config_start_validation(uint8_t config_id,
+                                         const uint8_t* bad_value,
+                                         size_t bad_value_len,
+                                         uint8_t expected_status,
+                                         const char* test_name) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uci_sim_session_t* session = NULL;
+
+    (void)test_name;
+    ASSERT_TRUE(bad_value != NULL || bad_value_len == 0U, "start validation bad value missing");
+    ASSERT_TRUE(bad_value_len <= UCI_SIM_MAX_CONFIG_VALUE, "start validation bad value too long");
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "start validation init failed");
+    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0,
+                "start validation session lookup failed");
+    ASSERT_TRUE(uci_sim_session_store_config(session, config_id, bad_value, (uint8_t)bad_value_len) == 0,
+                "start validation preload failed");
+
+    request.gid = UCI_GID_SESSION_CONTROL;
+    request.oid = UCI_SESSION_START;
+    request.payload_len = 4;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "start with invalid app config should fail");
+    ASSERT_EQ_U8(expected_status, result.response.payload[0], "start invalid app config status");
+    ASSERT_TRUE(result.has_notification, "start invalid app config should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid app config generic error oid");
+    ASSERT_EQ_U8(expected_status, result.notification.payload[0], "start invalid app config generic error status");
+    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid app config should preserve session state");
+    TEST_PASS();
+}
+
+#define TEST_CONFIG_VALIDATION(config_id, bad_value, expected_status, test_name) \
+    do { \
+        TEST_CASE(test_name); \
+        test_config_validation((uint8_t)(config_id), (bad_value), sizeof(bad_value), (uint8_t)(expected_status), #test_name); \
+    } while (0)
+
+#define TEST_CONFIG_START_VALIDATION(config_id, bad_value, expected_status, test_name) \
+    do { \
+        TEST_CASE(test_name); \
+        test_config_start_validation((uint8_t)(config_id), (bad_value), sizeof(bad_value), (uint8_t)(expected_status), #test_name); \
+    } while (0)
 
 static void test_measurement_policy_serializes_default_range_notification(void) {
     const uci_sim_profile_t* profile = uci_sim_default_profile();
@@ -597,434 +718,6 @@ static void test_engine_uses_session_ranging_interval_override(void) {
     PASS();
 }
 
-static void test_ranging_interval_validation_rejects_below_profile_min(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "interval validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "interval validation session lookup failed");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 11;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_RANGING_INTERVAL;
-    request.payload[6] = 0x04;
-    request.payload[7] = 49;
-    request.payload[8] = 0x00;
-    request.payload[9] = 0x00;
-    request.payload[10] = 0x00;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "interval below minimum should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_RANGE, result.response.payload[0], "interval below minimum status");
-    ASSERT_EQ_U8(0x00, result.response.payload[1], "interval below minimum config status count");
-    ASSERT_TRUE(result.has_notification, "interval below minimum should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "interval below minimum generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_RANGE, result.notification.payload[0], "interval below minimum generic error status");
-    ASSERT_EQ_U32(device.profile->ranging_interval_ms,
-                  uci_sim_session_get_ranging_interval_ms(session, device.profile),
-                  "invalid interval should not overwrite stored session interval");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_ranging_interval(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_interval[4] = { 49, 0x00, 0x00, 0x00 };
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "interval start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "interval start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_RANGING_INTERVAL,
-                                             invalid_interval,
-                                             sizeof(invalid_interval)) == 0,
-                "interval start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "start with invalid interval should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_RANGE, result.response.payload[0], "start invalid interval status");
-    ASSERT_TRUE(result.has_notification, "start invalid interval should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid interval generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_RANGE, result.notification.payload[0], "start invalid interval generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid interval should preserve session state");
-    PASS();
-}
-
-static void test_slot_duration_validation_rejects_below_minimum(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_slot_duration[2];
-    uint8_t original_slot_duration_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "slot duration validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "slot duration validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session,
-                                           UCI_APP_CONFIG_SLOT_DURATION,
-                                           original_slot_duration,
-                                           &original_slot_duration_len) == 0,
-                "slot duration validation original lookup failed");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 9;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_SLOT_DURATION;
-    request.payload[6] = 0x02;
-    request.payload[7] = 0x0F;
-    request.payload[8] = 0x00;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "slot duration below minimum should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "slot duration below minimum status");
-    ASSERT_EQ_U8(0x00, result.response.payload[1], "slot duration below minimum config status count");
-    ASSERT_TRUE(result.has_notification, "slot duration below minimum should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "slot duration below minimum generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "slot duration below minimum generic error status");
-    ASSERT_EQ_U16(read_u16_le(original_slot_duration),
-                  uci_sim_session_get_slot_duration_rstu(session),
-                  "invalid slot duration should not overwrite stored value");
-    ASSERT_EQ_U8(2U, original_slot_duration_len, "slot duration original len");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_slot_duration(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_slot_duration[2] = { 0x0F, 0x00 };
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "slot duration start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "slot duration start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_SLOT_DURATION,
-                                             invalid_slot_duration,
-                                             sizeof(invalid_slot_duration)) == 0,
-                "slot duration start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid slot duration should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid slot duration status");
-    ASSERT_TRUE(result.has_notification, "start invalid slot duration should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid slot duration generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid slot duration generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid slot duration should preserve session state");
-    PASS();
-}
-
-static void test_result_report_config_validation_rejects_unsupported_bits(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_result_report_config;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "result report validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "result report validation session lookup failed");
-    original_result_report_config = uci_sim_session_get_result_report_config(session);
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_RESULT_REPORT_CONFIG;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x10;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "result report config unsupported bits should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "result report invalid status");
-    ASSERT_EQ_U8(0x00, result.response.payload[1], "result report invalid config status count");
-    ASSERT_TRUE(result.has_notification, "result report invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "result report invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "result report invalid generic error status");
-    ASSERT_EQ_U8(original_result_report_config,
-                 uci_sim_session_get_result_report_config(session),
-                 "invalid result report config should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_result_report_config(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_result_report_config = 0x10;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "result report start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "result report start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_RESULT_REPORT_CONFIG,
-                                             &invalid_result_report_config,
-                                             sizeof(invalid_result_report_config)) == 0,
-                "result report start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid result report config should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid result report status");
-    ASSERT_TRUE(result.has_notification, "start invalid result report should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid result report generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid result report generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid result report should preserve session state");
-    PASS();
-}
-
-static void test_aoa_result_req_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_aoa_result_req;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "aoa result validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "aoa result validation session lookup failed");
-    original_aoa_result_req = uci_sim_session_get_aoa_result_req(session);
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_AOA_RESULT_REQ;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x04;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "aoa result req unsupported value should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "aoa result invalid status");
-    ASSERT_EQ_U8(0x00, result.response.payload[1], "aoa result invalid config status count");
-    ASSERT_TRUE(result.has_notification, "aoa result invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "aoa result invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "aoa result invalid generic error status");
-    ASSERT_EQ_U8(original_aoa_result_req,
-                 uci_sim_session_get_aoa_result_req(session),
-                 "invalid aoa result req should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_aoa_result_req(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_aoa_result_req = 0x04;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "aoa result start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "aoa result start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_AOA_RESULT_REQ,
-                                             &invalid_aoa_result_req,
-                                             sizeof(invalid_aoa_result_req)) == 0,
-                "aoa result start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid aoa result req should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid aoa result status");
-    ASSERT_TRUE(result.has_notification, "start invalid aoa result should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid aoa result generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid aoa result generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid aoa result should preserve session state");
-    PASS();
-}
-
-static void test_prf_mode_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_prf_mode = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "prf mode validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "prf mode validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_PRF_MODE, &original_prf_mode, &value_len) == 0,
-                "prf mode validation fetch original value failed");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_PRF_MODE;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x03;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported prf mode should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "prf mode invalid status");
-    ASSERT_TRUE(result.has_notification, "prf mode invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "prf mode invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "prf mode invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_PRF_MODE, &original_prf_mode, &value_len) == 0,
-                "prf mode validation refetch original value failed");
-    ASSERT_EQ_U8(0x00, original_prf_mode,
-                 "invalid prf mode should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_prf_mode(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_prf_mode = 0x03;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "prf mode start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "prf mode start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_PRF_MODE,
-                                             &invalid_prf_mode,
-                                             sizeof(invalid_prf_mode)) == 0,
-                "prf mode start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid prf mode should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid prf mode status");
-    ASSERT_TRUE(result.has_notification, "start invalid prf mode should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid prf mode generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid prf mode generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid prf mode should preserve session state");
-    PASS();
-}
-
 static void test_preamble_code_index_validation_rejects_unsupported_values(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -1233,413 +926,6 @@ static void test_session_start_rejects_invalid_sfd_id(void) {
     PASS();
 }
 
-static void test_psdu_data_rate_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t psdu_data_rate = 0x00;
-    uint8_t original_psdu_data_rate = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "psdu data rate validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "psdu data rate validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_PSDU_DATA_RATE, &psdu_data_rate, &value_len) == 0,
-                "psdu data rate validation fetch original value failed");
-    original_psdu_data_rate = psdu_data_rate;
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_PSDU_DATA_RATE;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x04;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported psdu data rate should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "psdu data rate invalid status");
-    ASSERT_TRUE(result.has_notification, "psdu data rate invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "psdu data rate invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "psdu data rate invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_PSDU_DATA_RATE, &psdu_data_rate, &value_len) == 0,
-                "psdu data rate validation refetch original value failed");
-    ASSERT_EQ_U8(original_psdu_data_rate, psdu_data_rate,
-                 "invalid psdu data rate should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_psdu_data_rate(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_psdu_data_rate = 0x04;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "psdu data rate start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "psdu data rate start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_PSDU_DATA_RATE,
-                                             &invalid_psdu_data_rate,
-                                             sizeof(invalid_psdu_data_rate)) == 0,
-                "psdu data rate start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid psdu data rate should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid psdu data rate status");
-    ASSERT_TRUE(result.has_notification, "start invalid psdu data rate should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid psdu data rate generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid psdu data rate generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid psdu data rate should preserve session state");
-    PASS();
-}
-
-static void test_preamble_duration_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t preamble_duration = 0x00;
-    uint8_t original_preamble_duration = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "preamble duration validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "preamble duration validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_PREAMBLE_DURATION, &preamble_duration, &value_len) == 0,
-                "preamble duration validation fetch original value failed");
-    original_preamble_duration = preamble_duration;
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_PREAMBLE_DURATION;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x02;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported preamble duration should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "preamble duration invalid status");
-    ASSERT_TRUE(result.has_notification, "preamble duration invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "preamble duration invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "preamble duration invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_PREAMBLE_DURATION, &preamble_duration, &value_len) == 0,
-                "preamble duration validation refetch original value failed");
-    ASSERT_EQ_U8(original_preamble_duration, preamble_duration,
-                 "invalid preamble duration should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_preamble_duration(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_preamble_duration = 0x02;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "preamble duration start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "preamble duration start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_PREAMBLE_DURATION,
-                                             &invalid_preamble_duration,
-                                             sizeof(invalid_preamble_duration)) == 0,
-                "preamble duration start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid preamble duration should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid preamble duration status");
-    ASSERT_TRUE(result.has_notification, "start invalid preamble duration should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid preamble duration generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid preamble duration generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid preamble duration should preserve session state");
-    PASS();
-}
-
-static void test_sts_length_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t sts_length = 0x00;
-    uint8_t original_sts_length = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "sts length validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "sts length validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_STS_LENGTH, &sts_length, &value_len) == 0,
-                "sts length validation fetch original value failed");
-    ASSERT_EQ_U8(1, value_len, "sts length validation original value len");
-    original_sts_length = sts_length;
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_STS_LENGTH;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x03;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported sts length should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "sts length invalid status");
-    ASSERT_TRUE(result.has_notification, "sts length invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "sts length invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "sts length invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_STS_LENGTH, &sts_length, &value_len) == 0,
-                "sts length validation refetch original value failed");
-    ASSERT_EQ_U8(original_sts_length, sts_length,
-                 "invalid sts length should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_sts_length(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_sts_length = 0x03;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "sts length start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "sts length start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_STS_LENGTH,
-                                             &invalid_sts_length,
-                                             sizeof(invalid_sts_length)) == 0,
-                "sts length start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid sts length should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid sts length status");
-    ASSERT_TRUE(result.has_notification, "start invalid sts length should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid sts length generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid sts length generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid sts length should preserve session state");
-    PASS();
-}
-
-static void test_key_rotation_rate_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_key_rotation_rate[2] = { 0x10, 0x00 };
-    uint8_t key_rotation_rate[2] = { 0x00, 0x00 };
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "key rotation rate validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "key rotation rate validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_KEY_ROTATION_RATE, key_rotation_rate, &value_len) == 0,
-                "key rotation rate validation fetch original value failed");
-    ASSERT_EQ_U8(2, value_len, "key rotation rate validation original value len");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 9;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_KEY_ROTATION_RATE;
-    request.payload[6] = 0x02;
-    request.payload[7] = invalid_key_rotation_rate[0];
-    request.payload[8] = invalid_key_rotation_rate[1];
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported key rotation rate should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "key rotation rate invalid status");
-    ASSERT_TRUE(result.has_notification, "key rotation rate invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "key rotation rate invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "key rotation rate invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_KEY_ROTATION_RATE, key_rotation_rate, &value_len) == 0,
-                "key rotation rate validation refetch original value failed");
-    ASSERT_EQ_U8(0x0F, key_rotation_rate[0], "invalid key rotation rate low byte should not overwrite stored value");
-    ASSERT_EQ_U8(0x00, key_rotation_rate[1], "invalid key rotation rate high byte should not overwrite stored value");
-    PASS();
-}
-
-static void test_key_rotation_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_key_rotation = 0x02;
-    uint8_t key_rotation = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "key rotation validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "key rotation validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_KEY_ROTATION, &key_rotation, &value_len) == 0,
-                "key rotation validation fetch original value failed");
-    ASSERT_EQ_U8(1, value_len, "key rotation validation original value len");
-    ASSERT_EQ_U8(0x01, key_rotation, "key rotation validation original value");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_KEY_ROTATION;
-    request.payload[6] = 0x01;
-    request.payload[7] = invalid_key_rotation;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported key rotation should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "key rotation invalid status");
-    ASSERT_TRUE(result.has_notification, "key rotation invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "key rotation invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "key rotation invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_KEY_ROTATION, &key_rotation, &value_len) == 0,
-                "key rotation validation refetch original value failed");
-    ASSERT_EQ_U8(0x01, key_rotation, "invalid key rotation should not overwrite stored value");
-    PASS();
-}
-
-static void test_number_of_sts_segments_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_number_of_sts_segments = 0x05;
-    uint8_t number_of_sts_segments = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "number_of_sts_segments validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "number_of_sts_segments validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_NUMBER_OF_STS_SEGMENTS, &number_of_sts_segments, &value_len) == 0,
-                "number_of_sts_segments validation fetch original value failed");
-    ASSERT_EQ_U8(1, value_len, "number_of_sts_segments validation original value len");
-    ASSERT_EQ_U8(0x02, number_of_sts_segments, "number_of_sts_segments validation original value");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_NUMBER_OF_STS_SEGMENTS;
-    request.payload[6] = 0x01;
-    request.payload[7] = invalid_number_of_sts_segments;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported number_of_sts_segments should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "number_of_sts_segments invalid status");
-    ASSERT_TRUE(result.has_notification, "number_of_sts_segments invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "number_of_sts_segments invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "number_of_sts_segments invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_NUMBER_OF_STS_SEGMENTS, &number_of_sts_segments, &value_len) == 0,
-                "number_of_sts_segments validation refetch original value failed");
-    ASSERT_EQ_U8(0x02, number_of_sts_segments, "invalid number_of_sts_segments should not overwrite stored value");
-    PASS();
-}
-
 static void test_session_start_rejects_incompatible_key_rotation(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -1678,401 +964,6 @@ static void test_session_start_rejects_incompatible_key_rotation(void) {
     ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start incompatible key rotation generic error oid");
     ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start incompatible key rotation generic error status");
     ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start incompatible key rotation should preserve session state");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_number_of_sts_segments(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_number_of_sts_segments = 0x05;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "number_of_sts_segments start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "number_of_sts_segments start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_NUMBER_OF_STS_SEGMENTS,
-                                             &invalid_number_of_sts_segments,
-                                             sizeof(invalid_number_of_sts_segments)) == 0,
-                "number_of_sts_segments start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid number_of_sts_segments should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid number_of_sts_segments status");
-    ASSERT_TRUE(result.has_notification, "start invalid number_of_sts_segments should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid number_of_sts_segments generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid number_of_sts_segments generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid number_of_sts_segments should preserve session state");
-    PASS();
-}
-
-static void test_max_rr_retry_validation_rejects_invalid_length(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_max_rr_retry = 0x04;
-    uint8_t max_rr_retry[2] = { 0x00, 0x00 };
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "max rr retry validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "max rr retry validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_MAX_RR_RETRY, max_rr_retry, &value_len) == 0,
-                "max rr retry validation fetch original value failed");
-    ASSERT_EQ_U8(2, value_len, "max rr retry validation original value len");
-    ASSERT_EQ_U8(0x00, max_rr_retry[0], "max rr retry validation original low byte");
-    ASSERT_EQ_U8(0x00, max_rr_retry[1], "max rr retry validation original high byte");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_MAX_RR_RETRY;
-    request.payload[6] = 0x01;
-    request.payload[7] = invalid_max_rr_retry;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "short max rr retry should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "max rr retry invalid length status");
-    ASSERT_TRUE(result.has_notification, "max rr retry invalid length should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "max rr retry invalid length generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "max rr retry invalid length generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_MAX_RR_RETRY, max_rr_retry, &value_len) == 0,
-                "max rr retry validation refetch original value failed");
-    ASSERT_EQ_U8(0x00, max_rr_retry[0], "invalid max rr retry low byte should not overwrite stored value");
-    ASSERT_EQ_U8(0x00, max_rr_retry[1], "invalid max rr retry high byte should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_max_rr_retry_length(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_max_rr_retry = 0x04;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "max rr retry start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "max rr retry start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_MAX_RR_RETRY,
-                                             &invalid_max_rr_retry,
-                                             sizeof(invalid_max_rr_retry)) == 0,
-                "max rr retry start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid max rr retry length should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid max rr retry length status");
-    ASSERT_TRUE(result.has_notification, "start invalid max rr retry length should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid max rr retry length generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid max rr retry length generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid max rr retry length should preserve session state");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_key_rotation_rate(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_key_rotation_rate[2] = { 0x10, 0x00 };
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "key rotation rate start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "key rotation rate start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_KEY_ROTATION_RATE,
-                                             invalid_key_rotation_rate,
-                                             sizeof(invalid_key_rotation_rate)) == 0,
-                "key rotation rate start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid key rotation rate should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid key rotation rate status");
-    ASSERT_TRUE(result.has_notification, "start invalid key rotation rate should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid key rotation rate generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid key rotation rate generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid key rotation rate should preserve session state");
-    PASS();
-}
-
-static void test_link_layer_mode_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t link_layer_mode = 0x00;
-    uint8_t original_link_layer_mode = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "link layer mode validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "link layer mode validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_LINK_LAYER_MODE, &link_layer_mode, &value_len) == 0,
-                "link layer mode validation fetch original value failed");
-    original_link_layer_mode = link_layer_mode;
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_LINK_LAYER_MODE;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x02;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported link layer mode should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "link layer mode invalid status");
-    ASSERT_TRUE(result.has_notification, "link layer mode invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "link layer mode invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "link layer mode invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_LINK_LAYER_MODE, &link_layer_mode, &value_len) == 0,
-                "link layer mode validation refetch original value failed");
-    ASSERT_EQ_U8(original_link_layer_mode, link_layer_mode,
-                 "invalid link layer mode should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_link_layer_mode(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_link_layer_mode = 0x02;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "link layer mode start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "link layer mode start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_LINK_LAYER_MODE,
-                                             &invalid_link_layer_mode,
-                                             sizeof(invalid_link_layer_mode)) == 0,
-                "link layer mode start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid link layer mode should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid link layer mode status");
-    ASSERT_TRUE(result.has_notification, "start invalid link layer mode should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid link layer mode generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid link layer mode generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid link layer mode should preserve session state");
-    PASS();
-}
-
-static void test_ranging_time_struct_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t ranging_time_struct = 0x00;
-    uint8_t original_ranging_time_struct = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging time struct validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "ranging time struct validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_RANGING_TIME_STRUCT, &ranging_time_struct, &value_len) == 0,
-                "ranging time struct validation fetch original value failed");
-    original_ranging_time_struct = ranging_time_struct;
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_RANGING_TIME_STRUCT;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x02;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported ranging time struct should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "ranging time struct invalid status");
-    ASSERT_TRUE(result.has_notification, "ranging time struct invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "ranging time struct invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "ranging time struct invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_RANGING_TIME_STRUCT, &ranging_time_struct, &value_len) == 0,
-                "ranging time struct validation refetch original value failed");
-    ASSERT_EQ_U8(original_ranging_time_struct, ranging_time_struct,
-                 "invalid ranging time struct should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_ranging_time_struct(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_ranging_time_struct = 0x02;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "ranging time struct start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "ranging time struct start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_RANGING_TIME_STRUCT,
-                                             &invalid_ranging_time_struct,
-                                             sizeof(invalid_ranging_time_struct)) == 0,
-                "ranging time struct start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid ranging time struct should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid ranging time struct status");
-    ASSERT_TRUE(result.has_notification, "start invalid ranging time struct should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid ranging time struct generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid ranging time struct generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid ranging time struct should preserve session state");
-    PASS();
-}
-
-static void test_slots_per_rr_validation_rejects_zero(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t slots_per_rr = 0x00;
-    uint8_t original_slots_per_rr = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "slots per rr validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "slots per rr validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_SLOTS_PER_RR, &slots_per_rr, &value_len) == 0,
-                "slots per rr validation fetch original value failed");
-    original_slots_per_rr = slots_per_rr;
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_SLOTS_PER_RR;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x00;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "zero slots per rr should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "slots per rr invalid status");
-    ASSERT_TRUE(result.has_notification, "slots per rr invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "slots per rr invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "slots per rr invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_SLOTS_PER_RR, &slots_per_rr, &value_len) == 0,
-                "slots per rr validation refetch original value failed");
-    ASSERT_EQ_U8(original_slots_per_rr, slots_per_rr,
-                 "invalid slots per rr should not overwrite stored value");
     PASS();
 }
 
@@ -2129,280 +1020,6 @@ static void test_responder_slot_index_validation_rejects_out_of_range_for_slots_
     PASS();
 }
 
-static void test_block_stride_length_validation_requires_block_time_struct(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t block_stride_length = 0x00;
-    uint8_t original_block_stride_length = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "block stride validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "block stride validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_BLOCK_STRIDE_LENGTH, &block_stride_length, &value_len) == 0,
-                "block stride validation fetch original value failed");
-    original_block_stride_length = block_stride_length;
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_BLOCK_STRIDE_LENGTH;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x05;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "block stride without block time struct should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "block stride invalid status");
-    ASSERT_TRUE(result.has_notification, "block stride invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "block stride invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "block stride invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_BLOCK_STRIDE_LENGTH, &block_stride_length, &value_len) == 0,
-                "block stride validation refetch original value failed");
-    ASSERT_EQ_U8(original_block_stride_length, block_stride_length,
-                 "invalid block stride should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_block_stride_without_block_time_struct(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t block_stride_length = 0x05;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "block stride start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "block stride start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_BLOCK_STRIDE_LENGTH,
-                                             &block_stride_length,
-                                             sizeof(block_stride_length)) == 0,
-                "block stride start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with incompatible block stride should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start incompatible block stride status");
-    ASSERT_TRUE(result.has_notification, "start incompatible block stride should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start incompatible block stride generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start incompatible block stride generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start incompatible block stride should preserve session state");
-    PASS();
-}
-
-static void test_scheduled_mode_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t scheduled_mode = UCI_SCHEDULED_MODE_TIME_SCHEDULED;
-    uint8_t original_scheduled_mode = UCI_SCHEDULED_MODE_TIME_SCHEDULED;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "scheduled mode validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "scheduled mode validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_SCHEDULED_MODE, &scheduled_mode, &value_len) == 0,
-                "scheduled mode validation fetch original value failed");
-    original_scheduled_mode = scheduled_mode;
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_SCHEDULED_MODE;
-    request.payload[6] = 0x01;
-    request.payload[7] = UCI_SCHEDULED_MODE_HYBRID;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported scheduled mode should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "scheduled mode invalid status");
-    ASSERT_TRUE(result.has_notification, "scheduled mode invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "scheduled mode invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "scheduled mode invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_SCHEDULED_MODE, &scheduled_mode, &value_len) == 0,
-                "scheduled mode validation refetch original value failed");
-    ASSERT_EQ_U8(original_scheduled_mode, scheduled_mode,
-                 "invalid scheduled mode should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_scheduled_mode(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_scheduled_mode = UCI_SCHEDULED_MODE_CONTENTION_BASED;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "scheduled mode start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "scheduled mode start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_SCHEDULED_MODE,
-                                             &invalid_scheduled_mode,
-                                             sizeof(invalid_scheduled_mode)) == 0,
-                "scheduled mode start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid scheduled mode should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid scheduled mode status");
-    ASSERT_TRUE(result.has_notification, "start invalid scheduled mode should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid scheduled mode generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid scheduled mode generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid scheduled mode should preserve session state");
-    PASS();
-}
-
-static void test_cap_size_range_validation_rejects_nonzero_for_time_scheduled(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t cap_size_range[2] = { 0x00, 0x00 };
-    uint8_t original_cap_size_range[2] = { 0x00, 0x00 };
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0,
-                "cap size range validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0,
-                "cap size range validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_CAP_SIZE_RANGE,
-                                           cap_size_range, &value_len) == 0,
-                "cap size range validation fetch original value failed");
-    ASSERT_EQ_U8(2U, value_len, "cap size range original len");
-    memcpy(original_cap_size_range, cap_size_range, sizeof(original_cap_size_range));
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 9;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_CAP_SIZE_RANGE;
-    request.payload[6] = 0x02;
-    request.payload[7] = 0x10;
-    request.payload[8] = 0x05;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "non-zero cap size range in time scheduled mode should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "cap size range invalid status");
-    ASSERT_TRUE(result.has_notification, "cap size range invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "cap size range invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "cap size range invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_CAP_SIZE_RANGE,
-                                           cap_size_range, &value_len) == 0,
-                "cap size range validation refetch original value failed");
-    ASSERT_TRUE(memcmp(original_cap_size_range,
-                       cap_size_range,
-                       sizeof(original_cap_size_range)) == 0,
-                "invalid cap size range should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_cap_size_range(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_cap_size_range[2] = { 0x10, 0x05 };
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0,
-                "cap size range start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0,
-                "cap size range start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_CAP_SIZE_RANGE,
-                                             invalid_cap_size_range,
-                                             sizeof(invalid_cap_size_range)) == 0,
-                "cap size range start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid cap size range should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid cap size range status");
-    ASSERT_TRUE(result.has_notification, "start invalid cap size range should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid cap size range generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid cap size range generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid cap size range should preserve session state");
-    PASS();
-}
-
 static void test_session_start_rejects_insufficient_slots_per_rr(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -2441,136 +1058,6 @@ static void test_session_start_rejects_insufficient_slots_per_rr(void) {
     ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start insufficient slots per rr generic error oid");
     ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start insufficient slots per rr generic error status");
     ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start insufficient slots per rr should preserve session state");
-    PASS();
-}
-
-static void test_rssi_reporting_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_rssi_reporting;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "rssi reporting validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "rssi reporting validation session lookup failed");
-    original_rssi_reporting = uci_sim_session_get_rssi_reporting(session);
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_RSSI_REPORTING;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x02;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "rssi reporting unsupported value should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "rssi reporting invalid status");
-    ASSERT_EQ_U8(0x00, result.response.payload[1], "rssi reporting invalid config status count");
-    ASSERT_TRUE(result.has_notification, "rssi reporting invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "rssi reporting invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "rssi reporting invalid generic error status");
-    ASSERT_EQ_U8(original_rssi_reporting,
-                 uci_sim_session_get_rssi_reporting(session),
-                 "invalid rssi reporting should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_rssi_reporting(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_rssi_reporting = 0x02;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "rssi reporting start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "rssi reporting start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_RSSI_REPORTING,
-                                             &invalid_rssi_reporting,
-                                             sizeof(invalid_rssi_reporting)) == 0,
-                "rssi reporting start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid rssi reporting should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid rssi reporting status");
-    ASSERT_TRUE(result.has_notification, "start invalid rssi reporting should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid rssi reporting generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid rssi reporting generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid rssi reporting should preserve session state");
-    PASS();
-}
-
-static void test_sts_config_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_sts_config = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "sts config validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "sts config validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_STS_CONFIG, &original_sts_config, &value_len) == 0,
-                "sts config validation get original failed");
-    ASSERT_EQ_U8(1, value_len, "sts config validation original length");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_STS_CONFIG;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x05;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported sts config should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "sts config invalid status");
-    ASSERT_EQ_U8(0x00, result.response.payload[1], "sts config invalid config status count");
-    ASSERT_TRUE(result.has_notification, "sts config invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "sts config invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "sts config invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_STS_CONFIG, &original_sts_config, &value_len) == 0,
-                "sts config validation get current failed");
-    ASSERT_EQ_U8(0x01, original_sts_config, "invalid sts config should not overwrite stored value");
     PASS();
 }
 
@@ -2666,272 +1153,6 @@ static void test_session_start_rejects_provisioned_sts_without_session_key(void)
     PASS();
 }
 
-static void test_ranging_round_usage_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_ranging_round_usage;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "round usage validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "round usage validation session lookup failed");
-    original_ranging_round_usage = uci_sim_session_get_ranging_round_usage(session);
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_RANGING_ROUND_USAGE;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x05;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported round usage should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "round usage invalid status");
-    ASSERT_EQ_U8(0x00, result.response.payload[1], "round usage invalid config status count");
-    ASSERT_TRUE(result.has_notification, "round usage invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "round usage invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "round usage invalid generic error status");
-    ASSERT_EQ_U8(original_ranging_round_usage,
-                 uci_sim_session_get_ranging_round_usage(session),
-                 "invalid round usage should not overwrite stored value");
-    PASS();
-}
-
-static void test_device_type_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_device_type = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "device type validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "device type validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_DEVICE_TYPE, &original_device_type, &value_len) == 0,
-                "device type validation fetch original device type failed");
-    ASSERT_EQ_U8(1, value_len, "device type validation original device type len");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_DEVICE_TYPE;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x02;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported device type should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "device type invalid status");
-    ASSERT_EQ_U8(0x00, result.response.payload[1], "device type invalid config status count");
-    ASSERT_TRUE(result.has_notification, "device type invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "device type invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "device type invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_DEVICE_TYPE, &original_device_type, &value_len) == 0,
-                "device type validation refetch original device type failed");
-    ASSERT_EQ_U8(UCI_DEVICE_TYPE_CONTROLLER, original_device_type,
-                 "invalid device type should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_device_type_role_mismatch(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t controlee_device_type = UCI_DEVICE_TYPE_CONTROLEE;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "device type mismatch init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "device type mismatch session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_DEVICE_TYPE,
-                                             &controlee_device_type,
-                                             sizeof(controlee_device_type)) == 0,
-                "device type mismatch preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with device type role mismatch should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid device type mismatch status");
-    ASSERT_TRUE(result.has_notification, "start invalid device type mismatch should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid device type mismatch generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid device type mismatch generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid device type mismatch should preserve session state");
-    PASS();
-}
-
-
-static void test_multi_node_mode_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_multi_node_mode = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "multi node mode validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "multi node mode validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_MULTI_NODE_MODE, &original_multi_node_mode, &value_len) == 0,
-                "multi node mode validation fetch original value failed");
-    ASSERT_EQ_U8(1, value_len, "multi node mode validation original value len");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_MULTI_NODE_MODE;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x03;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported multi node mode should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "multi node mode invalid status");
-    ASSERT_EQ_U8(0x00, result.response.payload[1], "multi node mode invalid config status count");
-    ASSERT_TRUE(result.has_notification, "multi node mode invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "multi node mode invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "multi node mode invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_MULTI_NODE_MODE, &original_multi_node_mode, &value_len) == 0,
-                "multi node mode validation refetch original value failed");
-    ASSERT_EQ_U8(0x01, original_multi_node_mode,
-                 "invalid multi node mode should not overwrite stored value");
-    PASS();
-}
-
-static void test_channel_number_validation_rejects_unsupported_values(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_channel_number = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "channel number validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "channel number validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_CHANNEL_NUMBER, &original_channel_number, &value_len) == 0,
-                "channel number validation fetch original value failed");
-    ASSERT_EQ_U8(1, value_len, "channel number validation original value len");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_CHANNEL_NUMBER;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x06;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported channel number should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "channel number invalid status");
-    ASSERT_TRUE(result.has_notification, "channel number invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "channel number invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "channel number invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_CHANNEL_NUMBER, &original_channel_number, &value_len) == 0,
-                "channel number validation refetch original value failed");
-    ASSERT_EQ_U8(0x05, original_channel_number,
-                 "invalid channel number should not overwrite stored value");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_channel_number(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_channel_number = 0x06;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "channel number start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "channel number start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_CHANNEL_NUMBER,
-                                             &invalid_channel_number,
-                                             sizeof(invalid_channel_number)) == 0,
-                "channel number start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid channel number should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid channel number status");
-    ASSERT_TRUE(result.has_notification, "start invalid channel number should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid channel number generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid channel number generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid channel number should preserve session state");
-    PASS();
-}
-
 static void test_session_start_rejects_unicast_multi_node_topology_mismatch(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -2979,193 +1200,6 @@ static void test_session_start_rejects_unicast_multi_node_topology_mismatch(void
     PASS();
 }
 
-static void test_number_of_controlees_validation_rejects_excessive_value(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_number_of_controlees = 0x00;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "number_of_controlees validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "number_of_controlees validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_NUMBER_OF_CONTROLEES, &original_number_of_controlees, &value_len) == 0,
-                "number_of_controlees validation fetch original value failed");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_NUMBER_OF_CONTROLEES;
-    request.payload[6] = 0x01;
-    request.payload[7] = 0x09;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported number_of_controlees should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "number_of_controlees invalid status");
-    ASSERT_TRUE(result.has_notification, "number_of_controlees invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "number_of_controlees invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "number_of_controlees invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_NUMBER_OF_CONTROLEES, &original_number_of_controlees, &value_len) == 0,
-                "number_of_controlees validation refetch original value failed");
-    ASSERT_EQ_U8(0x03, original_number_of_controlees,
-                 "invalid number_of_controlees should not overwrite stored value");
-    PASS();
-}
-
-static void test_mac_address_mode_validation_rejects_unsupported_value(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_mac_address_mode = 0xFF;
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "mac_address_mode validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "mac_address_mode validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_MAC_ADDRESS_MODE, &original_mac_address_mode, &value_len) == 0,
-                "mac_address_mode validation fetch original value failed");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 8;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_MAC_ADDRESS_MODE;
-    request.payload[6] = 0x01;
-    request.payload[7] = UCI_MAC_ADDRESS_MODE_EXTENDED;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "unsupported mac_address_mode should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "mac_address_mode invalid status");
-    ASSERT_TRUE(result.has_notification, "mac_address_mode invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "mac_address_mode invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "mac_address_mode invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_MAC_ADDRESS_MODE, &original_mac_address_mode, &value_len) == 0,
-                "mac_address_mode validation refetch original value failed");
-    ASSERT_EQ_U8(UCI_MAC_ADDRESS_MODE_SHORT, original_mac_address_mode,
-                 "invalid mac_address_mode should not overwrite stored value");
-    PASS();
-}
-
-static void test_device_mac_address_validation_rejects_invalid_length(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_device_mac[UCI_SIM_MAX_CONFIG_VALUE] = {0};
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "device_mac_address validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "device_mac_address validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_DEVICE_MAC_ADDRESS, original_device_mac, &value_len) == 0,
-                "device_mac_address validation fetch original value failed");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 11;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_DEVICE_MAC_ADDRESS;
-    request.payload[6] = 0x04;
-    request.payload[7] = 0xAA;
-    request.payload[8] = 0xBB;
-    request.payload[9] = 0xCC;
-    request.payload[10] = 0xDD;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "invalid device_mac_address length should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "device_mac_address invalid status");
-    ASSERT_TRUE(result.has_notification, "device_mac_address invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "device_mac_address invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "device_mac_address invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_DEVICE_MAC_ADDRESS, original_device_mac, &value_len) == 0,
-                "device_mac_address validation refetch original value failed");
-    ASSERT_EQ_U8(2, value_len, "invalid device_mac_address should preserve original length");
-    ASSERT_EQ_U8(0xCD, original_device_mac[0], "invalid device_mac_address should preserve original first byte");
-    ASSERT_EQ_U8(0xAB, original_device_mac[1], "invalid device_mac_address should preserve original second byte");
-    PASS();
-}
-
-static void test_dst_mac_address_validation_rejects_invalid_list_length(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    uint8_t original_dst_mac[UCI_SIM_MAX_CONFIG_VALUE] = {0};
-    uint8_t value_len = 0;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "dst_mac_address validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "dst_mac_address validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_DST_MAC_ADDRESS, original_dst_mac, &value_len) == 0,
-                "dst_mac_address validation fetch original value failed");
-
-    request.oid = UCI_SESSION_SET_APP_CONFIG;
-    request.payload_len = 10;
-    request.payload[4] = 0x01;
-    request.payload[5] = UCI_APP_CONFIG_DST_MAC_ADDRESS;
-    request.payload[6] = 0x03;
-    request.payload[7] = 0x78;
-    request.payload[8] = 0x56;
-    request.payload[9] = 0x34;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "invalid dst_mac_address list should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "dst_mac_address invalid status");
-    ASSERT_TRUE(result.has_notification, "dst_mac_address invalid should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "dst_mac_address invalid generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "dst_mac_address invalid generic error status");
-    ASSERT_TRUE(uci_sim_session_get_config(session, UCI_APP_CONFIG_DST_MAC_ADDRESS, original_dst_mac, &value_len) == 0,
-                "dst_mac_address validation refetch original value failed");
-    ASSERT_EQ_U8(6, value_len, "invalid dst_mac_address should preserve original length");
-    ASSERT_EQ_U8(0x78, original_dst_mac[0], "invalid dst_mac_address should preserve original first byte");
-    ASSERT_EQ_U8(0x56, original_dst_mac[1], "invalid dst_mac_address should preserve original second byte");
-    PASS();
-}
-
 static void test_session_start_rejects_controlee_count_dst_list_mismatch(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -3210,47 +1244,6 @@ static void test_session_start_rejects_controlee_count_dst_list_mismatch(void) {
     ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid count/list mismatch generic error oid");
     ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid count/list mismatch generic error status");
     ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid count/list mismatch should preserve session state");
-    PASS();
-}
-
-static void test_session_start_rejects_invalid_ranging_round_usage(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-    const uint8_t invalid_ranging_round_usage = 0x05;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "round usage start validation init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "round usage start validation session lookup failed");
-    ASSERT_TRUE(uci_sim_session_store_config(session,
-                                             UCI_APP_CONFIG_RANGING_ROUND_USAGE,
-                                             &invalid_ranging_round_usage,
-                                             sizeof(invalid_ranging_round_usage)) == 0,
-                "round usage start validation preload failed");
-
-    request.gid = UCI_GID_SESSION_CONTROL;
-    request.oid = UCI_SESSION_START;
-    request.payload_len = 4;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
-                "start with invalid round usage should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "start invalid round usage status");
-    ASSERT_TRUE(result.has_notification, "start invalid round usage should emit generic error ntf");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "start invalid round usage generic error oid");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "start invalid round usage generic error status");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, session->state, "start invalid round usage should preserve session state");
     PASS();
 }
 
@@ -6314,65 +4307,65 @@ int main(void) {
     test_control_packet_serializer_rejects_oversized_payload();
     test_engine_tick_progression();
     test_engine_uses_session_ranging_interval_override();
-    test_ranging_interval_validation_rejects_below_profile_min();
-    test_session_start_rejects_invalid_ranging_interval();
-    test_slot_duration_validation_rejects_below_minimum();
-    test_session_start_rejects_invalid_slot_duration();
-    test_result_report_config_validation_rejects_unsupported_bits();
-    test_session_start_rejects_invalid_result_report_config();
-    test_sts_config_validation_rejects_unsupported_values();
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_RANGING_INTERVAL, UCI_TEST_VALUE(49, 0x00, 0x00, 0x00), UCI_STATUS_INVALID_RANGE, test_ranging_interval_validation_rejects_below_profile_min);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_RANGING_INTERVAL, UCI_TEST_VALUE(49, 0x00, 0x00, 0x00), UCI_STATUS_INVALID_RANGE, test_session_start_rejects_invalid_ranging_interval);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_SLOT_DURATION, UCI_TEST_VALUE(0x0F, 0x00), UCI_STATUS_INVALID_PARAM, test_slot_duration_validation_rejects_below_minimum);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_SLOT_DURATION, UCI_TEST_VALUE(0x0F, 0x00), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_slot_duration);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_RESULT_REPORT_CONFIG, UCI_TEST_VALUE(0x10), UCI_STATUS_INVALID_PARAM, test_result_report_config_validation_rejects_unsupported_bits);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_RESULT_REPORT_CONFIG, UCI_TEST_VALUE(0x10), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_result_report_config);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_STS_CONFIG, UCI_TEST_VALUE(0x05), UCI_STATUS_INVALID_PARAM, test_sts_config_validation_rejects_unsupported_values);
     test_session_start_rejects_static_sts_without_iv();
     test_session_start_rejects_provisioned_sts_without_session_key();
-    test_aoa_result_req_validation_rejects_unsupported_values();
-    test_session_start_rejects_invalid_aoa_result_req();
-    test_prf_mode_validation_rejects_unsupported_values();
-    test_session_start_rejects_invalid_prf_mode();
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_AOA_RESULT_REQ, UCI_TEST_VALUE(0x04), UCI_STATUS_INVALID_PARAM, test_aoa_result_req_validation_rejects_unsupported_values);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_AOA_RESULT_REQ, UCI_TEST_VALUE(0x04), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_aoa_result_req);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_PRF_MODE, UCI_TEST_VALUE(0x03), UCI_STATUS_INVALID_PARAM, test_prf_mode_validation_rejects_unsupported_values);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_PRF_MODE, UCI_TEST_VALUE(0x03), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_prf_mode);
     test_preamble_code_index_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_preamble_code_index();
     test_sfd_id_validation_rejects_unsupported_values();
     test_session_start_rejects_invalid_sfd_id();
-    test_psdu_data_rate_validation_rejects_unsupported_values();
-    test_session_start_rejects_invalid_psdu_data_rate();
-    test_preamble_duration_validation_rejects_unsupported_values();
-    test_session_start_rejects_invalid_preamble_duration();
-    test_sts_length_validation_rejects_unsupported_values();
-    test_session_start_rejects_invalid_sts_length();
-    test_key_rotation_validation_rejects_unsupported_values();
-    test_number_of_sts_segments_validation_rejects_unsupported_values();
-    test_max_rr_retry_validation_rejects_invalid_length();
-    test_key_rotation_rate_validation_rejects_unsupported_values();
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_PSDU_DATA_RATE, UCI_TEST_VALUE(0x04), UCI_STATUS_INVALID_PARAM, test_psdu_data_rate_validation_rejects_unsupported_values);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_PSDU_DATA_RATE, UCI_TEST_VALUE(0x04), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_psdu_data_rate);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_PREAMBLE_DURATION, UCI_TEST_VALUE(0x02), UCI_STATUS_INVALID_PARAM, test_preamble_duration_validation_rejects_unsupported_values);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_PREAMBLE_DURATION, UCI_TEST_VALUE(0x02), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_preamble_duration);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_STS_LENGTH, UCI_TEST_VALUE(0x03), UCI_STATUS_INVALID_PARAM, test_sts_length_validation_rejects_unsupported_values);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_STS_LENGTH, UCI_TEST_VALUE(0x03), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_sts_length);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_KEY_ROTATION, UCI_TEST_VALUE(0x02), UCI_STATUS_INVALID_PARAM, test_key_rotation_validation_rejects_unsupported_values);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_NUMBER_OF_STS_SEGMENTS, UCI_TEST_VALUE(0x05), UCI_STATUS_INVALID_PARAM, test_number_of_sts_segments_validation_rejects_unsupported_values);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_MAX_RR_RETRY, UCI_TEST_VALUE(0x04), UCI_STATUS_INVALID_PARAM, test_max_rr_retry_validation_rejects_invalid_length);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_KEY_ROTATION_RATE, UCI_TEST_VALUE(0x10, 0x00), UCI_STATUS_INVALID_PARAM, test_key_rotation_rate_validation_rejects_unsupported_values);
     test_session_start_rejects_incompatible_key_rotation();
-    test_session_start_rejects_invalid_number_of_sts_segments();
-    test_session_start_rejects_invalid_max_rr_retry_length();
-    test_session_start_rejects_invalid_key_rotation_rate();
-    test_link_layer_mode_validation_rejects_unsupported_values();
-    test_session_start_rejects_invalid_link_layer_mode();
-    test_ranging_time_struct_validation_rejects_unsupported_values();
-    test_session_start_rejects_invalid_ranging_time_struct();
-    test_slots_per_rr_validation_rejects_zero();
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_NUMBER_OF_STS_SEGMENTS, UCI_TEST_VALUE(0x05), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_number_of_sts_segments);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_MAX_RR_RETRY, UCI_TEST_VALUE(0x04), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_max_rr_retry_length);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_KEY_ROTATION_RATE, UCI_TEST_VALUE(0x10, 0x00), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_key_rotation_rate);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_LINK_LAYER_MODE, UCI_TEST_VALUE(0x02), UCI_STATUS_INVALID_PARAM, test_link_layer_mode_validation_rejects_unsupported_values);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_LINK_LAYER_MODE, UCI_TEST_VALUE(0x02), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_link_layer_mode);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_RANGING_TIME_STRUCT, UCI_TEST_VALUE(0x02), UCI_STATUS_INVALID_PARAM, test_ranging_time_struct_validation_rejects_unsupported_values);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_RANGING_TIME_STRUCT, UCI_TEST_VALUE(0x02), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_ranging_time_struct);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_SLOTS_PER_RR, UCI_TEST_VALUE(0x00), UCI_STATUS_INVALID_PARAM, test_slots_per_rr_validation_rejects_zero);
     test_responder_slot_index_validation_rejects_out_of_range_for_slots_per_rr();
-    test_block_stride_length_validation_requires_block_time_struct();
-    test_session_start_rejects_block_stride_without_block_time_struct();
-    test_scheduled_mode_validation_rejects_unsupported_values();
-    test_session_start_rejects_invalid_scheduled_mode();
-    test_cap_size_range_validation_rejects_nonzero_for_time_scheduled();
-    test_session_start_rejects_invalid_cap_size_range();
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_BLOCK_STRIDE_LENGTH, UCI_TEST_VALUE(0x05), UCI_STATUS_INVALID_PARAM, test_block_stride_length_validation_requires_block_time_struct);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_BLOCK_STRIDE_LENGTH, UCI_TEST_VALUE(0x05), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_block_stride_without_block_time_struct);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_SCHEDULED_MODE, UCI_TEST_VALUE(UCI_SCHEDULED_MODE_HYBRID), UCI_STATUS_INVALID_PARAM, test_scheduled_mode_validation_rejects_unsupported_values);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_SCHEDULED_MODE, UCI_TEST_VALUE(UCI_SCHEDULED_MODE_CONTENTION_BASED), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_scheduled_mode);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_CAP_SIZE_RANGE, UCI_TEST_VALUE(0x10, 0x05), UCI_STATUS_INVALID_PARAM, test_cap_size_range_validation_rejects_nonzero_for_time_scheduled);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_CAP_SIZE_RANGE, UCI_TEST_VALUE(0x10, 0x05), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_cap_size_range);
     test_session_start_rejects_insufficient_slots_per_rr();
-    test_rssi_reporting_validation_rejects_unsupported_values();
-    test_session_start_rejects_invalid_rssi_reporting();
-    test_ranging_round_usage_validation_rejects_unsupported_values();
-    test_device_type_validation_rejects_unsupported_values();
-    test_multi_node_mode_validation_rejects_unsupported_values();
-    test_channel_number_validation_rejects_unsupported_values();
-    test_session_start_rejects_invalid_channel_number();
-    test_number_of_controlees_validation_rejects_excessive_value();
-    test_mac_address_mode_validation_rejects_unsupported_value();
-    test_device_mac_address_validation_rejects_invalid_length();
-    test_dst_mac_address_validation_rejects_invalid_list_length();
-    test_session_start_rejects_device_type_role_mismatch();
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_RSSI_REPORTING, UCI_TEST_VALUE(0x02), UCI_STATUS_INVALID_PARAM, test_rssi_reporting_validation_rejects_unsupported_values);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_RSSI_REPORTING, UCI_TEST_VALUE(0x02), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_rssi_reporting);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_RANGING_ROUND_USAGE, UCI_TEST_VALUE(0x05), UCI_STATUS_INVALID_PARAM, test_ranging_round_usage_validation_rejects_unsupported_values);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_DEVICE_TYPE, UCI_TEST_VALUE(0x02), UCI_STATUS_INVALID_PARAM, test_device_type_validation_rejects_unsupported_values);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_MULTI_NODE_MODE, UCI_TEST_VALUE(0x03), UCI_STATUS_INVALID_PARAM, test_multi_node_mode_validation_rejects_unsupported_values);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_CHANNEL_NUMBER, UCI_TEST_VALUE(0x06), UCI_STATUS_INVALID_PARAM, test_channel_number_validation_rejects_unsupported_values);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_CHANNEL_NUMBER, UCI_TEST_VALUE(0x06), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_channel_number);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_NUMBER_OF_CONTROLEES, UCI_TEST_VALUE(0x09), UCI_STATUS_INVALID_PARAM, test_number_of_controlees_validation_rejects_excessive_value);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_MAC_ADDRESS_MODE, UCI_TEST_VALUE(UCI_MAC_ADDRESS_MODE_EXTENDED), UCI_STATUS_INVALID_PARAM, test_mac_address_mode_validation_rejects_unsupported_value);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_DEVICE_MAC_ADDRESS, UCI_TEST_VALUE(0xAA, 0xBB, 0xCC, 0xDD), UCI_STATUS_INVALID_PARAM, test_device_mac_address_validation_rejects_invalid_length);
+    TEST_CONFIG_VALIDATION(UCI_APP_CONFIG_DST_MAC_ADDRESS, UCI_TEST_VALUE(0x78, 0x56, 0x34), UCI_STATUS_INVALID_PARAM, test_dst_mac_address_validation_rejects_invalid_list_length);
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_DEVICE_TYPE, UCI_TEST_VALUE(UCI_DEVICE_TYPE_CONTROLEE), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_device_type_role_mismatch);
     test_session_start_rejects_unicast_multi_node_topology_mismatch();
     test_session_start_rejects_controlee_count_dst_list_mismatch();
-    test_session_start_rejects_invalid_ranging_round_usage();
+    TEST_CONFIG_START_VALIDATION(UCI_APP_CONFIG_RANGING_ROUND_USAGE, UCI_TEST_VALUE(0x05), UCI_STATUS_INVALID_PARAM, test_session_start_rejects_invalid_ranging_round_usage);
     test_measurement_policy_serializes_default_range_notification();
     test_measurement_policy_serializes_session_ranging_interval_override();
     test_result_report_config_masks_range_notification_fields();

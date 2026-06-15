@@ -77,16 +77,6 @@ typedef struct uci_sim_session {
     uint8_t dtp_size;
     uint8_t dtp_payload_len;
     uint8_t dtp_payload[64];
-    uint32_t hus_controller_primary_session_id;
-    uint8_t hus_controller_role;
-    uint8_t hus_controller_reserved;
-    uint16_t hus_controller_config_length;
-    uint8_t hus_controller_config_data[250];
-    uint32_t hus_controlee_primary_session_id;
-    uint8_t hus_controlee_role;
-    uint8_t hus_controlee_reserved;
-    uint16_t hus_controlee_config_length;
-    uint8_t hus_controlee_config_data[250];
     uint16_t last_data_sequence;
     uint16_t last_data_length;
     uint8_t has_last_data_message;

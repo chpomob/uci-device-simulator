@@ -224,14 +224,3 @@ void uci_sim_scenario_on_session_stopped(uci_sim_device_t* device, uci_sim_sessi
     uci_sim_device_cancel_session_events(device, session->session_id);
     handle_reference_session_stopped(device, session);
 }
-
-int uci_sim_scenario_on_command_complete(uci_sim_device_t* device,
-                                         const uci_sim_packet_t* request,
-                                         uci_sim_result_t* result) {
-    if (!device || !request || !result) {
-        return 0;
-    }
-    (void)request;
-    (void)result;
-    return 0;
-}

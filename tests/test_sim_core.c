@@ -6309,86 +6309,6 @@ static void test_dt_round_update_commands(void) {
     PASS();
 }
 
-static void test_hus_config_commands(void) {
-    uci_sim_device_t device;
-    uci_sim_packet_t request;
-    uci_sim_result_t result;
-    uci_sim_session_t* session = NULL;
-
-    uci_sim_device_init(&device);
-
-    memset(&request, 0, sizeof(request));
-    request.mt = UCI_MT_COMMAND;
-    request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_SESSION_CONFIG;
-    request.oid = UCI_SESSION_INIT;
-    request.payload_len = 5;
-    request.payload[0] = 0x78;
-    request.payload[1] = 0x56;
-    request.payload[2] = 0x34;
-    request.payload[3] = 0x12;
-    request.payload[4] = UCI_SESSION_TYPE_RANGING;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "hus init failed");
-    ASSERT_TRUE(uci_sim_device_get_session(&device, 0x12345678U, &session) == 0, "hus session lookup");
-
-    request.oid = UCI_SESSION_SET_HUS_CONTROLLER_CONFIG;
-    request.payload_len = 15;
-    request.payload[4] = 0xEF;
-    request.payload[5] = 0xCD;
-    request.payload[6] = 0xAB;
-    request.payload[7] = 0x90;
-    request.payload[8] = 0x00;
-    request.payload[9] = 0xAA;
-    request.payload[10] = 0x03;
-    request.payload[11] = 0x00;
-    request.payload[12] = 0x11;
-    request.payload[13] = 0x22;
-    request.payload[14] = 0x33;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "hus controller config failed");
-    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "hus controller status");
-    ASSERT_EQ_U32(0x90ABCDEFU, session->hus_controller_primary_session_id, "hus controller primary session");
-    ASSERT_EQ_U8(0x00, session->hus_controller_role, "hus controller role");
-    ASSERT_EQ_U8(0xAA, session->hus_controller_reserved, "hus controller reserved");
-    ASSERT_EQ_U32(3, session->hus_controller_config_length, "hus controller config length");
-    ASSERT_EQ_U8(0x11, session->hus_controller_config_data[0], "hus controller config byte 0");
-    ASSERT_EQ_U8(0x22, session->hus_controller_config_data[1], "hus controller config byte 1");
-    ASSERT_EQ_U8(0x33, session->hus_controller_config_data[2], "hus controller config byte 2");
-
-    request.oid = UCI_SESSION_SET_HUS_CONTROLEE_CONFIG;
-    request.payload_len = 14;
-    request.payload[4] = 0x04;
-    request.payload[5] = 0x03;
-    request.payload[6] = 0x02;
-    request.payload[7] = 0x01;
-    request.payload[8] = 0x01;
-    request.payload[9] = 0x55;
-    request.payload[10] = 0x02;
-    request.payload[11] = 0x00;
-    request.payload[12] = 0x44;
-    request.payload[13] = 0x66;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "hus controlee config failed");
-    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "hus controlee status");
-    ASSERT_EQ_U32(0x01020304U, session->hus_controlee_primary_session_id, "hus controlee primary session");
-    ASSERT_EQ_U8(0x01, session->hus_controlee_role, "hus controlee role");
-    ASSERT_EQ_U8(0x55, session->hus_controlee_reserved, "hus controlee reserved");
-    ASSERT_EQ_U32(2, session->hus_controlee_config_length, "hus controlee config length");
-    ASSERT_EQ_U8(0x44, session->hus_controlee_config_data[0], "hus controlee config byte 0");
-    ASSERT_EQ_U8(0x66, session->hus_controlee_config_data[1], "hus controlee config byte 1");
-
-    request.oid = UCI_SESSION_SET_HUS_CONTROLLER_CONFIG;
-    request.payload_len = 11;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "hus short payload should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_MSG_SIZE, result.response.payload[0], "hus short payload status");
-
-    request.payload_len = 12;
-    request.payload[8] = 0x02;
-    request.payload[10] = 0x00;
-    request.payload[11] = 0x00;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "hus invalid role should fail");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "hus invalid role status");
-    PASS();
-}
-
 int main(void) {
     test_packet_round_trip();
     test_control_packet_serializer_rejects_oversized_payload();
@@ -6499,7 +6419,6 @@ int main(void) {
     test_logical_link_lifecycle();
     test_logical_link_edge_cases();
     test_dt_round_update_commands();
-    test_hus_config_commands();
 
     printf("Passed: %d\n", g_passed);
     printf("Failed: %d\n", g_failed);

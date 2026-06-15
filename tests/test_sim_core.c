@@ -541,56 +541,6 @@ static int dequeue_outbound(uci_sim_engine_t* engine, uci_sim_packet_t* packet) 
     return uci_sim_engine_dequeue_outbound_packet(engine, packet);
 }
 
-static void make_session_init_packet(uci_sim_packet_t* request, uint32_t session_id) {
-    memset(request, 0, sizeof(*request));
-    request->mt = UCI_MT_COMMAND;
-    request->pbf = UCI_PBF_COMPLETE;
-    request->gid = UCI_GID_SESSION_CONFIG;
-    request->oid = UCI_SESSION_INIT;
-    request->payload_len = 5;
-    request->payload[0] = (uint8_t)(session_id & 0xFFU);
-    request->payload[1] = (uint8_t)((session_id >> 8) & 0xFFU);
-    request->payload[2] = (uint8_t)((session_id >> 16) & 0xFFU);
-    request->payload[3] = (uint8_t)((session_id >> 24) & 0xFFU);
-    request->payload[4] = UCI_SESSION_TYPE_RANGING;
-}
-
-static void make_session_control_packet(uci_sim_packet_t* request,
-                                        uint8_t oid,
-                                        uint32_t session_id) {
-    memset(request, 0, sizeof(*request));
-    request->mt = UCI_MT_COMMAND;
-    request->pbf = UCI_PBF_COMPLETE;
-    request->gid = UCI_GID_SESSION_CONTROL;
-    request->oid = oid;
-    request->payload_len = 4;
-    request->payload[0] = (uint8_t)(session_id & 0xFFU);
-    request->payload[1] = (uint8_t)((session_id >> 8) & 0xFFU);
-    request->payload[2] = (uint8_t)((session_id >> 16) & 0xFFU);
-    request->payload[3] = (uint8_t)((session_id >> 24) & 0xFFU);
-}
-
-static void make_set_app_config_packet(uci_sim_packet_t* request,
-                                       uint32_t session_id,
-                                       uint8_t config_id,
-                                       const uint8_t* value,
-                                       uint8_t value_len) {
-    memset(request, 0, sizeof(*request));
-    request->mt = UCI_MT_COMMAND;
-    request->pbf = UCI_PBF_COMPLETE;
-    request->gid = UCI_GID_SESSION_CONFIG;
-    request->oid = UCI_SESSION_SET_APP_CONFIG;
-    request->payload_len = (uint16_t)(7U + value_len);
-    request->payload[0] = (uint8_t)(session_id & 0xFFU);
-    request->payload[1] = (uint8_t)((session_id >> 8) & 0xFFU);
-    request->payload[2] = (uint8_t)((session_id >> 16) & 0xFFU);
-    request->payload[3] = (uint8_t)((session_id >> 24) & 0xFFU);
-    request->payload[4] = 0x01U;
-    request->payload[5] = config_id;
-    request->payload[6] = value_len;
-    memcpy(&request->payload[7], value, value_len);
-}
-
 static void test_engine_tick_progression(void) {
     uci_sim_engine_t engine;
     uci_sim_packet_t request;
@@ -1524,6 +1474,8 @@ static void test_default_profile_feature_matrix(void) {
                 "profile should support app config 0xE6");
     ASSERT_TRUE(uci_sim_profile_supports_session_app_config(profile, 0xE7),
                 "profile should support app config 0xE7");
+    ASSERT_TRUE(!uci_sim_profile_supports_session_app_config(profile, (uint8_t)(0x47U + 1U)),
+                "profile should reject removed app config ID after 0x47");
     ASSERT_TRUE(!uci_sim_profile_supports_session_app_config(profile, 0x99),
                 "profile should reject unsupported app config IDs");
     ASSERT_TRUE(start_transition != NULL, "profile should define session start transition");
@@ -2285,301 +2237,6 @@ static void test_ranging_stream_stops_at_max_number_of_measurements(void) {
     PASS();
 }
 
-static void test_session_time_base_aligns_first_measurement_to_reference(void) {
-    uci_sim_engine_t engine;
-    uci_sim_packet_t request;
-    uci_sim_packet_t response;
-    uci_sim_packet_t notification;
-    const uci_sim_profile_t* profile;
-    const uint32_t reference_session_id = 0x11111111U;
-    const uint32_t dependent_session_id = 0x22222222U;
-    const uint8_t interval_50ms[4] = { 0x32, 0x00, 0x00, 0x00 };
-    const uint8_t time_base_value[9] = { 0x01, 0x11, 0x11, 0x11, 0x11, 0x20, 0x4E, 0x00, 0x00 };
-
-    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
-    profile = engine.device.profile;
-
-    make_session_init_packet(&request, reference_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base align ref init failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base align ref init rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base align ref init ntf missing");
-
-    make_session_init_packet(&request, dependent_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base align dep init failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base align dep init rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base align dep init ntf missing");
-
-    make_set_app_config_packet(&request, reference_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_50ms, 4);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base align ref interval failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base align ref interval rsp missing");
-
-    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_50ms, 4);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base align dep interval failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base align dep interval rsp missing");
-
-    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_SESSION_TIME_BASE, time_base_value, 9);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base align set app config failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base align set app config rsp missing");
-
-    make_session_control_packet(&request, UCI_SESSION_START, reference_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base align ref start failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base align ref start rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base align ref start ntf missing");
-
-    make_session_control_packet(&request, UCI_SESSION_START, dependent_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base align dep start failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base align dep start rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base align dep start ntf missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "time base align should wait before first range");
-
-    ASSERT_TRUE(uci_sim_engine_tick(&engine, 49U) == 0, "time base align tick 49 failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "time base align should not emit before ref deadline");
-
-    ASSERT_TRUE(uci_sim_engine_tick(&engine, 1U) == 0, "time base align tick 50 failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base align ref range missing");
-    ASSERT_EQ_U32(reference_session_id,
-                  read_u32_le(&notification.payload[profile->range_data_primary_session_id_offset]),
-                  "time base align first range should be reference session");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "time base align dependent should still wait after ref");
-
-    ASSERT_TRUE(uci_sim_engine_tick(&engine, 19U) == 0, "time base align tick 69 failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "time base align dependent should still wait for offset");
-
-    ASSERT_TRUE(uci_sim_engine_tick(&engine, 1U) == 0, "time base align tick 70 failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base align dependent range missing");
-    ASSERT_EQ_U32(dependent_session_id,
-                  read_u32_le(&notification.payload[profile->range_data_primary_session_id_offset]),
-                  "time base align second range should be dependent session");
-    PASS();
-}
-
-static void test_session_time_base_resyncs_when_reference_starts(void) {
-    uci_sim_engine_t engine;
-    uci_sim_packet_t request;
-    uci_sim_packet_t response;
-    uci_sim_packet_t notification;
-    const uci_sim_profile_t* profile;
-    const uint32_t reference_session_id = 0x11111111U;
-    const uint32_t dependent_session_id = 0x22222222U;
-    const uint8_t interval_50ms[4] = { 0x32, 0x00, 0x00, 0x00 };
-    const uint8_t time_base_value[9] = { 0x07, 0x11, 0x11, 0x11, 0x11, 0x20, 0x4E, 0x00, 0x00 };
-
-    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
-    profile = engine.device.profile;
-
-    make_session_init_packet(&request, reference_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base resync ref init failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base resync ref init rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base resync ref init ntf missing");
-
-    make_session_init_packet(&request, dependent_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base resync dep init failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base resync dep init rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base resync dep init ntf missing");
-
-    make_set_app_config_packet(&request, reference_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_50ms, 4);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base resync ref interval failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base resync ref interval rsp missing");
-
-    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_50ms, 4);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base resync dep interval failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base resync dep interval rsp missing");
-
-    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_SESSION_TIME_BASE, time_base_value, 9);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base resync set app config failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base resync set app config rsp missing");
-
-    make_session_control_packet(&request, UCI_SESSION_START, dependent_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base resync dep start failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base resync dep start rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base resync dep start ntf missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "time base resync dep should wait for interval");
-
-    make_session_control_packet(&request, UCI_SESSION_START, reference_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base resync ref start failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base resync ref start rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base resync ref start ntf missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "time base resync should still wait before range");
-
-    ASSERT_TRUE(uci_sim_engine_tick(&engine, 49U) == 0, "time base resync tick 49 failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "time base resync should not emit before ref deadline");
-
-    ASSERT_TRUE(uci_sim_engine_tick(&engine, 1U) == 0, "time base resync tick 50 failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base resync ref range missing");
-    ASSERT_EQ_U32(reference_session_id,
-                  read_u32_le(&notification.payload[profile->range_data_primary_session_id_offset]),
-                  "time base resync first range should be reference session");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "time base resync dependent should wait for offset");
-
-    ASSERT_TRUE(uci_sim_engine_tick(&engine, 19U) == 0, "time base resync tick 69 failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) != 0, "time base resync dependent should still wait");
-
-    ASSERT_TRUE(uci_sim_engine_tick(&engine, 1U) == 0, "time base resync tick 70 failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base resync dependent range missing");
-    ASSERT_EQ_U32(dependent_session_id,
-                  read_u32_le(&notification.payload[profile->range_data_primary_session_id_offset]),
-                  "time base resync second range should be dependent session");
-    PASS();
-}
-
-static void test_session_time_base_stops_dependent_when_reference_stops(void) {
-    uci_sim_engine_t engine;
-    uci_sim_packet_t request;
-    uci_sim_packet_t response;
-    uci_sim_packet_t notification;
-    const uint32_t reference_session_id = 0x11111111U;
-    const uint32_t dependent_session_id = 0x22222222U;
-    const uint8_t interval_50ms[4] = { 0x32, 0x00, 0x00, 0x00 };
-    const uint8_t time_base_value[9] = { 0x01, 0x11, 0x11, 0x11, 0x11, 0x20, 0x4E, 0x00, 0x00 };
-
-    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
-
-    make_session_init_packet(&request, reference_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base loss ref init failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base loss ref init rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base loss ref init ntf missing");
-
-    make_session_init_packet(&request, dependent_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base loss dep init failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base loss dep init rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base loss dep init ntf missing");
-
-    make_set_app_config_packet(&request, reference_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_50ms, 4);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base loss ref interval failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base loss ref interval rsp missing");
-
-    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_50ms, 4);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base loss dep interval failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base loss dep interval rsp missing");
-
-    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_SESSION_TIME_BASE, time_base_value, 9);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base loss set app config failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base loss set app config rsp missing");
-
-    make_session_control_packet(&request, UCI_SESSION_START, reference_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base loss ref start failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base loss ref start rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base loss ref start ntf missing");
-
-    make_session_control_packet(&request, UCI_SESSION_START, dependent_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base loss dep start failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base loss dep start rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base loss dep start ntf missing");
-
-    make_session_control_packet(&request, UCI_SESSION_STOP, reference_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base loss ref stop failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base loss ref stop rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base loss ref stop ntf missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base loss dependent stop ntf missing");
-    ASSERT_EQ_U32(dependent_session_id, read_u32_le(notification.payload), "time base loss dependent stop session id");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_IDLE, notification.payload[4], "time base loss dependent stop state");
-    ASSERT_EQ_U8(UCI_SESSION_REASON_ERROR_REF_UWB_SESSION_LOST,
-                 notification.payload[5],
-                 "time base loss dependent stop reason");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_IDLE, engine.device.sessions[1].state, "time base loss dependent final state");
-    ASSERT_EQ_U8(0U, engine.device.sessions[1].ranging_stream_remaining, "time base loss dependent remaining");
-    PASS();
-}
-
-static void test_session_time_base_rejects_ranging_interval_mismatch(void) {
-    uci_sim_engine_t engine;
-    uci_sim_packet_t request;
-    uci_sim_packet_t response;
-    uci_sim_packet_t notification;
-    const uint32_t reference_session_id = 0x11111111U;
-    const uint32_t dependent_session_id = 0x22222222U;
-    const uint8_t interval_50ms[4] = { 0x32, 0x00, 0x00, 0x00 };
-    const uint8_t interval_60ms[4] = { 0x3C, 0x00, 0x00, 0x00 };
-    const uint8_t time_base_value[9] = { 0x01, 0x11, 0x11, 0x11, 0x11, 0x20, 0x4E, 0x00, 0x00 };
-
-    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
-
-    make_session_init_packet(&request, reference_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch ref init failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch ref init rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base mismatch ref init ntf missing");
-
-    make_session_init_packet(&request, dependent_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch dep init failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch dep init rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base mismatch dep init ntf missing");
-
-    make_set_app_config_packet(&request, reference_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_50ms, 4);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch ref interval failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch ref interval rsp missing");
-
-    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_60ms, 4);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch dep interval failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch dep interval rsp missing");
-
-    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_SESSION_TIME_BASE, time_base_value, 9);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch set app config failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch set app config rsp missing");
-
-    make_session_control_packet(&request, UCI_SESSION_START, reference_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch ref start failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch ref start rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base mismatch ref start ntf missing");
-
-    make_session_control_packet(&request, UCI_SESSION_START, dependent_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base mismatch dep start submit failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base mismatch dep start rsp missing");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, response.payload[0], "time base mismatch dep start status");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base mismatch dep generic error missing");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, notification.oid, "time base mismatch dep generic error oid");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, engine.device.sessions[1].state, "time base mismatch dep final state");
-    PASS();
-}
-
-static void test_session_time_base_rejects_offset_outside_interval(void) {
-    uci_sim_engine_t engine;
-    uci_sim_packet_t request;
-    uci_sim_packet_t response;
-    uci_sim_packet_t notification;
-    const uint32_t reference_session_id = 0x11111111U;
-    const uint32_t dependent_session_id = 0x22222222U;
-    const uint8_t interval_50ms[4] = { 0x32, 0x00, 0x00, 0x00 };
-    const uint8_t time_base_value[9] = { 0x01, 0x11, 0x11, 0x11, 0x11, 0x50, 0xC3, 0x00, 0x00 };
-
-    uci_sim_engine_init_with_scenario(&engine, UCI_SIM_SCENARIO_RANGING_STREAM);
-
-    make_session_init_packet(&request, reference_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset ref init failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset ref init rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base offset ref init ntf missing");
-
-    make_session_init_packet(&request, dependent_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset dep init failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset dep init rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base offset dep init ntf missing");
-
-    make_set_app_config_packet(&request, reference_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_50ms, 4);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset ref interval failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset ref interval rsp missing");
-
-    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_RANGING_INTERVAL, interval_50ms, 4);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset dep interval failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset dep interval rsp missing");
-
-    make_set_app_config_packet(&request, dependent_session_id, UCI_APP_CONFIG_SESSION_TIME_BASE, time_base_value, 9);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset set app config failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset set app config rsp missing");
-
-    make_session_control_packet(&request, UCI_SESSION_START, reference_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset ref start failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset ref start rsp missing");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base offset ref start ntf missing");
-
-    make_session_control_packet(&request, UCI_SESSION_START, dependent_session_id);
-    ASSERT_TRUE(uci_sim_engine_submit_packet(&engine, &request) == 0, "time base offset dep start submit failed");
-    ASSERT_TRUE(dequeue_outbound(&engine, &response) == 0, "time base offset dep start rsp missing");
-    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, response.payload[0], "time base offset dep start status");
-    ASSERT_TRUE(dequeue_outbound(&engine, &notification) == 0, "time base offset dep generic error missing");
-    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, notification.oid, "time base offset dep generic error oid");
-    ASSERT_EQ_U8(UCI_SESSION_STATE_INIT, engine.device.sessions[1].state, "time base offset dep final state");
-    PASS();
-}
-
 static void test_default_scenario_initialization(void) {
     uci_sim_device_t device;
 
@@ -3080,12 +2737,6 @@ static void test_session_app_config_storage(void) {
     request.payload[7] = 0x01;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set session data transfer status ntf config failed");
 
-    request.payload_len = 16;
-    request.payload[5] = 0x48;
-    request.payload[6] = 9;
-    memcpy(&request.payload[7], (const uint8_t[]){ 0x01, 0x78, 0x56, 0x34, 0x12, 0x08, 0x07, 0x06, 0x05 }, 9);
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set session time base app config failed");
-
     request.payload_len = 8;
     request.payload[5] = 0x49;
     request.payload[6] = 1;
@@ -3182,12 +2833,12 @@ static void test_session_app_config_storage(void) {
     ASSERT_EQ_U8(0x03, result.response.payload[5], "get multi app config second id");
     ASSERT_EQ_U8(0x02, result.response.payload[7], "get multi app config second value");
 
-    request.payload_len = 79;
+    request.payload_len = 78;
     request.payload[0] = 0x78;
     request.payload[1] = 0x56;
     request.payload[2] = 0x34;
     request.payload[3] = 0x12;
-    request.payload[4] = 74;
+    request.payload[4] = 73;
     request.payload[5] = 0x01;
     request.payload[6] = 0x02;
     request.payload[7] = 0x04;
@@ -3250,21 +2901,20 @@ static void test_session_app_config_storage(void) {
     request.payload[64] = 0x45;
     request.payload[65] = 0x46;
     request.payload[66] = 0x47;
-    request.payload[67] = 0x48;
-    request.payload[68] = 0x49;
-    request.payload[69] = 0x4A;
-    request.payload[70] = 0x4B;
-    request.payload[71] = 0x4C;
-    request.payload[72] = 0x4D;
-    request.payload[73] = 0x3A;
-    request.payload[74] = 0x3B;
-    request.payload[75] = 0x3C;
-    request.payload[76] = 0x3D;
-    request.payload[77] = 0x3E;
-    request.payload[78] = 0x3F;
+    request.payload[67] = 0x49;
+    request.payload[68] = 0x4A;
+    request.payload[69] = 0x4B;
+    request.payload[70] = 0x4C;
+    request.payload[71] = 0x4D;
+    request.payload[72] = 0x3A;
+    request.payload[73] = 0x3B;
+    request.payload[74] = 0x3C;
+    request.payload[75] = 0x3D;
+    request.payload[76] = 0x3E;
+    request.payload[77] = 0x3F;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get extended app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get extended app config status");
-    ASSERT_EQ_U8(74, result.response.payload[1], "get extended app config count");
+    ASSERT_EQ_U8(73, result.response.payload[1], "get extended app config count");
     ASSERT_EQ_U8(0x01, result.response.payload[2], "get extended app config first id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x0A,
                                              (const uint8_t[]){ 0x05, 0x00, 0x00, 0x00 }, 4),
@@ -3391,9 +3041,6 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x47,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get extended app config missing session data transfer status ntf config");
-    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x48,
-                                             (const uint8_t[]){ 0x01, 0x78, 0x56, 0x34, 0x12, 0x08, 0x07, 0x06, 0x05 }, 9),
-                "get extended app config missing session time base");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x49,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get extended app config missing dl tdoa responder tof");
@@ -3420,7 +3067,7 @@ static void test_session_app_config_storage(void) {
     request.payload[4] = 0;
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get all app config failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get all app config status");
-    ASSERT_EQ_U8(78, result.response.payload[1], "get all app config count");
+    ASSERT_EQ_U8(77, result.response.payload[1], "get all app config count");
     ASSERT_EQ_U8(0x00, result.response.payload[2], "get all app config first id");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x0A,
                                              (const uint8_t[]){ 0x05, 0x00, 0x00, 0x00 }, 4),
@@ -3550,9 +3197,6 @@ static void test_session_app_config_storage(void) {
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x47,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing session data transfer status ntf config");
-    ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x48,
-                                             (const uint8_t[]){ 0x01, 0x78, 0x56, 0x34, 0x12, 0x08, 0x07, 0x06, 0x05 }, 9),
-                "get all app config missing session time base");
     ASSERT_TRUE(response_contains_config_tlv(&result.response, 0x49,
                                              (const uint8_t[]){ 0x01 }, 1),
                 "get all app config missing dl tdoa responder tof");
@@ -4394,11 +4038,6 @@ int main(void) {
     test_ranging_stream_respects_proximity_transition_mode();
     test_ranging_stream_progresses_to_completion();
     test_ranging_stream_stops_at_max_number_of_measurements();
-    test_session_time_base_aligns_first_measurement_to_reference();
-    test_session_time_base_resyncs_when_reference_starts();
-    test_session_time_base_stops_dependent_when_reference_stops();
-    test_session_time_base_rejects_ranging_interval_mismatch();
-    test_session_time_base_rejects_offset_outside_interval();
     test_session_app_config_storage();
     test_profile_rejects_unsupported_session_features();
     test_session_init_rejects_radar_type();

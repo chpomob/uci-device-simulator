@@ -965,107 +965,6 @@ static int validate_cap_size_range_context(const uci_sim_profile_t* profile,
     return 0;
 }
 
-static int validate_session_time_base_value(const uci_sim_profile_t* profile,
-                                            const uint8_t* value,
-                                            uint8_t value_len,
-                                            uci_sim_validation_result_t* result) {
-    uint8_t status = UCI_STATUS_INVALID_PARAM;
-    uint8_t reason = UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS;
-    uint8_t surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE;
-
-    (void)profile;
-
-    if (!value || value_len != 9U || (value[0] & (uint8_t)~0x07U) != 0U) {
-        set_invalid_result(result, status, reason, surface);
-        return -1;
-    }
-
-    return 0;
-}
-
-static const uci_sim_session_t* find_session_const(const uci_sim_device_t* device,
-                                                   uint32_t session_id) {
-    size_t i;
-
-    if (!device) {
-        return NULL;
-    }
-
-    for (i = 0; i < UCI_SIM_MAX_SESSIONS; ++i) {
-        if (device->sessions[i].allocated &&
-            device->sessions[i].session_id == session_id) {
-            return &device->sessions[i];
-        }
-    }
-
-    return NULL;
-}
-
-static int validate_session_time_base_context(const uci_sim_profile_t* profile,
-                                              const uci_sim_device_t* device,
-                                              const uci_sim_session_t* session,
-                                              uci_sim_validation_result_t* result) {
-    uci_sim_session_time_base_t time_base;
-    const uci_sim_session_t* reference_session;
-    uint32_t interval_ms;
-    uint32_t reference_interval_ms;
-    uint64_t interval_us;
-
-    if (!session || uci_sim_session_get_session_time_base(session, &time_base) != 0 || !time_base.present) {
-        return 0;
-    }
-
-    if (!time_base.enabled) {
-        return 0;
-    }
-
-    if (time_base.reference_session_id == session->session_id) {
-        set_invalid_result(result,
-                           UCI_STATUS_INVALID_PARAM,
-                           UCI_SESSION_REASON_ERROR_REF_UWB_SESSION_DOES_NOT_EXIST,
-                           UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
-        return -1;
-    }
-
-    reference_session = find_session_const(device, time_base.reference_session_id);
-    if (!reference_session) {
-        set_invalid_result(result,
-                           UCI_STATUS_INVALID_PARAM,
-                           UCI_SESSION_REASON_ERROR_REF_UWB_SESSION_DOES_NOT_EXIST,
-                           UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
-        return -1;
-    }
-
-    if (!time_base.continue_session && reference_session->state != UCI_SESSION_STATE_ACTIVE) {
-        set_invalid_result(result,
-                           UCI_STATUS_INVALID_PARAM,
-                           UCI_SESSION_REASON_ERROR_REF_UWB_SESSION_LOST,
-                           UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
-        return -1;
-    }
-
-    interval_ms = uci_sim_session_get_ranging_interval_ms(session, profile);
-    reference_interval_ms = uci_sim_session_get_ranging_interval_ms(reference_session, profile);
-    if (interval_ms != reference_interval_ms) {
-        set_invalid_result(result,
-                           UCI_STATUS_INVALID_PARAM,
-                           UCI_SESSION_REASON_ERROR_REF_UWB_SESSION_RANGING_DURATION_MISMATCH,
-                           UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
-        return -1;
-    }
-
-    interval_us = (uint64_t)reference_interval_ms * 1000ULL;
-    if (time_base.offset_us >= interval_us) {
-        set_invalid_result(result,
-                           UCI_STATUS_INVALID_PARAM,
-                           UCI_SESSION_REASON_ERROR_REF_UWB_SESSION_INVALID_OFFSET_TIME,
-                           UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE);
-        return -1;
-    }
-
-    return 0;
-}
-
 static int require_session_config_len(const uci_sim_profile_t* profile,
                                       const uci_sim_session_t* session,
                                       uint8_t config_id,
@@ -1477,9 +1376,6 @@ int uci_sim_validate_session_app_config(const uci_sim_profile_t* profile,
             }
             return validate_block_stride_context(profile, session, config_id, value, value_len, result);
         }
-        if (config_id == UCI_APP_CONFIG_SESSION_TIME_BASE) {
-            return validate_session_time_base_value(profile, value, value_len, result);
-        }
         if (config_id == UCI_APP_CONFIG_SLOTS_PER_RR) {
             if (!value || value_len != 1) {
                 set_invalid_result(result,
@@ -1606,6 +1502,8 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
     uint8_t channel_number = 0;
     uint8_t channel_number_len = 0;
 
+    (void)device;
+
     uci_sim_validation_result_init(result);
     if (!session) {
         return 0;
@@ -1633,9 +1531,6 @@ int uci_sim_validate_session_start(const uci_sim_profile_t* profile,
         return -1;
     }
     if (validate_slot_duration_rstu(profile, read_u16_le(slot_duration), result) != 0) {
-        return -1;
-    }
-    if (validate_session_time_base_context(profile, device, session, result) != 0) {
         return -1;
     }
     if (uci_sim_session_get_config(session, UCI_APP_CONFIG_CHANNEL_NUMBER, &channel_number, &channel_number_len) != 0 ||

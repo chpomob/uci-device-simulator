@@ -157,7 +157,6 @@ stored supported TLVs below. This now includes the basic ranging/session control
 | `0x45` | `SESSION_KEY` | `supported` | Default-profile stored/retrievable; simulator and shell accept 16-byte and 32-byte hex values |
 | `0x46` | `SUBSESSION_KEY` | `supported` | Default-profile stored/retrievable; simulator and shell accept 16-byte and 32-byte hex values |
 | `0x47` | `SESSION_DATA_TRANSFER_STATUS_NTF_CONFIG` | `supported` | Default-profile stored/retrievable |
-| `0x48` | `SESSION_TIME_BASE` | `supported` | Default-profile uses the 9-byte local Qorvo/Cherry structure, now with deterministic scheduler behavior for reference alignment, optional resync, reference-loss stop semantics, and start-time rejection on interval mismatch / out-of-window offset |
 | `0x49` | `DL_TDOA_RESPONDER_TOF` | `supported` | Default-profile stored/retrievable |
 | `0x4A` | `SECURE_RANGING_NEFA_LEVEL` | `supported` | Default-profile stored/retrievable |
 | `0x4B` | `SECURE_RANGING_CSW_LENGTH` | `supported` | Default-profile stored/retrievable |

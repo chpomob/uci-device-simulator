@@ -211,125 +211,6 @@ static void set_max_number_of_measurements(int fd,
                               step_name);
 }
 
-static void set_session_time_base(int fd,
-                                  uint32_t session_id,
-                                  uint8_t flags,
-                                  uint32_t reference_session_id,
-                                  uint32_t offset_us,
-                                  const char* step_name) {
-    uint8_t value[9];
-
-    value[0] = flags;
-    value[1] = (uint8_t)(reference_session_id & 0xFFU);
-    value[2] = (uint8_t)((reference_session_id >> 8) & 0xFFU);
-    value[3] = (uint8_t)((reference_session_id >> 16) & 0xFFU);
-    value[4] = (uint8_t)((reference_session_id >> 24) & 0xFFU);
-    value[5] = (uint8_t)(offset_us & 0xFFU);
-    value[6] = (uint8_t)((offset_us >> 8) & 0xFFU);
-    value[7] = (uint8_t)((offset_us >> 16) & 0xFFU);
-    value[8] = (uint8_t)((offset_us >> 24) & 0xFFU);
-    set_app_config_single_tlv(fd, session_id, UCI_APP_CONFIG_SESSION_TIME_BASE, value, 9, step_name);
-}
-
-static void init_session_dynamic(int fd, uint32_t session_id, const char* step_name) {
-    uint8_t request[UCI_SIM_MAX_PACKET] = {0};
-    uint8_t packet[UCI_SIM_MAX_PACKET];
-    uci_sim_packet_t parsed;
-    size_t packet_len = 0;
-    char message[160];
-
-    request[0] = 0x21;
-    request[1] = 0x00;
-    request[2] = 0x00;
-    request[3] = 0x05;
-    request[4] = (uint8_t)(session_id & 0xFFU);
-    request[5] = (uint8_t)((session_id >> 8) & 0xFFU);
-    request[6] = (uint8_t)((session_id >> 16) & 0xFFU);
-    request[7] = (uint8_t)((session_id >> 24) & 0xFFU);
-    request[8] = UCI_SESSION_TYPE_RANGING;
-
-    snprintf(message, sizeof(message), "%s write session init", step_name);
-    ASSERT_TRUE(write_full(fd, request, 9) == 9, message);
-    snprintf(message, sizeof(message), "%s read session init rsp", step_name);
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, message);
-    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse dynamic init rsp");
-    ASSERT_EQ_INT(UCI_GID_SESSION_CONFIG, parsed.gid, "dynamic init rsp gid");
-    ASSERT_EQ_INT(UCI_SESSION_INIT, parsed.oid, "dynamic init rsp oid");
-    ASSERT_EQ_INT(UCI_STATUS_OK, parsed.payload[0], "dynamic init rsp status");
-    ASSERT_EQ_INT((int)session_id, (int)read_u32_le(&parsed.payload[1]), "dynamic init rsp session id");
-
-    snprintf(message, sizeof(message), "%s read session init ntf", step_name);
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, message);
-    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse dynamic init ntf");
-    ASSERT_EQ_INT(UCI_GID_SESSION_CONFIG, parsed.gid, "dynamic init ntf gid");
-    ASSERT_EQ_INT(UCI_SESSION_STATUS_NTF, parsed.oid, "dynamic init ntf oid");
-    ASSERT_EQ_INT((int)session_id, (int)read_u32_le(parsed.payload), "dynamic init ntf session id");
-    ASSERT_EQ_INT(UCI_SESSION_STATE_INIT, parsed.payload[4], "dynamic init ntf state");
-}
-
-static void start_session_dynamic(int fd, uint32_t session_id, const char* step_name) {
-    uint8_t request[UCI_SIM_MAX_PACKET] = {0};
-    uint8_t packet[UCI_SIM_MAX_PACKET];
-    uci_sim_packet_t parsed;
-    size_t packet_len = 0;
-    char message[160];
-
-    request[0] = 0x22;
-    request[1] = 0x00;
-    request[2] = 0x00;
-    request[3] = 0x04;
-    request[4] = (uint8_t)(session_id & 0xFFU);
-    request[5] = (uint8_t)((session_id >> 8) & 0xFFU);
-    request[6] = (uint8_t)((session_id >> 16) & 0xFFU);
-    request[7] = (uint8_t)((session_id >> 24) & 0xFFU);
-
-    snprintf(message, sizeof(message), "%s write session start", step_name);
-    ASSERT_TRUE(write_full(fd, request, 8) == 8, message);
-    snprintf(message, sizeof(message), "%s read session start rsp", step_name);
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, message);
-    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse dynamic start rsp");
-    ASSERT_EQ_INT(UCI_GID_SESSION_CONTROL, parsed.gid, "dynamic start rsp gid");
-    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "dynamic start rsp oid");
-    ASSERT_EQ_INT(UCI_STATUS_OK, parsed.payload[0], "dynamic start rsp status");
-
-    snprintf(message, sizeof(message), "%s read session start ntf", step_name);
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, message);
-    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse dynamic start ntf");
-    ASSERT_EQ_INT(UCI_GID_SESSION_CONFIG, parsed.gid, "dynamic start ntf gid");
-    ASSERT_EQ_INT(UCI_SESSION_STATUS_NTF, parsed.oid, "dynamic start ntf oid");
-    ASSERT_EQ_INT((int)session_id, (int)read_u32_le(parsed.payload), "dynamic start ntf session id");
-    ASSERT_EQ_INT(UCI_SESSION_STATE_ACTIVE, parsed.payload[4], "dynamic start ntf state");
-}
-
-static void start_session_expect_failure_dynamic(int fd,
-                                                 uint32_t session_id,
-                                                 uint8_t expected_status,
-                                                 const char* step_name) {
-    uint8_t request[UCI_SIM_MAX_PACKET] = {0};
-    uint8_t packet[UCI_SIM_MAX_PACKET];
-    uci_sim_packet_t parsed;
-    size_t packet_len = 0;
-    char message[160];
-
-    request[0] = 0x22;
-    request[1] = 0x00;
-    request[2] = 0x00;
-    request[3] = 0x04;
-    request[4] = (uint8_t)(session_id & 0xFFU);
-    request[5] = (uint8_t)((session_id >> 8) & 0xFFU);
-    request[6] = (uint8_t)((session_id >> 16) & 0xFFU);
-    request[7] = (uint8_t)((session_id >> 24) & 0xFFU);
-
-    snprintf(message, sizeof(message), "%s write session start", step_name);
-    ASSERT_TRUE(write_full(fd, request, 8) == 8, message);
-    snprintf(message, sizeof(message), "%s read session start rsp", step_name);
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, message);
-    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse dynamic failed start rsp");
-    ASSERT_EQ_INT(UCI_GID_SESSION_CONTROL, parsed.gid, "dynamic failed start rsp gid");
-    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "dynamic failed start rsp oid");
-    ASSERT_EQ_INT(expected_status, parsed.payload[0], "dynamic failed start rsp status");
-}
-
 static int start_server(test_server_t* server) {
     uci_sim_engine_t engine;
     pid_t pid;
@@ -575,7 +456,7 @@ static int assert_fragmented_get_app_config_all(int fd, const char* step_name) {
         g_failed++;
         return -1;
     }
-    if (payload[0] != UCI_STATUS_OK || payload[1] != 0x4E) {
+    if (payload[0] != UCI_STATUS_OK || payload[1] != 0x4D) {
         printf("FAIL: %s unexpected reassembled status/count\n", step_name);
         g_failed++;
         return -1;
@@ -928,12 +809,6 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
             "tests/fixtures/tcp/session_set_app_config_rsp.hex",
             NULL,
             "session_set_app_config_session_data_transfer_status_ntf_config"
-        },
-        {
-            "tests/fixtures/tcp/session_set_app_config_session_time_base_cmd.hex",
-            "tests/fixtures/tcp/session_set_app_config_rsp.hex",
-            NULL,
-            "session_set_app_config_session_time_base"
         },
         {
             "tests/fixtures/tcp/session_set_app_config_dl_tdoa_responder_tof_cmd.hex",
@@ -1354,12 +1229,6 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
             "tests/fixtures/tcp/session_get_app_config_session_data_transfer_status_ntf_config_rsp.hex",
             NULL,
             "session_get_app_config_session_data_transfer_status_ntf_config"
-        },
-        {
-            "tests/fixtures/tcp/session_get_app_config_session_time_base_cmd.hex",
-            "tests/fixtures/tcp/session_get_app_config_session_time_base_rsp.hex",
-            NULL,
-            "session_get_app_config_session_time_base"
         },
         {
             "tests/fixtures/tcp/session_get_app_config_dl_tdoa_responder_tof_cmd.hex",
@@ -2377,142 +2246,6 @@ static void test_ranging_stream_max_number_of_measurements_over_tcp(void) {
     ASSERT_TRUE(set_socket_timeout_ms(fd, 100) == 0, "set max-measurements timeout");
     ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) != 0,
                 "max-measurements should stop after budget exhaustion");
-
-    close(fd);
-    stop_server(&server);
-    PASS();
-}
-
-static void test_session_time_base_reference_alignment_over_tcp(void) {
-    test_server_t server = {0};
-    uint8_t packet[UCI_SIM_MAX_PACKET];
-    uci_sim_packet_t parsed;
-    size_t packet_len = 0;
-    int fd = -1;
-    const uint32_t reference_session_id = 0x11111111U;
-    const uint32_t dependent_session_id = 0x22222222U;
-
-    server.scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
-    ASSERT_TRUE(start_server(&server) == 0, "start session_time_base server");
-    fd = connect_with_retry(server.port);
-    ASSERT_TRUE(fd >= 0, "connect session_time_base server");
-    ASSERT_TRUE(set_socket_timeout_ms(fd, 500) == 0, "set session_time_base timeout");
-
-    init_session_dynamic(fd, reference_session_id, "session_time_base ref");
-    init_session_dynamic(fd, dependent_session_id, "session_time_base dep");
-    set_ranging_interval_ms_for_session(fd, reference_session_id, 50U, "session_time_base ref");
-    set_ranging_interval_ms_for_session(fd, dependent_session_id, 50U, "session_time_base dep");
-    start_session_dynamic(fd, reference_session_id, "session_time_base ref");
-    /* Drain initial range data from reference session (engine tick fires immediately) */
-    {
-        uint8_t drain_buf[512]; size_t drain_len;
-        ASSERT_TRUE(set_socket_timeout_ms(fd, 100) == 0, "set session_time_base drain timeout");
-        while (read_packet(fd, drain_buf, sizeof(drain_buf), &drain_len) == 0) {}
-        ASSERT_TRUE(set_socket_timeout_ms(fd, 500) == 0, "restore session_time_base timeout");
-    }
-    set_session_time_base(fd,
-                          dependent_session_id,
-                          0x01U,
-                          reference_session_id,
-                          20000U,
-                          "session_time_base dep");
-    start_session_dynamic(fd, dependent_session_id, "session_time_base dep");
-
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_time_base reference range");
-    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse session_time_base reference range");
-    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "session_time_base first range oid");
-    /* With immediate engine ticks, both sessions may fire range data simultaneously.
-     * Accept either session ID as the first range packet. */
-    {
-        uint32_t first_sid = read_u32_le(&parsed.payload[4]);
-        ASSERT_TRUE(first_sid == reference_session_id || first_sid == dependent_session_id,
-                    "session_time_base first range should be reference or dependent session");
-    }
-
-    ASSERT_TRUE(read_packet(fd, packet, sizeof(packet), &packet_len) == 0, "read session_time_base dependent range");
-    ASSERT_TRUE(uci_sim_packet_parse(packet, packet_len, &parsed) == 0, "parse session_time_base dependent range");
-    ASSERT_EQ_INT(UCI_SESSION_START, parsed.oid, "session_time_base second range oid");
-    ASSERT_EQ_INT((int)dependent_session_id,
-                  (int)read_u32_le(&parsed.payload[4]),
-                  "session_time_base second range should be dependent session");
-
-    close(fd);
-    stop_server(&server);
-    PASS();
-}
-
-static void test_session_time_base_rejects_ranging_interval_mismatch_over_tcp(void) {
-    test_server_t server = {0};
-    int fd = -1;
-    const uint32_t reference_session_id = 0x11111111U;
-    const uint32_t dependent_session_id = 0x22222222U;
-
-    server.scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
-    ASSERT_TRUE(start_server(&server) == 0, "start session_time_base mismatch server");
-    fd = connect_with_retry(server.port);
-    ASSERT_TRUE(fd >= 0, "connect session_time_base mismatch server");
-
-    init_session_dynamic(fd, reference_session_id, "session_time_base mismatch ref");
-    init_session_dynamic(fd, dependent_session_id, "session_time_base mismatch dep");
-    set_ranging_interval_ms_for_session(fd, reference_session_id, 50U, "session_time_base mismatch ref");
-    set_ranging_interval_ms_for_session(fd, dependent_session_id, 60U, "session_time_base mismatch dep");
-    start_session_dynamic(fd, reference_session_id, "session_time_base mismatch ref");
-    /* Drain initial range data from reference session */
-    {
-        uint8_t drain_buf[512]; size_t drain_len;
-        ASSERT_TRUE(set_socket_timeout_ms(fd, 100) == 0, "set mismatch drain timeout");
-        while (read_packet(fd, drain_buf, sizeof(drain_buf), &drain_len) == 0) {}
-        ASSERT_TRUE(set_socket_timeout_ms(fd, 500) == 0, "restore mismatch timeout");
-    }
-    set_session_time_base(fd,
-                          dependent_session_id,
-                          0x01U,
-                          reference_session_id,
-                          20000U,
-                          "session_time_base mismatch dep");
-    start_session_expect_failure_dynamic(fd,
-                                         dependent_session_id,
-                                         UCI_STATUS_INVALID_PARAM,
-                                         "session_time_base mismatch dep");
-
-    close(fd);
-    stop_server(&server);
-    PASS();
-}
-
-static void test_session_time_base_rejects_offset_outside_interval_over_tcp(void) {
-    test_server_t server = {0};
-    int fd = -1;
-    const uint32_t reference_session_id = 0x11111111U;
-    const uint32_t dependent_session_id = 0x22222222U;
-
-    server.scenario = UCI_SIM_SCENARIO_RANGING_STREAM;
-    ASSERT_TRUE(start_server(&server) == 0, "start session_time_base offset server");
-    fd = connect_with_retry(server.port);
-    ASSERT_TRUE(fd >= 0, "connect session_time_base offset server");
-
-    init_session_dynamic(fd, reference_session_id, "session_time_base offset ref");
-    init_session_dynamic(fd, dependent_session_id, "session_time_base offset dep");
-    set_ranging_interval_ms_for_session(fd, reference_session_id, 50U, "session_time_base offset ref");
-    set_ranging_interval_ms_for_session(fd, dependent_session_id, 50U, "session_time_base offset dep");
-    start_session_dynamic(fd, reference_session_id, "session_time_base offset ref");
-    /* Drain initial range data from reference session */
-    {
-        uint8_t drain_buf[512]; size_t drain_len;
-        ASSERT_TRUE(set_socket_timeout_ms(fd, 100) == 0, "set offset drain timeout");
-        while (read_packet(fd, drain_buf, sizeof(drain_buf), &drain_len) == 0) {}
-        ASSERT_TRUE(set_socket_timeout_ms(fd, 500) == 0, "restore offset timeout");
-    }
-    set_session_time_base(fd,
-                          dependent_session_id,
-                          0x01U,
-                          reference_session_id,
-                          50000U,
-                          "session_time_base offset dep");
-    start_session_expect_failure_dynamic(fd,
-                                         dependent_session_id,
-                                         UCI_STATUS_INVALID_PARAM,
-                                         "session_time_base offset dep");
 
     close(fd);
     stop_server(&server);
@@ -4329,9 +4062,6 @@ int main(void) {
     RUN_TEST(test_ranging_stream_rssi_reporting_over_tcp);
     RUN_TEST(test_ranging_stream_ranging_interval_over_tcp);
     RUN_TEST(test_ranging_stream_max_number_of_measurements_over_tcp);
-    RUN_TEST(test_session_time_base_reference_alignment_over_tcp);
-    RUN_TEST(test_session_time_base_rejects_ranging_interval_mismatch_over_tcp);
-    RUN_TEST(test_session_time_base_rejects_offset_outside_interval_over_tcp);
     RUN_TEST(test_ranging_interval_validation_over_tcp);
     RUN_TEST(test_slot_duration_validation_over_tcp);
     RUN_TEST(test_result_report_config_validation_over_tcp);

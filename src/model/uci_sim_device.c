@@ -524,37 +524,6 @@ uint16_t uci_sim_session_get_max_number_of_measurements(const uci_sim_session_t*
     return read_u16_le(value);
 }
 
-int uci_sim_session_get_session_time_base(const uci_sim_session_t* session,
-                                          uci_sim_session_time_base_t* time_base) {
-    uint8_t value[9] = {0};
-    uint8_t value_len = 0;
-
-    if (!time_base) {
-        return -1;
-    }
-
-    memset(time_base, 0, sizeof(*time_base));
-    if (!session) {
-        return -1;
-    }
-
-    if (uci_sim_session_get_config(session,
-                                   UCI_APP_CONFIG_SESSION_TIME_BASE,
-                                   value,
-                                   &value_len) != 0 ||
-        value_len != 9U) {
-        return -1;
-    }
-
-    time_base->present = 1U;
-    time_base->enabled = (value[0] & 0x01U) ? 1U : 0U;
-    time_base->continue_session = (value[0] & 0x02U) ? 1U : 0U;
-    time_base->resync = (value[0] & 0x04U) ? 1U : 0U;
-    time_base->reference_session_id = read_u32_le(&value[1]);
-    time_base->offset_us = read_u32_le(&value[5]);
-    return 0;
-}
-
 uint32_t uci_sim_session_get_ranging_interval_ms(const uci_sim_session_t* session,
                                                  const uci_sim_profile_t* profile) {
     uint8_t value[4] = {0x00, 0x00, 0x00, 0x00};

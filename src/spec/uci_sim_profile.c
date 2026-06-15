@@ -333,7 +333,6 @@ static const uci_sim_profile_t k_default_profile = {
         0x45,
         0x46,
         0x47,
-        0x48,
         0x49,
         0x4A,
         0x4B,
@@ -344,7 +343,7 @@ static const uci_sim_profile_t k_default_profile = {
         0xE6,  /* RX_ANTENNA_SELECTION */
         0xE7,  /* TX_ANTENNA_SELECTION */
     },
-    .supported_session_app_config_id_count = 81,
+    .supported_session_app_config_id_count = 80,
     .default_session_app_config_ids = {
         0x00,
         0x01,
@@ -418,7 +417,6 @@ static const uci_sim_profile_t k_default_profile = {
         0x45,
         0x46,
         0x47,
-        0x48,
         0x49,
         0x4A,
         0x4B,
@@ -427,7 +425,7 @@ static const uci_sim_profile_t k_default_profile = {
     },
     .default_session_app_config_value_lens = {
         1, 1, 1, 1, 1, 1, 2, 6, 2, 4, 4, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 2, 2, 1, 1, 2, 1, 1, 2, 8, 1, 2, 4, 1, 1, 1, 1, 4, 1, 2, 4, 4, 1, 1, 3, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-        16, 16, 1, 9, 1, 1, 1, 1, 1
+        16, 16, 1, 1, 1, 1, 1, 1
     },
     .default_session_app_config_values = {
         { 0x01 },
@@ -504,14 +502,13 @@ static const uci_sim_profile_t k_default_profile = {
         { 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA, 0x99, 0x88,
           0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00 },
         { 0x01 },
-        { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
         { 0x01 },
         { 0x02 },
         { 0x03 },
         { 0x01 },
         { 0x0A }
     },
-    .default_session_app_config_count = 78,
+    .default_session_app_config_count = 77,
     .supported_notification_oids = {
         UCI_CORE_DEVICE_STATUS_NTF,
         UCI_SESSION_STATUS_NTF,

@@ -37,15 +37,6 @@ typedef struct uci_sim_device_config {
     int in_use;
 } uci_sim_device_config_t;
 
-typedef struct uci_sim_session_time_base {
-    uint8_t present;
-    uint8_t enabled;
-    uint8_t continue_session;
-    uint8_t resync;
-    uint32_t reference_session_id;
-    uint32_t offset_us;
-} uci_sim_session_time_base_t;
-
 typedef struct uci_sim_multicast_entry {
     uint16_t short_address;
     uint32_t subsession_id;
@@ -148,8 +139,6 @@ uint16_t uci_sim_session_get_range_data_ntf_proximity_far(const uci_sim_session_
 uint8_t uci_sim_session_get_ranging_round_usage(const uci_sim_session_t* session);
 uint8_t uci_sim_session_get_data_repetition_count(const uci_sim_session_t* session);
 uint16_t uci_sim_session_get_max_number_of_measurements(const uci_sim_session_t* session);
-int uci_sim_session_get_session_time_base(const uci_sim_session_t* session,
-                                          uci_sim_session_time_base_t* time_base);
 uint32_t uci_sim_session_get_ranging_interval_ms(const uci_sim_session_t* session,
                                                  const uci_sim_profile_t* profile);
 uint16_t uci_sim_session_get_slot_duration_rstu(const uci_sim_session_t* session);

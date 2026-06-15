@@ -1744,30 +1744,45 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
 
     ASSERT_TRUE(start_server(&server) == 0, "start_server");
     fd = connect_with_retry(server.port);
-    ASSERT_TRUE(fd >= 0, "connect_with_retry");
+    if (fd < 0) {
+        printf("FAIL: connect_with_retry\n");
+        g_failed++;
+        goto cleanup;
+    }
 
     for (i = 0; i < sizeof(k_steps) / sizeof(k_steps[0]); ++i) {
         snprintf(message, sizeof(message), "%s request load", k_steps[i].step_name);
-        ASSERT_TRUE(load_hex_fixture(k_steps[i].request_fixture, request, sizeof(request), &request_len) == 0, message);
+        if (load_hex_fixture(k_steps[i].request_fixture, request, sizeof(request), &request_len) != 0) {
+            printf("FAIL: %s\n", message);
+            g_failed++;
+            goto cleanup;
+        }
         snprintf(message, sizeof(message), "%s write", k_steps[i].step_name);
-        ASSERT_TRUE(write_full(fd, request, request_len) == (ssize_t)request_len, message);
+        if (write_full(fd, request, request_len) != (ssize_t)request_len) {
+            printf("FAIL: %s\n", message);
+            g_failed++;
+            goto cleanup;
+        }
 
         if (strcmp(k_steps[i].step_name, "session_get_app_config_all") == 0) {
             assert_fragmented_get_app_config_all(fd, k_steps[i].step_name);
         } else {
             assert_fixture_packet(fd, k_steps[i].response_fixture, k_steps[i].step_name);
         }
+        if (g_failed > 0) goto cleanup;
         if (k_steps[i].notification_fixture) {
             char notification_step[160];
             snprintf(notification_step, sizeof(notification_step), "%s notification", k_steps[i].step_name);
             assert_fixture_packet(fd, k_steps[i].notification_fixture, notification_step);
         }
-        if (g_failed > 0) break;
+        if (g_failed > 0) goto cleanup;
     }
 
-    close(fd);
+    if (g_failed == 0) PASS();
+
+cleanup:
+    if (fd >= 0) close(fd);
     stop_server(&server);
-    PASS();
 }
 
 static void test_delayed_notification_flow_over_tcp(void) {

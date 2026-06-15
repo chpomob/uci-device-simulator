@@ -239,7 +239,7 @@ static int handle_qorvo_mac(uci_sim_device_t* device, const uci_sim_packet_t* re
 
     switch (request->oid) {
         case UCI_OID_QORVO_MAC_GET_CALIBRATIONS: {
-            /* Parse requested keys from payload, return simulated calibration data.
+            /* Walk requested keys and return fixed simulated calibration data.
              * Request format: count(u16 LE) + [key_length(u8) + key_name(variable)]*count */
             uint16_t i;
             size_t offset = 0;
@@ -274,12 +274,8 @@ static int handle_qorvo_mac(uci_sim_device_t* device, const uci_sim_packet_t* re
             for (i = 0; i < num_keys; i++) {
                 uint8_t key_len;
                 const uint8_t* key_ptr;
-                uint8_t calib_value[32];
-                uint8_t calib_value_len = 0;
-                uint8_t jndex;
-                int is_port = 0;
-                int is_ants = 0;
-                int is_lut = 0;
+                const uint8_t calib_value = 0xFF;
+                const uint8_t calib_value_len = 1;
 
                 if (offset >= request->payload_len) {
                     malformed = 1;
@@ -293,43 +289,6 @@ static int handle_qorvo_mac(uci_sim_device_t* device, const uci_sim_packet_t* re
                 }
                 key_ptr = &request->payload[offset];
 
-                /* Determine value type: find LAST '.' in key name to get the suffix */
-                {
-                    int last_dot = -1;
-                    for (jndex = 0; jndex < key_len; jndex++) {
-                        if (key_ptr[jndex] == '.') last_dot = (int)jndex;
-                    }
-                    if (last_dot >= 0) {
-                        size_t suffix_len = key_len - (size_t)last_dot;
-                        const char* suffix = (const char*)&key_ptr[last_dot];
-                        if (suffix_len >= 5 && memcmp(suffix, ".port", 5) == 0) {
-                            is_port = 1;
-                        } else if (suffix_len >= 11 && memcmp(suffix, ".nb_rx_ants", 11) == 0) {
-                            is_ants = 1;
-                        } else if (suffix_len >= 7 && memcmp(suffix, ".lut_id", 7) == 0) {
-                            is_lut = 1;
-                        }
-                    }
-                }
-
-                if (is_port) {
-                    /* antX.port -> X is at position 3 */
-                    char c = (char)(key_len > 3 ? key_ptr[3] : '0');
-                    calib_value[0] = (c >= '0' && c <= '9') ? (uint8_t)(c - '0') : 0;
-                    calib_value_len = 1;
-                } else if (is_ants) {
-                    calib_value[0] = 6;
-                    calib_value_len = 1;
-                } else if (is_lut) {
-                    /* uint8: -1 (0xFF) means 'no LUT' */
-                    calib_value[0] = 0xFF;
-                    calib_value_len = 1;
-                } else {
-                    /* Unknown key — skip it */
-                    offset += key_len;
-                    continue;
-                }
-
                 /* Check if we have room for the entry */
                 if (resp_off + 1 + key_len + 1 + 1 + calib_value_len > UCI_SIM_CONTROL_PAYLOAD_LIMIT) {
                     offset += key_len;
@@ -342,8 +301,7 @@ static int handle_qorvo_mac(uci_sim_device_t* device, const uci_sim_packet_t* re
                 resp_off += key_len;
                 result->response.payload[resp_off++] = 0; /* key_status = success */
                 result->response.payload[resp_off++] = calib_value_len;
-                memcpy(&result->response.payload[resp_off], calib_value, calib_value_len);
-                resp_off += calib_value_len;
+                result->response.payload[resp_off++] = calib_value;
                 num_returned++;
 
                 offset += key_len;

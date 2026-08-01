@@ -4,3 +4,5 @@ uci-device-sim
 /test_sim_core
 .adversarial-loop/
 .hermes/
+findings.json
+.adversarial-review*

@@ -12,3 +12,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .hermes/
+findings.json
+.adversarial-review*

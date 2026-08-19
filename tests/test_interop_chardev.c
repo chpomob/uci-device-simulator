@@ -109,7 +109,7 @@ static void test_device_reset(void) {
 
     ASSERT_TRUE(ctx_init(&c, UCI_SIM_SCENARIO_DEFAULT) == 0, "init");
 
-    uint8_t cmd[] = {0x20, 0x00, 0x00, 0x01, 0x00};
+    uint8_t cmd[] = {0x20, 0x00, 0x00, 0x01, 0x01};
     ASSERT_TRUE(write(c.slave_fd, cmd, 5) == 5, "write cmd");
     ASSERT_TRUE(process(&c) == 0, "process");
 
@@ -137,7 +137,7 @@ static void test_full_flow(void) {
     ASSERT_TRUE(ctx_init(&c, UCI_SIM_SCENARIO_DEFAULT) == 0, "init");
 
     /* RESET */
-    memcpy(cmd, (uint8_t[]){0x20, 0x00, 0x00, 0x01, 0x00}, 5);
+    memcpy(cmd, (uint8_t[]){0x20, 0x00, 0x00, 0x01, 0x01}, 5);
     ASSERT_TRUE(write(c.slave_fd, cmd, 5) == 5, "write reset");
     ASSERT_TRUE(process(&c) == 0, "process reset");
     ASSERT_TRUE(read_packet_poll(c.slave_fd, buf, sizeof(buf), &plen) == 0, "read reset rsp");
@@ -242,7 +242,7 @@ static void test_non_data_byte2_reserved(void) {
     size_t plen = 0;
 
     ASSERT_TRUE(ctx_init(&c, UCI_SIM_SCENARIO_DEFAULT) == 0, "init");
-    uint8_t cmd[] = {0x20, 0x00, 0xFF, 0x01, 0x00};
+    uint8_t cmd[] = {0x20, 0x00, 0xFF, 0x01, 0x01};
     ASSERT_TRUE(write(c.slave_fd, cmd, 5) == 5, "write cmd");
     ASSERT_TRUE(process(&c) == 0, "process");
     ASSERT_TRUE(read_packet_poll(c.slave_fd, buf, sizeof(buf), &plen) == 0, "read rsp");

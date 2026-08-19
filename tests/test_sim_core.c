@@ -1709,7 +1709,7 @@ static void test_core_device_reset_restores_profile_defaults(void) {
 
     request.oid = UCI_CORE_DEVICE_RESET;
     request.payload_len = 1;
-    request.payload[0] = 0x00;
+    request.payload[0] = 1; /* only reset-configuration value 1 is valid (spec.md R3) */
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "device reset failed");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "device reset status");
     ASSERT_TRUE(result.has_notification, "device reset notification missing");
@@ -1726,6 +1726,56 @@ static void test_core_device_reset_restores_profile_defaults(void) {
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "timestamp after reset failed");
     ASSERT_TRUE(read_u64_le(&result.response.payload[1]) == uci_sim_default_profile()->initial_uwbs_timestamp,
                 "timestamp reset to profile default");
+    PASS();
+}
+
+static void test_core_device_reset_rejects_invalid_config_value(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+
+    uci_sim_device_init(&device);
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_SET_CONFIG;
+    request.payload_len = 4;
+    request.payload[0] = 1;
+    request.payload[1] = UCI_DEVICE_CONFIG_DEVICE_STATE;
+    request.payload[2] = 1;
+    request.payload[3] = UCI_DEVICE_STATE_ACTIVE;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set state before reset failed");
+
+    request.gid = UCI_GID_SESSION_CONFIG;
+    request.oid = UCI_SESSION_INIT;
+    request.payload_len = 5;
+    request.payload[0] = 0x78;
+    request.payload[1] = 0x56;
+    request.payload[2] = 0x34;
+    request.payload[3] = 0x12;
+    request.payload[4] = UCI_SESSION_TYPE_RANGING;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "session init before reset failed");
+
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_DEVICE_RESET;
+    request.payload_len = 1;
+    request.payload[0] = 0x00;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "invalid device reset should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "invalid device reset status");
+    ASSERT_TRUE(result.has_notification, "invalid device reset should emit generic error ntf");
+    ASSERT_EQ_U8(UCI_CORE_GENERIC_ERROR, result.notification.oid, "invalid device reset generic error oid");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.notification.payload[0], "invalid device reset generic error status");
+    ASSERT_EQ_U8(UCI_DEVICE_STATE_ACTIVE, device.device_state, "device state unchanged after invalid reset");
+    ASSERT_EQ_U8(1, (uint8_t)device.sessions[0].allocated, "sessions unchanged after invalid reset");
+
+    request.payload[0] = 2;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0, "invalid device reset (value 2) should fail");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "invalid device reset (value 2) status");
+    ASSERT_EQ_U8(UCI_DEVICE_STATE_ACTIVE, device.device_state, "device state unchanged after second invalid reset");
+    ASSERT_EQ_U8(1, (uint8_t)device.sessions[0].allocated, "sessions unchanged after second invalid reset");
+
     PASS();
 }
 
@@ -4028,6 +4078,7 @@ int main(void) {
     test_core_caps_match_profile();
     test_core_query_timestamp_response();
     test_core_device_reset_restores_profile_defaults();
+    test_core_device_reset_rejects_invalid_config_value();
     test_default_scenario_initialization();
     test_delayed_notification_scenario();
     test_session_get_count();

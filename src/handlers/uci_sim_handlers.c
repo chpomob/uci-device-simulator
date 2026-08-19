@@ -5,6 +5,7 @@
 
 #define UCI_SIM_CONTROL_PAYLOAD_LIMIT 255U
 #define UCI_SIM_DEVICE_INFO_FIXED_LEN 10U
+#define UCI_CORE_DEVICE_RESET_CONFIG_VALID 1U
 
 static void emit_session_status_ntf_with_reason(uci_sim_device_t* device,
                                                 uint32_t session_id,
@@ -342,6 +343,10 @@ static int handle_core(uci_sim_device_t* device, const uci_sim_packet_t* request
         case UCI_CORE_DEVICE_RESET:
             if (request->payload_len != 1) {
                 make_status_response(request, result, UCI_STATUS_INVALID_MSG_SIZE);
+                return -1;
+            }
+            if (request->payload[0] != UCI_CORE_DEVICE_RESET_CONFIG_VALID) {
+                make_status_response(request, result, UCI_STATUS_INVALID_PARAM);
                 return -1;
             }
             uci_sim_device_reset_runtime_state(device);

@@ -179,8 +179,8 @@ uci_sim_chardev_t *uci_sim_chardev_start(uci_sim_engine_t *engine,
     if (fl < 0) goto fail;
     if (fcntl(m_fd, F_SETFL, fl | O_NONBLOCK) != 0) goto fail;
 
-    /* Make /dev/pts/N world-readable/writable */
-    chmod(sl_name, 0666);
+    /* Restrict /dev/pts/N to owner rw only (no group/world access) */
+    chmod(sl_name, 0600);
 
     /* Allocate context */
     dev = calloc(1, sizeof(*dev));
@@ -247,23 +247,29 @@ int uci_sim_chardev_process_input(uci_sim_chardev_t *dev)
      * We need to accumulate into the existing stream buffer.
      * First, grow it if necessary.
      */
-    size_t need = dev->slen + (size_t)n;
-    if (need > UCI_SIM_MAX_PACKET) {
-        /* Safety: drop excess, keep stream[0..UCI_SIM_MAX_PACKET-1] */
-        need = UCI_SIM_MAX_PACKET;
-        memmove(buf, buf + n - (UCI_SIM_MAX_PACKET - dev->slen),
-                UCI_SIM_MAX_PACKET - dev->slen);
+    size_t old_slen = dev->slen;
+
+    if (!dev->stream) {
+        uint8_t *nv = realloc(dev->stream, UCI_SIM_MAX_PACKET);
+        if (!nv) return -1;
+        dev->stream = nv;
     }
 
-    if (need > dev->slen) {
-        if (!dev->stream || need > (size_t)UCI_SIM_MAX_PACKET) {
-            uint8_t *nv = realloc(dev->stream, UCI_SIM_MAX_PACKET);
-            if (!nv) return -1;
-            dev->stream = nv;
-        }
-        memcpy(dev->stream + dev->slen, buf, n);
-        dev->slen  = need < UCI_SIM_MAX_PACKET ? need : UCI_SIM_MAX_PACKET;
+    /* copy_len (not n) must be used for the memcpy below: dev->stream is
+     * sized to exactly UCI_SIM_MAX_PACKET, so copying the full, unclamped
+     * n bytes when old_slen + n exceeds that capacity would write past the
+     * end of the allocation. Excess trailing bytes are simply dropped. */
+    size_t copy_len = (size_t)n;
+    if (old_slen + copy_len > UCI_SIM_MAX_PACKET) {
+        copy_len = UCI_SIM_MAX_PACKET - old_slen;
+        fprintf(stderr,
+                "[chardev] stream buffer full, dropping %zu byte(s); "
+                "stream desync is likely\n",
+                (size_t)n - copy_len);
     }
+
+    memcpy(dev->stream + old_slen, buf, copy_len);
+    dev->slen = old_slen + copy_len;
 
     /* 3. Feed complete packets from stream → engine */
     if (stream_feed_to_engine(dev) != 0)

@@ -1290,6 +1290,55 @@ static void test_core_device_info_clamps_vendor_length_to_payload_limit(void) {
     PASS();
 }
 
+static void test_core_device_info_vendor_layout(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    const uint8_t* v;
+    static const uint8_t expected_chip_id[32] = {
+        'Q', 'M', '3', '5', '8', '2', '5', 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+    static const uint8_t expected_flavor[24] = {
+        'Q', 'M', '3', '5', '8', '2', '5', '_', 'S', 'I', 'P', '_', 'V', '1', '.', '0',
+        0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20
+    };
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_DEVICE_INFO;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0,
+                "device info vendor layout handle failed");
+    ASSERT_EQ_U16(96U, result.response.payload_len, "device info vendor layout payload length");
+    ASSERT_EQ_U8(86U, result.response.payload[9], "device info vendor layout vendor length");
+    v = &result.response.payload[10];
+
+    ASSERT_EQ_U8(1, v[0], "vendor layout fw major");
+    ASSERT_EQ_U8(0, v[1], "vendor layout fw minor");
+    ASSERT_EQ_U8(0, v[2], "vendor layout fw patch");
+    ASSERT_EQ_U8(0, v[3], "vendor layout fw rc");
+    ASSERT_TRUE(read_u64_le(&v[4]) == 66ULL, "vendor layout firmware build identifier");
+    ASSERT_EQ_U8(1, v[12], "vendor layout product fw major");
+    ASSERT_EQ_U8(0, v[13], "vendor layout product fw minor");
+    ASSERT_EQ_U8(0, v[14], "vendor layout product fw patch");
+    ASSERT_TRUE(memcmp(&v[15], expected_chip_id, sizeof(expected_chip_id)) == 0,
+                "vendor layout chip identifier");
+    ASSERT_TRUE(read_u32_le(&v[47]) == 0x8BEDU, "vendor layout device identifier");
+    ASSERT_EQ_U8(1, v[51], "vendor layout package identifier");
+    ASSERT_TRUE(memcmp(&v[52], expected_flavor, sizeof(expected_flavor)) == 0,
+                "vendor layout firmware flavor string");
+    ASSERT_TRUE(read_u32_le(&v[76]) == 0x8BEDU, "vendor layout product id");
+    ASSERT_TRUE(read_u32_le(&v[80]) == 2U, "vendor layout soi variant");
+    ASSERT_TRUE(read_u16_le(&v[84]) == 1U, "vendor layout rom code version");
+    PASS();
+}
+
 static void test_get_calibrations_rejects_malformed_key_list(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -1539,6 +1588,138 @@ static void test_core_device_config_storage(void) {
     PASS();
 }
 
+static void test_core_set_config_rejects_device_state(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uint8_t original_state;
+
+    uci_sim_device_init(&device);
+    original_state = device.device_state;
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_SET_CONFIG;
+    request.payload_len = 4;
+    request.payload[0] = 1;
+    request.payload[1] = UCI_DEVICE_CONFIG_DEVICE_STATE;
+    request.payload[2] = 1;
+    request.payload[3] = UCI_DEVICE_STATE_ACTIVE;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "set config device state should fail overall");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "set config device state status");
+    ASSERT_EQ_U8(1, result.response.payload[1], "set config device state processed count");
+    ASSERT_EQ_U8(UCI_DEVICE_CONFIG_DEVICE_STATE, result.response.payload[2], "set config device state tag");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[3], "set config device state tlv status");
+    ASSERT_EQ_U8(original_state, device.device_state, "device state unchanged after rejected set");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_GET_CONFIG;
+    request.payload_len = 2;
+    request.payload[0] = 1;
+    request.payload[1] = UCI_DEVICE_CONFIG_DEVICE_STATE;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0,
+                "get config device state failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get config device state status");
+    ASSERT_EQ_U8(original_state, result.response.payload[4], "get config device state value unchanged");
+    PASS();
+}
+
+static void test_core_set_config_device_state_does_not_block_others(int device_state_first) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    uint8_t original_state;
+    size_t off;
+    size_t roff;
+    int i;
+    int device_state_seen = 0;
+    int low_power_seen = 0;
+
+    uci_sim_device_init(&device);
+    original_state = device.device_state;
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_SET_CONFIG;
+    request.payload[0] = 2;
+    off = 1;
+    if (device_state_first) {
+        request.payload[off++] = UCI_DEVICE_CONFIG_DEVICE_STATE;
+        request.payload[off++] = 1;
+        request.payload[off++] = UCI_DEVICE_STATE_ACTIVE;
+        request.payload[off++] = UCI_DEVICE_CONFIG_LOW_POWER_MODE;
+        request.payload[off++] = 1;
+        request.payload[off++] = 1;
+    } else {
+        request.payload[off++] = UCI_DEVICE_CONFIG_LOW_POWER_MODE;
+        request.payload[off++] = 1;
+        request.payload[off++] = 1;
+        request.payload[off++] = UCI_DEVICE_CONFIG_DEVICE_STATE;
+        request.payload[off++] = 1;
+        request.payload[off++] = UCI_DEVICE_STATE_ACTIVE;
+    }
+    request.payload_len = (uint16_t)off;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) != 0,
+                "set config mixed tlvs should fail overall");
+    ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, result.response.payload[0], "set config mixed tlvs status");
+    ASSERT_EQ_U8(2, result.response.payload[1], "set config mixed tlvs processed count");
+
+    roff = 2;
+    for (i = 0; i < 2; ++i) {
+        uint8_t tag = result.response.payload[roff];
+        uint8_t status = result.response.payload[roff + 1];
+
+        if (tag == UCI_DEVICE_CONFIG_DEVICE_STATE) {
+            ASSERT_EQ_U8(UCI_STATUS_INVALID_PARAM, status, "device state tlv should be rejected");
+            device_state_seen = 1;
+        } else if (tag == UCI_DEVICE_CONFIG_LOW_POWER_MODE) {
+            ASSERT_EQ_U8(UCI_STATUS_OK, status, "low power tlv should succeed");
+            low_power_seen = 1;
+        }
+        roff += 2;
+    }
+    ASSERT_TRUE(device_state_seen, "device state tlv missing from mixed set response");
+    ASSERT_TRUE(low_power_seen, "low power tlv missing from mixed set response");
+    ASSERT_EQ_U8(original_state, device.device_state, "device state unchanged after mixed set");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_GET_CONFIG;
+    request.payload_len = 2;
+    request.payload[0] = 1;
+    request.payload[1] = UCI_DEVICE_CONFIG_LOW_POWER_MODE;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0,
+                "get low power mode after mixed set failed");
+    ASSERT_EQ_U8(1, result.response.payload[4], "low power mode applied after mixed set");
+
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_GET_CONFIG;
+    request.payload_len = 2;
+    request.payload[0] = 1;
+    request.payload[1] = UCI_DEVICE_CONFIG_DEVICE_STATE;
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0,
+                "get device state after mixed set failed");
+    ASSERT_EQ_U8(original_state, result.response.payload[4], "device state unchanged after mixed set (get)");
+
+    PASS();
+}
+
 static void test_core_additional_device_configs(void) {
     uci_sim_device_t device;
     uci_sim_packet_t request;
@@ -1642,6 +1823,46 @@ static void test_core_caps_match_profile(void) {
     ASSERT_EQ_U8(profile->core_caps_payload[1], result.response.payload[1], "core caps profile count");
     ASSERT_EQ_U8(profile->core_caps_payload[2], result.response.payload[2], "core caps profile tlv");
     ASSERT_EQ_U8(profile->core_caps_payload[3], result.response.payload[3], "core caps profile len byte");
+    PASS();
+}
+
+static void test_core_caps_e4_ranging_interval(void) {
+    uci_sim_device_t device;
+    uci_sim_packet_t request;
+    uci_sim_result_t result;
+    const uci_sim_profile_t* profile = uci_sim_default_profile();
+    uint8_t count;
+    size_t offset;
+    size_t i;
+    int found = 0;
+
+    uci_sim_device_init(&device);
+    memset(&request, 0, sizeof(request));
+    request.mt = UCI_MT_COMMAND;
+    request.pbf = UCI_PBF_COMPLETE;
+    request.gid = UCI_GID_CORE;
+    request.oid = UCI_CORE_GET_CAPS_INFO;
+
+    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "core caps e4 handle failed");
+    ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "core caps e4 status");
+
+    count = result.response.payload[1];
+    offset = 2;
+    for (i = 0; i < count; ++i) {
+        uint8_t tag = result.response.payload[offset];
+        uint8_t len = result.response.payload[offset + 1];
+
+        if (tag == 0xE4U) {
+            ASSERT_EQ_U8(4, len, "core caps e4 value length");
+            ASSERT_TRUE(read_u32_le(&result.response.payload[offset + 2]) ==
+                        profile->supported_min_ranging_interval_ms,
+                        "core caps e4 value");
+            found = 1;
+            break;
+        }
+        offset += 2U + len;
+    }
+    ASSERT_TRUE(found, "core caps e4 entry missing");
     PASS();
 }
 
@@ -4051,14 +4272,19 @@ int main(void) {
     test_measurement_uses_session_slot_index();
     test_core_device_info();
     test_core_device_info_clamps_vendor_length_to_payload_limit();
+    test_core_device_info_vendor_layout();
     test_get_calibrations_rejects_malformed_key_list();
     test_get_calibrations_caps_control_response_at_255_bytes();
     test_default_profile_is_applied();
     test_default_profile_feature_matrix();
     test_core_device_config_storage();
+    test_core_set_config_rejects_device_state();
+    test_core_set_config_device_state_does_not_block_others(0);
+    test_core_set_config_device_state_does_not_block_others(1);
     test_core_additional_device_configs();
     test_profile_rejects_unsupported_core_features();
     test_core_caps_match_profile();
+    test_core_caps_e4_ranging_interval();
     test_core_query_timestamp_response();
     test_core_device_reset_restores_profile_defaults();
     test_core_device_reset_rejects_invalid_config_value();

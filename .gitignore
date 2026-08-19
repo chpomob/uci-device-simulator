@@ -5,6 +5,8 @@ uci-device-sim
 .adversarial-loop/
 .adversarial-plan/
 .adversarial-spec/
+docs/runs/
+.ralph/
 __pycache__/
 *.pyc
 .pytest_cache/

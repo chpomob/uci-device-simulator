@@ -537,7 +537,7 @@ static void test_shell_compatible_core_and_session_flow_over_tcp(void) {
         {
             "tests/fixtures/tcp/core_set_config_device_state_cmd.hex",
             "tests/fixtures/tcp/core_set_config_device_state_rsp.hex",
-            NULL,
+            "tests/fixtures/tcp/core_generic_error_invalid_param_ntf.hex",
             "core_set_config_device_state"
         },
         {

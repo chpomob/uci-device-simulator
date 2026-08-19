@@ -6,6 +6,9 @@ LDFLAGS =
 BUILD = build
 DEPFLAGS = -MMD -MP
 
+ASAN_CFLAGS = $(CFLAGS) -fsanitize=address -fno-omit-frame-pointer
+ASAN_BUILD = build-asan
+
 # ── Per-target source lists ──
 SRCS_TCP := \
 	src/main.c \
@@ -72,11 +75,12 @@ OBJS_CHARDEV      := $(SRCS_CHARDEV:%.c=$(BUILD)/%.o)
 OBJS_TEST_CORE    := $(SRCS_TEST_CORE:%.c=$(BUILD)/%.o)
 OBJS_TEST_TCP     := $(SRCS_TEST_TCP:%.c=$(BUILD)/%.o)
 OBJS_TEST_CHARDEV := $(SRCS_TEST_CHARDEV:%.c=$(BUILD)/%.o)
-ALL_OBJS          := $(OBJS_TCP) $(OBJS_CHARDEV) $(OBJS_TEST_CORE) $(OBJS_TEST_TCP) $(OBJS_TEST_CHARDEV)
+OBJS_TEST_CHARDEV_ASAN := $(SRCS_TEST_CHARDEV:%.c=$(ASAN_BUILD)/%.o)
+ALL_OBJS          := $(OBJS_TCP) $(OBJS_CHARDEV) $(OBJS_TEST_CORE) $(OBJS_TEST_TCP) $(OBJS_TEST_CHARDEV) $(OBJS_TEST_CHARDEV_ASAN)
 ALL_DEPS          := $(ALL_OBJS:.o=.d)
 
 # ── Targets ──
-.PHONY: all test clean help
+.PHONY: all test clean help chardev_test_asan
 
 all: help
 
@@ -85,7 +89,8 @@ help:
 	@echo "  make tcp      TCP server simulator"
 	@echo "  make chardev  PTY chardev simulator"
 	@echo "  make test     Run unit tests"
-	@echo "  make clean    Remove build/"
+	@echo "  make chardev_test_asan  AddressSanitizer-instrumented chardev interop test"
+	@echo "  make clean    Remove build/ and build-asan/"
 
 tcp: $(BUILD)/uci-device-sim-tcp
 chardev: $(BUILD)/uci-device-sim-chardev
@@ -103,6 +108,10 @@ chardev_test: $(BUILD)/test_interop_chardev
 	@echo ""; echo "═══ Chardev interop test ..."; echo ""
 	@./$(BUILD)/test_interop_chardev
 
+chardev_test_asan: $(ASAN_BUILD)/test_interop_chardev
+	@echo ""; echo "═══ Chardev interop test (ASan) ..."; echo ""
+	@./$(ASAN_BUILD)/test_interop_chardev
+
 # Test binaries need the core library too
 $(BUILD)/test_sim_core: $(OBJS_TEST_CORE)
 	@mkdir -p $(dir $@)
@@ -115,6 +124,10 @@ $(BUILD)/test_interop_tcp: $(OBJS_TEST_TCP)
 $(BUILD)/test_interop_chardev: $(OBJS_TEST_CHARDEV)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+$(ASAN_BUILD)/test_interop_chardev: $(OBJS_TEST_CHARDEV_ASAN)
+	@mkdir -p $(dir $@)
+	$(CC) $(ASAN_CFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(BUILD)/uci-device-sim-tcp: $(OBJS_TCP)
 	@mkdir -p $(dir $@)
@@ -129,7 +142,11 @@ $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(DEPFLAGS) -c -o $@ $<
 
+$(ASAN_BUILD)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(ASAN_CFLAGS) $(DEPFLAGS) -c -o $@ $<
+
 -include $(ALL_DEPS)
 
 clean:
-	rm -rf $(BUILD)
+	rm -rf $(BUILD) $(ASAN_BUILD)

@@ -1,4 +1,5 @@
 /build/
+build-asan/
 *.o
 uci-device-sim
 /test_sim_core

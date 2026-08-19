@@ -452,6 +452,7 @@ static int handle_core_set_get_config(uci_sim_device_t* device,
 
     if (is_set) {
         size_t response_offset = 2;
+        int any_failed = 0;
 
         while (processed < count && offset + 2 <= request->payload_len) {
             uint8_t config_id = request->payload[offset++];
@@ -461,13 +462,29 @@ static int handle_core_set_get_config(uci_sim_device_t* device,
                 result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
                 break;
             }
+            if (config_id == UCI_DEVICE_CONFIG_DEVICE_STATE) {
+                result->response.payload[response_offset++] = config_id;
+                result->response.payload[response_offset++] = UCI_STATUS_INVALID_PARAM;
+                any_failed = 1;
+                offset += value_len;
+                processed++;
+                continue;
+            }
             if (!uci_sim_profile_supports_core_config(device->profile, config_id)) {
-                result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
-                break;
+                result->response.payload[response_offset++] = config_id;
+                result->response.payload[response_offset++] = UCI_STATUS_INVALID_PARAM;
+                any_failed = 1;
+                offset += value_len;
+                processed++;
+                continue;
             }
             if (uci_sim_device_store_config(device, config_id, &request->payload[offset], value_len) != 0) {
-                result->response.payload[0] = UCI_STATUS_FAILED;
-                break;
+                result->response.payload[response_offset++] = config_id;
+                result->response.payload[response_offset++] = UCI_STATUS_FAILED;
+                any_failed = 1;
+                offset += value_len;
+                processed++;
+                continue;
             }
 
             result->response.payload[response_offset++] = config_id;
@@ -476,8 +493,10 @@ static int handle_core_set_get_config(uci_sim_device_t* device,
             processed++;
         }
 
-        if (processed != count && result->response.payload[0] == UCI_STATUS_OK) {
+        if (any_failed || processed != count) {
             result->response.payload[0] = UCI_STATUS_INVALID_PARAM;
+        } else {
+            result->response.payload[0] = UCI_STATUS_OK;
         }
 
         result->response.payload[1] = processed;

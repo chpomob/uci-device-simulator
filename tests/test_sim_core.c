@@ -1512,14 +1512,13 @@ static void test_core_device_config_storage(void) {
     request.oid = UCI_CORE_SET_CONFIG;
     request.payload_len = 4;
     request.payload[0] = 1;
-    request.payload[1] = UCI_DEVICE_CONFIG_DEVICE_STATE;
+    request.payload[1] = UCI_DEVICE_CONFIG_LOW_POWER_MODE;
     request.payload[2] = 1;
-    request.payload[3] = UCI_DEVICE_STATE_ACTIVE;
+    request.payload[3] = 1;
 
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set core config failed");
     ASSERT_TRUE(result.has_response, "set core config response missing");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "set core config status");
-    ASSERT_EQ_U8(UCI_DEVICE_STATE_ACTIVE, device.device_state, "device state not updated");
 
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;
@@ -1528,15 +1527,15 @@ static void test_core_device_config_storage(void) {
     request.oid = UCI_CORE_GET_CONFIG;
     request.payload_len = 2;
     request.payload[0] = 1;
-    request.payload[1] = UCI_DEVICE_CONFIG_DEVICE_STATE;
+    request.payload[1] = UCI_DEVICE_CONFIG_LOW_POWER_MODE;
 
     ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "get core config failed");
     ASSERT_TRUE(result.has_response, "get core config response missing");
     ASSERT_EQ_U8(UCI_STATUS_OK, result.response.payload[0], "get core config status");
     ASSERT_EQ_U8(1, result.response.payload[1], "get core config count");
-    ASSERT_EQ_U8(UCI_DEVICE_CONFIG_DEVICE_STATE, result.response.payload[2], "get core config id");
+    ASSERT_EQ_U8(UCI_DEVICE_CONFIG_LOW_POWER_MODE, result.response.payload[2], "get core config id");
     ASSERT_EQ_U8(1, result.response.payload[3], "get core config len");
-    ASSERT_EQ_U8(UCI_DEVICE_STATE_ACTIVE, result.response.payload[4], "get core config value");
+    ASSERT_EQ_U8(1, result.response.payload[4], "get core config value");
     PASS();
 }
 
@@ -1678,19 +1677,11 @@ static void test_core_device_reset_restores_profile_defaults(void) {
     uci_sim_result_t result;
 
     uci_sim_device_init(&device);
+    device.device_state = UCI_DEVICE_STATE_ACTIVE;
 
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;
     request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_CORE;
-    request.oid = UCI_CORE_SET_CONFIG;
-    request.payload_len = 4;
-    request.payload[0] = 1;
-    request.payload[1] = UCI_DEVICE_CONFIG_DEVICE_STATE;
-    request.payload[2] = 1;
-    request.payload[3] = UCI_DEVICE_STATE_ACTIVE;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set state before reset failed");
-
     request.gid = UCI_GID_SESSION_CONFIG;
     request.oid = UCI_SESSION_INIT;
     request.payload_len = 5;
@@ -1735,19 +1726,11 @@ static void test_core_device_reset_rejects_invalid_config_value(void) {
     uci_sim_result_t result;
 
     uci_sim_device_init(&device);
+    device.device_state = UCI_DEVICE_STATE_ACTIVE;
 
     memset(&request, 0, sizeof(request));
     request.mt = UCI_MT_COMMAND;
     request.pbf = UCI_PBF_COMPLETE;
-    request.gid = UCI_GID_CORE;
-    request.oid = UCI_CORE_SET_CONFIG;
-    request.payload_len = 4;
-    request.payload[0] = 1;
-    request.payload[1] = UCI_DEVICE_CONFIG_DEVICE_STATE;
-    request.payload[2] = 1;
-    request.payload[3] = UCI_DEVICE_STATE_ACTIVE;
-    ASSERT_TRUE(uci_sim_device_handle_packet(&device, &request, &result) == 0, "set state before reset failed");
-
     request.gid = UCI_GID_SESSION_CONFIG;
     request.oid = UCI_SESSION_INIT;
     request.payload_len = 5;

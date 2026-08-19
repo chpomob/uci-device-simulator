@@ -649,10 +649,7 @@ int uci_sim_device_store_config(uci_sim_device_t* device,
     }
 
     if (config_id == UCI_DEVICE_CONFIG_DEVICE_STATE) {
-        if (value_len != 1) {
-            return -1;
-        }
-        device->device_state = value[0];
+        return -1;
     }
 
     for (i = 0; i < UCI_SIM_MAX_DEVICE_CONFIGS; ++i) {

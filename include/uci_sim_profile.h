@@ -27,6 +27,11 @@ typedef struct {
     uint16_t phy_version;
     uint16_t test_version;
     uint8_t vendor_specific_length;
+    /* CORE_GET_DEVICE_INFO_RSP vendor-specific info, 15-field layout:
+     * fw major/minor/patch/rc (1/1/1/1), unique firmware build identifier (8),
+     * product fw major/minor/patch (1/1/1), unique chip identifier (32),
+     * device identifier (4), package identifier (1), firmware flavor (24),
+     * product ID (4), SOI variant (4), ROM code version (2). */
     uint8_t vendor_specific_data[UCI_SIM_MAX_PAYLOAD];
     int16_t device_stats_temperature;
     uint8_t default_device_state;

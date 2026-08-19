@@ -1,5 +1,7 @@
 #include "uci_sim_profile.h"
 
+#define UCI_SIM_DEFAULT_MIN_RANGING_INTERVAL_MS 50U
+
 static int list_contains(const uint8_t* values, size_t count, uint8_t needle) {
     size_t i;
 
@@ -17,35 +19,45 @@ static const uci_sim_profile_t k_default_profile = {
     .mac_version = 0x0200,
     .phy_version = 0x0200,
     .test_version = 0x0100,
-    /* Vendor-specific DEVICE_INFO data (qm-firmware format, 52 bytes minimum):
-     * fw_major, fw_minor, fw_patch, fw_rc (4)
-     * build_job u64 LE (8)
-     * OEM version (4 — skipped by Cherry)
-     * soc_id (16)
-     * device_id u32 LE (4) = QM35825 (0x8BED)
-     * package_id (1) = 0x01
-     * flavor (24 bytes, optional)
-     * product_id u32 LE (4, optional) — Cherry uses this in newer firmware
-     * soi_variant u32 LE (4, optional) — Cherry needs this for calibration
-     * rom_revision u16 LE (2, optional)
-     * Total: 52 + 24 + 4 + 4 + 2 = 86 */
+    /* Vendor-specific DEVICE_INFO data (CORE_GET_DEVICE_INFO_RSP vendor-info
+     * layout, 15 fields, 86 bytes total):
+     * 1. internal fw version major (1)
+     * 2. internal fw version minor (1)
+     * 3. internal fw version patch (1)
+     * 4. internal fw version RC (1)
+     * 5. unique firmware build identifier (8)
+     * 6. product fw version major (1)
+     * 7. product fw version minor (1)
+     * 8. product fw version patch (1)
+     * 9. unique chip identifier (32)
+     * 10. device identifier, LE (4)
+     * 11. package identifier — 0=SoC, 1=SiP (1)
+     * 12. firmware flavor string, space-padded (24)
+     * 13. product ID, LE (4)
+     * 14. SOI variant, LE (4)
+     * 15. ROM code version, LE (2)
+     * Total: 1+1+1+1+8+1+1+1+32+4+1+24+4+4+2 = 86 */
     .vendor_specific_length = 86,
     .vendor_specific_data = {
-        0x01, 0x00, 0x00, 0x00,  /* fw_major=1, minor=0, patch=0, rc=0 */
-        0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  /* build_job=66 */
-        0x00, 0x00, 0x00, 0x00,  /* OEM version (skipped) */
-        0x51, 0x4D, 0x33, 0x35, 0x38, 0x32, 0x35, 0x00,  /* soc_id: "QM35825\0..." */
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  /* ...continued */
-        0xED, 0x8B, 0x00, 0x00,  /* device_id = 0x8BED (QM35825) */
-        0x01,                    /* package_id = SIP */
-        /* flavor (24 bytes) */
+        0x01, 0x00, 0x00, 0x00,  /* internal fw version: major=1, minor=0, patch=0, rc=0 */
+        0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  /* unique firmware build identifier = 66 */
+        0x01, 0x00, 0x00,        /* product fw version: major=1, minor=0, patch=0 */
+        /* unique chip identifier (32 bytes) — placeholder identity value
+         * consistent with the rest of the static profile */
+        0x51, 0x4D, 0x33, 0x35, 0x38, 0x32, 0x35, 0x00,  /* "QM35825\0" */
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0xED, 0x8B, 0x00, 0x00,  /* device identifier = 0x8BED (QM35825) */
+        0x01,                    /* package identifier = SiP */
+        /* firmware flavor (24 bytes, space-padded) */
         'Q','M','3','5','8','2','5','_','S','I','P','_','V','1','.','0',
-        0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-        /* product_id (4 bytes) */
+        0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,
+        /* product ID (4 bytes) */
         0xED, 0x8B, 0x00, 0x00,  /* 0x8BED */
-        /* soi_variant (4 bytes) */
+        /* SOI variant (4 bytes) */
         0x02, 0x00, 0x00, 0x00,  /* SOI variant 2 */
-        /* rom_revision (2 bytes) */
+        /* ROM code version (2 bytes) */
         0x01, 0x00,               /* ROM rev 1 */
     },
     .device_stats_temperature = 3500,  /* 35.00°C */
@@ -57,7 +69,7 @@ static const uci_sim_profile_t k_default_profile = {
     .default_session_type = UCI_SESSION_TYPE_RANGING,
     .initial_session_state = UCI_SESSION_STATE_INIT,
     .session_status_reason_code = UCI_SESSION_REASON_STATE_CHANGE_WITH_SESSION_MANAGEMENT_COMMANDS,
-    .supported_min_ranging_interval_ms = 50U,
+    .supported_min_ranging_interval_ms = UCI_SIM_DEFAULT_MIN_RANGING_INTERVAL_MS,
     .invalid_ranging_interval_status = UCI_STATUS_INVALID_RANGE,
     .invalid_ranging_interval_reason_code = UCI_SESSION_REASON_ERROR_INVALID_RANGING_INTERVAL,
     .invalid_ranging_interval_surface = UCI_SIM_INVALID_CONFIG_SURFACE_IMMEDIATE,
@@ -196,8 +208,17 @@ static const uci_sim_profile_t k_default_profile = {
     .ranging_interval_ms = 2000U,
     .ranging_event_period_ms = 2000U,
     .ranging_stream_burst_count = 3,
-    .core_caps_payload = { UCI_STATUS_OK, 0x01, 0xE4, 0x00 },
-    .core_caps_payload_len = 4,
+    /* Spec R5: the 0xE4 TLV value below must equal supported_min_ranging_interval_ms
+     * (set from UCI_SIM_DEFAULT_MIN_RANGING_INTERVAL_MS above). A profile that
+     * overrides supported_min_ranging_interval_ms must update this TLV to match. */
+    .core_caps_payload = {
+        UCI_STATUS_OK, 0x01,
+        0xE4, 0x04,
+        (uint8_t)(UCI_SIM_DEFAULT_MIN_RANGING_INTERVAL_MS & 0xFFU),
+        (uint8_t)((UCI_SIM_DEFAULT_MIN_RANGING_INTERVAL_MS >> 8) & 0xFFU),
+        0x00, 0x00
+    },
+    .core_caps_payload_len = 8,
     .range_data_notification_oid = UCI_SESSION_START,
     .range_data_payload_template = {
         0x00, 0x00, 0x00, 0x00,

@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -275,6 +276,113 @@ static void test_unknown_oid(void) {
     PASS();
 }
 
+/* ─── Drain helper: discard everything currently queued for read on
+ * fd, so stale packets from a prior step don't shadow a later read. ── */
+static void drain_all_pending(int fd) {
+    uint8_t scratch[256];
+    for (;;) {
+        struct pollfd pfd = {fd, POLLIN, 0};
+        if (poll(&pfd, 1, 50) <= 0) break;
+        ssize_t n = read(fd, scratch, sizeof(scratch));
+        if (n <= 0) break;
+    }
+}
+
+/* ─── Stream-accumulator overflow: the clamp must never write past
+ * dev->stream's UCI_SIM_MAX_PACKET bound, and the accumulator must
+ * remain correctly parseable afterward, not merely non-crashing
+ * (R1 / AC1, AC2) ─────────────────────────────────────────────── */
+static void test_stream_overflow_clamped(void) {
+    ctx_t c;
+    uint8_t buf[UCI_SIM_MAX_PACKET];
+    uci_sim_packet_t p;
+    size_t plen = 0;
+    uint8_t chunk1[8];
+    static uint8_t chunk2[UCI_SIM_MAX_PACKET];
+    uint8_t reset_cmd[] = {0x20, 0x00, 0x00, 0x01, 0x01};
+    size_t off;
+
+    ASSERT_TRUE(ctx_init(&c, UCI_SIM_SCENARIO_DEFAULT) == 0, "init");
+
+    /* 1. Leave a partial packet buffered: header claims an 8-byte
+     * payload (unknown OID 0x3F -> no device-state side effects) but
+     * only 4 garbage payload bytes actually arrive, so
+     * stream_feed_to_engine() must wait for more data. */
+    chunk1[0] = 0x20; chunk1[1] = 0x3F; chunk1[2] = 0x00; chunk1[3] = 0x08;
+    memset(chunk1 + 4, 0xAA, 4);
+    ASSERT_TRUE(write(c.slave_fd, chunk1, sizeof(chunk1)) == (ssize_t)sizeof(chunk1),
+                "write leading partial packet");
+    ASSERT_TRUE(process(&c) == 0, "process partial packet");
+
+    /* 2. Send a second chunk sized at UCI_SIM_MAX_PACKET -- the
+     * largest a single read() inside process_input() can return --
+     * so old_slen(8) + n(UCI_SIM_MAX_PACKET) exceeds UCI_SIM_MAX_PACKET
+     * and exercises the clamp. Its first 4 bytes complete packet #1's
+     * claimed 8-byte payload; the rest is filled with as many more
+     * well-formed unknown-OID commands as fit (254 bytes each:
+     * 4-byte header + 250-byte payload), derived from sizeof(chunk2)
+     * rather than a fixed count so the layout keeps exercising the
+     * clamp regardless of how UCI_SIM_MAX_PACKET is defined. Any
+     * leftover bytes that don't form a full 254-byte command are
+     * zeroed and dropped by the clamp itself, never parsed. */
+    memset(chunk2, 0xBB, 4);
+    off = 4;
+    while (off + 254 <= sizeof(chunk2)) {
+        chunk2[off + 0] = 0x20;
+        chunk2[off + 1] = 0x3F;
+        chunk2[off + 2] = 0x00;
+        chunk2[off + 3] = 250;
+        memset(chunk2 + off + 4, 0xCC, 250);
+        off += 254;
+    }
+    memset(chunk2 + off, 0x00, sizeof(chunk2) - off);
+    ASSERT_TRUE(write(c.slave_fd, chunk2, sizeof(chunk2)) == (ssize_t)sizeof(chunk2),
+                "write overflow-inducing chunk");
+    ASSERT_TRUE(process(&c) == 0, "process overflow chunk without corruption");
+
+    /* Drain the five UNKNOWN_OID responses generated above so they
+     * don't shadow the probe response read below. */
+    drain_all_pending(c.slave_fd);
+
+    /* 3. Prove dev->slen ended at a sane, in-bounds value (not
+     * corrupted or unbounded) by sending one more well-formed
+     * command and requiring a byte-exact correct response -- a
+     * garbled/missing response here would indicate the accumulator's
+     * notion of "bytes already buffered" survived the overflow in a
+     * corrupted state. */
+    ASSERT_TRUE(write(c.slave_fd, reset_cmd, sizeof(reset_cmd)) == (ssize_t)sizeof(reset_cmd),
+                "write probe reset");
+    ASSERT_TRUE(process(&c) == 0, "process probe reset");
+    ASSERT_TRUE(read_packet_poll(c.slave_fd, buf, sizeof(buf), &plen) == 0, "read probe rsp");
+    ASSERT_TRUE(uci_sim_packet_parse(buf, plen, &p) == 0, "parse probe rsp");
+    ASSERT_EQ_INT(UCI_MT_RESPONSE, p.mt, "probe rsp mt");
+    ASSERT_EQ_INT(UCI_GID_CORE, p.gid, "probe rsp gid");
+    ASSERT_EQ_INT(UCI_CORE_DEVICE_RESET, p.oid, "probe rsp oid");
+    ASSERT_EQ_INT(UCI_STATUS_OK, p.payload[0], "probe rsp status");
+    ASSERT_EQ_INT(5, (int)plen, "probe rsp total length");
+
+    ASSERT_TRUE(read_packet_poll(c.slave_fd, buf, sizeof(buf), &plen) == 0, "read probe ntf");
+    ASSERT_TRUE(uci_sim_packet_parse(buf, plen, &p) == 0, "parse probe ntf");
+    ASSERT_EQ_INT(UCI_DEVICE_STATE_READY, p.payload[0], "probe ntf state");
+
+    ctx_done(&c);
+    PASS();
+}
+
+/* ─── PTY slave device node must not be world-readable/writable
+ * (R2 / AC3) ──────────────────────────────────────────────────── */
+static void test_pty_slave_not_world_accessible(void) {
+    ctx_t c;
+    struct stat st;
+
+    ASSERT_TRUE(ctx_init(&c, UCI_SIM_SCENARIO_DEFAULT) == 0, "init");
+    ASSERT_TRUE(stat(c.pty_path, &st) == 0, "stat pty path");
+    ASSERT_TRUE((st.st_mode & (S_IROTH | S_IWOTH)) == 0, "pty slave not world-accessible");
+
+    ctx_done(&c);
+    PASS();
+}
+
 int main(void) {
     printf("═══ Chardev Tests ═══\n\n");
     test_device_info();
@@ -284,6 +392,8 @@ int main(void) {
     test_pty_path_lifetime();
     test_fragmented_header();
     test_non_data_byte2_reserved();
+    test_stream_overflow_clamped();
+    test_pty_slave_not_world_accessible();
     printf("\nPassed: %d\nFailed: %d\n", g_passed, g_failed);
     return g_failed > 0 ? 1 : 0;
 }

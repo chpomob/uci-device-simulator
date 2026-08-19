@@ -3,4 +3,9 @@
 uci-device-sim
 /test_sim_core
 .adversarial-loop/
+.adversarial-plan/
+.adversarial-spec/
+__pycache__/
+*.pyc
+.pytest_cache/
 .hermes/
